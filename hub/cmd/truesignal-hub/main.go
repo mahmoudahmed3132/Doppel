@@ -31,6 +31,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/httpapi"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/hubsettings"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/livefeed"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
@@ -39,6 +40,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/secrets"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/siem"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/updatecheck"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webhook"
 )
 
@@ -177,7 +179,7 @@ func serve(log *slog.Logger) error {
 	}
 	notifier.Start(ctx)
 
-	settingsSvc := &hubsettings.Service{Store: db, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log}// Parser and Assets are PORTED: until installed, source lists are
+	settingsSvc := &hubsettings.Service{Store: db, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log} // Parser and Assets are PORTED: until installed, source lists are
 	// stored but not applied and the asset inventory is read-only.
 
 	if err := settingsSvc.Load(ctx); err != nil {
@@ -186,11 +188,12 @@ func serve(log *slog.Logger) error {
 	go settingsSvc.RunRetentionLoop(ctx, db)
 	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc}
 
+	broker := livefeed.NewBroker()
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
-		Enricher: enricher, SIEM: siemSvc, Notifier: notifier}
+		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker}
 	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
 		Run(ctx, siem.HeartbeatInterval)
-	live := &liveness.Service{Store: db, Raiser: pipe, Log: log, Now: time.Now, StartedAt: startedAt}
+	live := &liveness.Service{Store: db, Raiser: pipe, Publisher: broker, Log: log, Now: time.Now, StartedAt: startedAt}
 	go live.Run(ctx, 5*time.Second)
 
 	network := httpapi.Network{Trusted: cfg.TrustedProxies}
@@ -235,6 +238,16 @@ func serve(log *slog.Logger) error {
 	(&httpapi.Catalogue{Cat: cat, Log: log}).Register(admin)
 	(&httpapi.Outputs{SIEM: siemSvc, Store: db, Webhook: notifier, Network: network, Log: log, Now: time.Now}).Register(admin)
 	(&httpapi.Events{Store: db, Enricher: enricher, Log: log}).Register(admin)
+	updates := &updatecheck.Checker{URL: cfg.UpdateCheckURL, Log: log, Now: time.Now,
+		Interval: func(ctx context.Context) time.Duration {
+			return time.Duration(settingsSvc.Get(ctx).UpdateCheckHours) * time.Hour
+		}}
+	go updates.Run(ctx)
+	(&httpapi.Insights{Store: db, Enricher: enricher, Updates: updates, Settings: settingsSvc, Auth: authSvc, Live: broker,
+		Armed: notifier.Armed, SIEMStats: siemSvc.Stats, Version: Version, Schema: store.SchemaVersion(),
+		StartedAt: startedAt, Development: cfg.Development, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin,
+		// Projections and the ATT&CK mapper are PORTED.
+	}).Register(admin)
 	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
 			if err := db.FactoryReset(ctx, purge); err != nil {

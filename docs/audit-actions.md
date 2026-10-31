@@ -41,6 +41,7 @@ Request bodies are never included.
 | `events.delete_all` | every event deleted (confirmation phrase required) | `POST /api/v3/events/delete-all` |
 | `events.export` | evidence exported (JSON or CSV) | `GET /api/v3/events/export` |
 | `honeytokens.export` | honeytoken inventory exported | `GET /api/v3/honeytokens/export` |
+| `system.update_check` | manual update check | `POST /api/v3/system/update-check` |
 | `system.cli_notice_ack` | new-CLI-release notice acknowledged | `POST /api/v3/system/cli-notice/ack` |
 | `system.factory_reset` | factory reset (password + confirmation; delivered to the SIEM **before** execution, refused if undeliverable) | `POST /api/v3/system/factory-reset` |
 

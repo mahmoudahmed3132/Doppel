@@ -335,3 +335,16 @@ and factory reset `{"confirm": "FACTORY RESET"}` plus the password, so the
 UI's confirm-by-typing is also enforced by the API. Event and honeytoken
 exports are audited (`events.export`, `honeytokens.export`) although they are
 GET requests. Exports are capped at 1 000 000 events per request.
+
+### Q54 — §6.4 — Live feed and session lifetime
+**Meanwhile:** an open live feed does not count as activity: the session is
+re-validated every 15 s without refreshing its idle timer, so the 15-minute
+idle timeout still applies to an unattended dashboard and logout, password or
+MFA changes close open feeds within one tick. The UI's API calls refresh the
+session as usual.
+
+### Q55 — §6.11 — Update-check source
+**Meanwhile:** `TS_UPDATE_CHECK_URL` (default: the GitHub releases API of this
+repository); tags `hub/vX.Y.Z` and `cli/vX.Y.Z`, drafts and pre-releases
+ignored; interval from `update_check_hours` (0 = off). This is the only
+outbound call besides registry, SIEM and webhooks.

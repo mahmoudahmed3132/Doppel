@@ -610,3 +610,23 @@ func (s *Service) ResetSetupToken(ctx context.Context) (string, error) {
 	s.mu.Unlock()
 	return s.Init(ctx)
 }
+
+// Check validates a session token without refreshing its idle timer, so a
+// long-lived connection (live feed) cannot keep an idle session alive.
+func (s *Service) Check(ctx context.Context, token string) error {
+	if token == "" || len(token) > 128 {
+		return ErrSessionInvalid
+	}
+	rec, err := s.store.SessionByHash(ctx, tokenHash(token))
+	if errors.Is(err, domain.ErrNotFound) {
+		return ErrSessionInvalid
+	}
+	if err != nil {
+		return err
+	}
+	now := s.now().UTC()
+	if rec.EnrolOnly || now.Sub(rec.CreatedAt) >= s.ttl || now.Sub(rec.LastSeenAt) >= s.idle {
+		return ErrSessionInvalid
+	}
+	return nil
+}

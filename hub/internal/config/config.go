@@ -33,6 +33,7 @@ const (
 	EnvDevAllowUnsigned    = "TS_DEV_ALLOW_UNSIGNED_MANIFESTS"
 	EnvDevAllowUnpinned    = "TS_DEV_ALLOW_UNPINNED_IMAGES"
 	EnvRegistryURL         = "TS_REGISTRY_URL"
+	EnvUpdateCheckURL      = "TS_UPDATE_CHECK_URL"
 )
 
 // Config is the Hub process configuration.
@@ -55,6 +56,7 @@ type Config struct {
 	DevAllowUnsigned  bool
 	DevAllowUnpinned  bool
 	RegistryURL       string // default registry; the registry_url setting overrides it
+	UpdateCheckURL    string // releases API queried by the update check (§6.11)
 }
 
 // DefaultRegistryURL is the product's registry branch (§10).
@@ -156,6 +158,13 @@ func Load(getenv func(string) string) (*Config, error) {
 	c.GeoIPDB = get(EnvGeoIPDB)
 	c.SignerRepo = get(EnvSignerRepo)
 	c.SigstoreRoot = get(EnvSigstoreTrustedRoot)
+	c.UpdateCheckURL = "https://api.github.com/repos/mahmoudahmed3132/TrueSignal-Rewrite/releases?per_page=100"
+	if v := get(EnvUpdateCheckURL); v != "" {
+		if !strings.HasPrefix(v, "https://") {
+			fail(EnvUpdateCheckURL, "must be an https:// URL")
+		}
+		c.UpdateCheckURL = v
+	}
 	c.RegistryURL = DefaultRegistryURL
 	if v := get(EnvRegistryURL); v != "" {
 		c.RegistryURL = v

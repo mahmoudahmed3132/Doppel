@@ -152,6 +152,9 @@ func (a *Admin) wrap(method, route, action string, acc access, h http.HandlerFun
 	})
 }
 
+// ExpectedOrigin returns the Hub origin a browser request must come from.
+func (a *Admin) ExpectedOrigin(r *http.Request) string { return a.expectedOrigin(r) }
+
 func (a *Admin) expectedOrigin(r *http.Request) string {
 	if ep, ok, err := a.Settings.Setting(r.Context(), auth.SettingEndpoint); err == nil && ok {
 		if o := endpointOrigin(ep); o != "" {

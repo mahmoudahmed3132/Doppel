@@ -634,3 +634,24 @@ paths:
     post:
       summary: 'Factory reset {"password", "confirm": "FACTORY RESET", "purge_honeytokens": bool}. The audit record is delivered to the SIEM first; if that fails the reset is refused (502).'
       responses: {'200': {description: '{"reset": true, "setup_required": true}'}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '502': {$ref: '#/components/responses/Error'}}
+  /api/v3/analytics/summary:
+    get: {summary: 'Counters: events_total/unread/24h, critical_24h, nodes/sensors total and online', responses: {'200': {description: '{"summary"}'}}}
+  /api/v3/analytics/severity:
+    get: {summary: 'Unarchived events by severity over ?days=1..365 (default 7)', responses: {'200': {description: '{"days","severity"}'}}}
+  /api/v3/analytics/velocity:
+    get: {summary: 'Events per bucket: ?hours=1..2160 (24), ?bucket=60..86400 s (3600), ≤ 1000 buckets, gaps filled', responses: {'200': {description: '{"bucket_seconds","series":[{t,count}]}'}}}
+  /api/v3/analytics/uptime:
+    get: {summary: 'Per sensor, per UTC day % online over ?days=1..90 (14); -1 = not yet created', responses: {'200': {description: '{"days","sensors":[{node_id,sensor_id,days,percent}]}'}}}
+  /api/v3/analytics/attack/navigator:
+    get: {summary: ATT&CK Navigator layer for ?days (PORTED; 503 until installed), responses: {'200': {description: attachment}, '503': {$ref: '#/components/responses/Error'}}}
+  /api/v3/analytics/projections/{name}:
+    parameters: [{name: name, in: path, required: true, schema: {type: string}}]
+    get: {summary: 'PORTED projections (insights, sources, attack matrix, attack path, geo map, report) over ?days; other query parameters passed through', responses: {'200': {description: '{"projection","days","data"}'}, '404': {$ref: '#/components/responses/Error'}}}
+  /api/v3/system/status:
+    get: {summary: 'Version, schema, uptime, armed, SIEM queue, update state, hub_update_available, cli_release_notice, installed modules, live clients', responses: {'200': {description: '{"status"}'}}}
+  /api/v3/system/update-check:
+    post: {summary: Check releases now. Audited., responses: {'200': {description: '{"status"}'}}}
+  /api/v3/live:
+    get:
+      summary: 'WebSocket (RFC 6455). Session cookie; Origin must equal the Hub origin (except development). Server sends text messages {"type": "event"|"status"|"tick"|"refresh", "data"}; clients may send only control frames (masked, ≤ 4 KiB). The session is re-checked every tick (15 s) without refreshing its idle timer; the feed closes (1008) when it ends. Slow clients are dropped.'
+      responses: {'101': {description: Switching Protocols}, '401': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
