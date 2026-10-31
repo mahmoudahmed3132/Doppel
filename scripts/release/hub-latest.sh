@@ -11,10 +11,15 @@ image="${1:?image}"; repo="${2:?owner/repo}"
 issuer=https://token.actions.githubusercontent.com
 die() { echo "hub-latest: $*" >&2; exit 1; }
 
-target="" digest="" published=""
-for v in $(git tag --list 'hub/v*' | sed 's|^hub/v||' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1nr -k2,2nr -k3,3nr); do
+stable=$(git tag --list 'hub/v*' | sed 's|^hub/v||' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1nr -k2,2nr -k3,3nr || true)
+if [ -z "$stable" ]; then
+	# Only pre-release tags so far: there is nothing :latest may point at.
+	echo "hub-latest: no stable Hub release tag yet; :latest left unchanged"
+	exit 0
+fi
+target="" digest=""
+for v in $stable; do
 	d=$(crane digest "$image:$v" 2>/dev/null) || { echo "hub-latest: $v not published, skipped"; continue; }
-	published=1
 	if cosign verify "$image@$d" \
 		--certificate-identity "https://github.com/$repo/.github/workflows/publish-hub.yml@refs/tags/hub/v$v" \
 		--certificate-oidc-issuer "$issuer" >/dev/null 2>&1; then
@@ -23,12 +28,9 @@ for v in $(git tag --list 'hub/v*' | sed 's|^hub/v||' | grep -E '^[0-9]+\.[0-9]+
 	fi
 	echo "hub-latest: $v ($d) signature does not verify, skipped" >&2
 done
-if [ -z "$published" ]; then
-	# Only pre-releases so far (or nothing pushed yet): :latest stays unset.
-	echo "hub-latest: no stable Hub release is published yet; :latest left unchanged"
-	exit 0
-fi
-[ -n "$target" ] || die "stable Hub releases are published but none has a valid signature"
+# Stable tags exist, so a missing digest (registry outage, failed publish)
+# or an unverifiable signature must fail the job, never pass silently.
+[ -n "$target" ] || die "stable Hub release tags exist but none resolves to a published, signature-verified image"
 
 current=$(crane digest "$image:latest" 2>/dev/null || true)
 if [ "$current" = "$digest" ]; then
