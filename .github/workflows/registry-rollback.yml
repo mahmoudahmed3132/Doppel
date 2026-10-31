@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Registry rollback (§10, manual): marks the latest version of a sensor
 # deprecated. Hubs stop offering it for new deployments and stop counting it

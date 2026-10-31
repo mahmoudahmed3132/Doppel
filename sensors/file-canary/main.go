@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Command file-canary plants lure files and reports access to and
 // tampering with them (§11.4). `file-canary init` runs in the init

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package compose renders a node's Docker Compose file from its sensor
 // instances and their verified manifests (§6.12). It is a security

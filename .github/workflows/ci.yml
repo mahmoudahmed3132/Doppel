@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # CI on every push and pull request (§10). Third-party actions are pinned by
 # commit SHA (version in the trailing comment; Dependabot proposes bumps).

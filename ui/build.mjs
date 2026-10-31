@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Builds the admin UI into hub/internal/webui/dist, which the Hub embeds.
 // Output is one hashed script and one hashed stylesheet referenced from a

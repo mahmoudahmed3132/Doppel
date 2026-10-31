@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # §10 compose guard: production compose files must never build images
 # locally (no "build:" key); every image comes from the registry, pinned.

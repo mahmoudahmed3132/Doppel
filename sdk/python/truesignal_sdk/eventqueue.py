@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """Bounded event queue: on overflow the oldest event is dropped and counted
 (§5.3); the count is reported in the next heartbeat."""
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """TrueSignal Python sensor SDK (contract v3, spec §5 / §11.6).
 
 Standard library only. A sensor defines a :class:`Spec` (fire-drill event and

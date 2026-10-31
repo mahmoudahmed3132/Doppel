@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package analytics computes the Hub's own dashboard aggregates (§6.4
 // Analytics); the richer projections are PORTED.

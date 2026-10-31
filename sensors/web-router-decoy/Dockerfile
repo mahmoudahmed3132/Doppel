@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Build from the repository root:
 #   docker build -f sensors/web-router-decoy/Dockerfile -t ts-sensor-web-router-decoy .

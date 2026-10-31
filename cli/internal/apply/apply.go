@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package apply converges the node to the Hub's desired compose file (§8):
 // fetch, inject the node key, re-check host paths on this host, compare

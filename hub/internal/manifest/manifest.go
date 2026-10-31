@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package manifest defines sensor manifest schema v3 (§9): strict decoding,
 // structural validation and the static compose rules of §6.12 that apply to

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package enrich computes output-only event enrichment (§6.5 step 6): node
 // alias, ATT&CK mapping, source asset and location. It is evaluated on every

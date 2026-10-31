@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package webhook sends chat notifications for events (§6.8): ntfy, gotify,
 // Discord or Slack. Delivery is asynchronous through a bounded queue with

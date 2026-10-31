@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Self-test of the §10 publish guards and registry tooling, run in CI
 # (acceptance §14.13). Uses a throwaway clone with a local bare "origin" and

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package hubsettings owns the Hub's typed, validated settings (§6.4
 // Settings): public endpoint, registry, update checks, retention, source

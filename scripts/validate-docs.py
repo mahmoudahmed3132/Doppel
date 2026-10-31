@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # CI checks (§10): sensor manifests against docs/manifest-v3.schema.json
 # (JSON Schema 2020-12), docs/openapi.yaml well-formed, and every HTTP route

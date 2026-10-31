@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package stub provides deliberately minimal stand-ins for the PORTED
 // modules, for tests and for running the Hub before the real modules are

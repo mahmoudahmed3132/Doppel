@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package auth implements admin setup, login, lockouts, sessions and the
 // MFA flows of §6.3 around the PORTED TOTP/recovery-code core.

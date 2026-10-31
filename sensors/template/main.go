@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Command template is the reference TrueSignal sensor. It listens on one TCP
 // port, reports every connection as "template_connection" (one event per

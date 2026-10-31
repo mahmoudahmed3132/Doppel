@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // MFA enrolment, recovery codes display. The TOTP secret and recovery codes
 // are shown once and never stored by the UI.

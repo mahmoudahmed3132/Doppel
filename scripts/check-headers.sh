@@ -1,9 +1,9 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Fails if a source file lacks the licence header required by spec §0.8.
 set -eu
-HEADER='Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.'
+HEADER='Copyright (c) 2026 TrueSignal Deception. All rights reserved.'
 status=0
 for f in $(git ls-files --cached --others --exclude-standard \
 	'*.go' '*.ts' '*.tsx' '*.js' '*.cjs' '*.mjs' '*.sh' '*.py' '*.css' 'Dockerfile' '**/Dockerfile' 'Makefile'); do

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // UI end-to-end smoke test against a fresh development Hub (see ui/README.md).
 // Usage: node ui/e2e/smoke.cjs <screenshot-dir>

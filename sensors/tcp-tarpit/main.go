@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Command tcp-tarpit listens on configured TCP ports, reports connections
 // and payloads, and holds, echoes or closes them (§11.1). It never forwards

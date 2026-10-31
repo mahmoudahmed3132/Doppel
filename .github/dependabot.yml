@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 # Proposes bumps for SHA-pinned actions, Go modules, UI packages and base images.
 version: 2
 updates:

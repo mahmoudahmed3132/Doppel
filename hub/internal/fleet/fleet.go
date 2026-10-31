@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package fleet manages nodes and their sensor instances (§6.4 Nodes and
 // Sensors). Every change to a node's sensor set is rendered by the compose

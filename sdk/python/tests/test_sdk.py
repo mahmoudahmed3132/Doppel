@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """Tests for the Python SDK against a mock Hub over real HTTP."""
 
 from __future__ import annotations

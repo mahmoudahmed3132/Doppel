@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Applies a change to the registry branch and pushes it, retrying on
 # conflict (§10: concurrent sensor publishes). Each attempt starts from the

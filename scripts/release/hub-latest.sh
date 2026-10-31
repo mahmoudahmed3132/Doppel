@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Points :latest at the highest published AND signature-verified Hub release
 # (§10). The existing manifest is tagged unchanged (same digest), then

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Live feed client for /api/v3/live (WebSocket, server push only). Reconnects
 // with capped exponential backoff; a 1008 close means the session ended.

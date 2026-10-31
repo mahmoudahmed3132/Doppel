@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Hub image. Build from the repository root AFTER building the admin UI
 # (`make ui`), which writes hub/internal/webui/dist/ for go:embed:

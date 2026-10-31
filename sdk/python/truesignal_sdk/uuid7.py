@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """UUIDv7 (RFC 9562 §5.7) with a monotonic sequence inside one millisecond
 (method 1: 12-bit counter in rand_a), so ids from one process sort in
 generation order."""

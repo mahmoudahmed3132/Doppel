@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """Sensor runtime (§5): event queue and batched sender with retries,
 heartbeats, graceful shutdown with stop notice, fire drill (SIGUSR1) and
 test mode.

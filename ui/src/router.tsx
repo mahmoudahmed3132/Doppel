@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // History-API router. The Hub serves index.html for every non-API path.
 import type { ComponentChildren } from "preact";

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """Runtime configuration from the environment (§5.1). The variables are set by
 the Hub's compose compiler and cannot be overridden by user configuration."""
 

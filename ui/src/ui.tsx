@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Shared components. Everything renders data as text (Preact escapes it);
 // nothing here builds HTML from strings.

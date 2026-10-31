@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Thin client for the admin API (/api/v3). Same-origin fetches carry the
 // session cookie; the browser adds Origin on non-GET requests, which the

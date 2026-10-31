@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package updatecheck periodically reads the product's public releases and
 // reports the newest Hub and CLI versions (§6.11). It is the Hub's only

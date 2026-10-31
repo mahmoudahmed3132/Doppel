@@ -12,6 +12,7 @@ every source file carries the §0.8 header verbatim.
 **Answer (owner, 2026-10-31):** interim choice confirmed. Note: the Apache-2.0
 grant in `LICENSE` and the "All rights reserved" headers still conflict
 legally; whichever is intended should be settled before any public release.
+**Answer (owner, 2026-10-31, final):** proprietary. The repository is private; `LICENSE` is replaced by a proprietary notice and every header names the owner, `TrueSignal Deception` (placeholder brackets removed). Counsel reviews the period when the repository was public with the Apache-2.0 file.
 
 ### Q2 — §2 — Go module path
 The repository is `github.com/mahmoudahmed3132/TrueSignal-Rewrite`. Is that

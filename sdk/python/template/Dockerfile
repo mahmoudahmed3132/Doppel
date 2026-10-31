@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Python template sensor. Build from the repository root:
 #   docker build -f sdk/python/template/Dockerfile -t ts-sensor-python-template .

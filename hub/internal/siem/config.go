@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package siem delivers events, audit records, honeytoken inventory and Hub
 // heartbeats to one SIEM destination (§6.9): a bounded queue, per-record

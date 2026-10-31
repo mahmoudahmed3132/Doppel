@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Build from the repository root:
 #   docker build -f sensors/tcp-tarpit/Dockerfile -t ts-sensor-tcp-tarpit .

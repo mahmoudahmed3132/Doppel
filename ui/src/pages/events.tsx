@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Events: filters (§6.4), keyset pagination, detail drawer, read/archive,
 // export. Every field is attacker-influenced and rendered as text only.

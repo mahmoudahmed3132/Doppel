@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """Template sensor (Python): reports every TCP connection to one port and
 closes it. Copy this directory to start a community sensor.
 

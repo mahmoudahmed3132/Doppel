@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Application shell: decides between setup, login, MFA enrolment and the
 // authenticated layout; owns the live feed, unread badge and release notice.

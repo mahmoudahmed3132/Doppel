@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Production Hub deployment (see docs/operations.md). Pin the image by digest:
 # replace <digest> with the value from the release notes and verify the

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Release notes against the previous tag of the SAME component (§10), limited
 # to the paths that make up that component.
