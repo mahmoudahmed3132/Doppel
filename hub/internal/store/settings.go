@@ -53,3 +53,16 @@ func (db *DB) PutSettings(ctx context.Context, kv map[string]*string) error {
 		return nil
 	})
 }
+
+// PutSettingIfAbsent stores value under key unless the key exists, and
+// returns the value that is stored afterwards (race-safe create-once).
+func (db *DB) PutSettingIfAbsent(ctx context.Context, key, value string) (string, error) {
+	if _, err := db.sql.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING`, key, value); err != nil {
+		return "", err
+	}
+	v, ok, err := db.Setting(ctx, key)
+	if err == nil && !ok {
+		err = errors.New("setting vanished after insert")
+	}
+	return v, err
+}

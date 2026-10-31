@@ -134,6 +134,7 @@ enrolled cannot log in until the module is installed (break-glass:
 latest non-deprecated catalogue version as one rendered, atomic change; the
 node picks it up on its next `apply`. No separate "marked" state is kept.
 Requires the catalogue (503 `catalogue_unavailable` otherwise).
+**Answer (owner, 2026-10-31):** accepted as the default.
 
 ### Q22 — §7 — Masking secret configuration values without a verified manifest
 **Meanwhile:** values of keys the manifest marks secret are returned as
@@ -161,3 +162,37 @@ The rendered compose contains injected secrets (node key, capture key,
 honeytoken, beacon key). **Meanwhile:** admin previews are always rendered
 with secrets replaced by placeholders; only the node-authenticated CLI fetch
 (to be built with §8) receives real values.
+
+### Q27 — §6.3 vs §6.12.9 — Injecting the node key
+§6.3 stores node keys only as SHA-256; §6.12.9 says the Hub injects the node
+key into each sensor. The Hub cannot inject what it does not keep.
+**Meanwhile:** the Hub omits `TS_NODE_KEY` and names it in
+`x-truesignal.node_key_env`; the CLI adds the key from its 0600 config to
+every service before writing the 0600 compose file. A user-supplied
+`TS_NODE_KEY` config value is dropped like any reserved key.
+
+### Q28 — §6.12.4 — Mounting an ancestor of a forbidden path
+The rule forbids mounts *inside* `/run`, `/var/lib/docker`, …; mounting
+`/var` or `/var/lib` would expose them just the same.
+**Meanwhile:** ancestors of any forbidden prefix are refused too. Effect:
+lures cannot live directly in `/` or `/var` (parent mounts), but `/var/www/…`,
+`/srv/…`, `/home/…`, `/opt/…` work. Symlinks on the host cannot be resolved by
+the Hub; the CLI will re-check resolved paths before `apply` (§8).
+
+### Q29 — §6.12 — Compose output format
+**Meanwhile:** JSON (a YAML subset accepted by Docker Compose), long-syntax
+volumes/ports. Avoids YAML quoting/injection classes entirely and makes the
+CLI's semantic comparison trivial.
+
+### Q30 — §9 — Template defaults on the Hub
+**Meanwhile:** the Hub does not evaluate discovery templates
+(`free_port(…)` etc.); a key whose only default is a template needs an
+explicit value, otherwise `422 missing_config`.
+
+### Q31 — §6.12 — Hardening beyond the listed rules
+**Meanwhile:** every container also gets `pids_limit: 256`, a memory limit
+(manifest `memory_mb`, default 256 MiB), a 16 MiB `/tmp` tmpfs (the root FS is
+read-only), bounded json-file logs, `restart: unless-stopped`, and bind mounts
+with `create_host_path: false` (a missing lure directory fails the deploy
+instead of Docker creating it as root). Tell us if any of these conflicts with
+a PORTED decoy's needs (e.g. memory for the scan detector).

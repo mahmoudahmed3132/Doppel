@@ -22,14 +22,17 @@ import (
 
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/audit"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/compose"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/config"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/httpapi"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ratelimit"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/secrets"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
 )
 
@@ -147,10 +150,16 @@ func serve(log *slog.Logger) error {
 		Development: cfg.Development, Log: log, Now: time.Now}
 
 	keys := nodekey.NewAuthenticator(db) // shared: admin key rotation invalidates ingest auth
+	compiler := &compose.Compiler{
+		Manifests: nil, // catalogue (§6.7) not installed yet: renders answer 422 manifest_unavailable
+		Settings:  db,
+		Keys:      &secrets.Keys{Store: db},
+		// Honeytokens: PORTED module; File Canary deploys fail closed until installed.
+		Options: manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
+		Log:     log,
+	}
 	(&httpapi.Fleet{
-		// Compiler and Catalogue are not installed yet: sensor changes and
-		// compose previews answer 503; node management works.
-		Svc:      &fleet.Service{Store: db, Keys: keys, Log: log, Now: time.Now},
+		Svc:      &fleet.Service{Store: db, Compiler: compiler, Keys: keys, Log: log, Now: time.Now},
 		Settings: db,
 		Log:      log,
 	}).Register(admin)
