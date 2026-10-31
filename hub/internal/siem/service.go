@@ -145,12 +145,12 @@ func (s *Service) Stats() (depth int, dropped uint64) {
 // to the previous destination first (bounded wait); queued records then go
 // to the new one. The caller's own post-request audit reaches the new
 // destination through the queue.
-func (s *Service) Switch(ctx context.Context, cfg Config, preAudit domain.AuditRecord) error {
+func (s *Service) Switch(ctx context.Context, cfg Config, preAudit *domain.AuditRecord) error {
 	tr, err := s.transport(cfg)
 	if err != nil {
 		return err
 	}
-	req := &switchReq{cfg: cfg, tr: tr, preAudit: &preAudit, done: make(chan struct{})}
+	req := &switchReq{cfg: cfg, tr: tr, preAudit: preAudit, done: make(chan struct{})}
 	select {
 	case s.control <- req:
 	case <-ctx.Done():
@@ -429,4 +429,14 @@ func (s *Service) Shutdown(ctx context.Context) {
 		s.tr.Close()
 	}
 	s.mu.Unlock()
+}
+
+// DeliverNow sends one record synchronously to the active destination over
+// a separate connection. With no output configured it succeeds (nothing to
+// deliver). Used for audit records that must precede an action (§6.13).
+func (s *Service) DeliverNow(ctx context.Context, rec domain.Record) error {
+	if s.Config().Protocol == ProtoNone || s.Config().Protocol == "" {
+		return nil
+	}
+	return s.Test(ctx, rec)
 }

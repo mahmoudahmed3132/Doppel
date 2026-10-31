@@ -320,3 +320,18 @@ user space and filtered there. Adequate for typical servers; a cBPF filter
 (`TS_LOGIN_COOLDOWN_SEC=0`) so a honeytoken attempt is never suppressed; the
 SDK's bounded queue limits memory under brute force. Page views and probes are
 rate-limited per source.
+
+### Q52 — §6.13 — Factory reset when the audit cannot reach the SIEM
+"Audited before execution to the current SIEM output." **Meanwhile:** the reset
+is refused (`502 audit_undeliverable`) if that delivery fails, so a stolen
+session cannot wipe the Hub while the SIEM is unreachable. An operator whose
+SIEM is genuinely gone sets the SIEM output to `none` first (itself audited to
+the old destination). The catalogue cache (signed public manifests) survives a
+reset; Hub master keys are deleted with the settings.
+
+### Q53 — §6.4 — Danger-zone confirmations and export auditing
+**Meanwhile:** "delete all events" requires `{"confirm": "DELETE ALL EVENTS"}`
+and factory reset `{"confirm": "FACTORY RESET"}` plus the password, so the
+UI's confirm-by-typing is also enforced by the API. Event and honeytoken
+exports are audited (`events.export`, `honeytokens.export`) although they are
+GET requests. Exports are capped at 1 000 000 events per request.

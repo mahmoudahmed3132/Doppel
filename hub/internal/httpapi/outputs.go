@@ -80,7 +80,7 @@ func (o *Outputs) putSIEM(w http.ResponseWriter, r *http.Request) {
 		Path: r.URL.Path, Status: http.StatusOK, Outcome: "success", ActorIP: o.Network.ClientIP(r)}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	if err := o.SIEM.Switch(ctx, next, pre); err != nil {
+	if err := o.SIEM.Switch(ctx, next, &pre); err != nil {
 		Fail(w, http.StatusUnprocessableEntity, "siem_unavailable", err.Error())
 		return
 	}

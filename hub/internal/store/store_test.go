@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
 )
 
 func openTest(t *testing.T) (*DB, string) {
@@ -309,5 +310,74 @@ func TestMigrationV1ToCurrentKeepsData(t *testing.T) {
 	}
 	if c, _ := db.CachedManifests(ctx); len(c) != 1 || c[0].Verified {
 		t.Fatalf("%+v", c)
+	}
+}
+
+func TestBeaconHoneytokenStoresAndFactoryReset(t *testing.T) {
+	db, _ := openTest(t)
+	ctx := context.Background()
+	now := time.Now()
+	if err := db.InsertBeacon(ctx, ported.Beacon{ID: "b1", Token: "tok", Type: "dns", Name: "n", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := db.BeaconByToken(ctx, "tok"); b == nil || b.ID != "b1" {
+		t.Fatal("beacon lookup")
+	}
+	if b, err := db.BeaconByToken(ctx, "nope"); b != nil || err != nil {
+		t.Fatal("unknown token must be nil, nil")
+	}
+	db.IncrementBeaconUse(ctx, "b1", now)
+	if l, _ := db.ListBeacons(ctx); len(l) != 1 || l[0].UseCount != 1 || l[0].LastUsedAt == nil {
+		t.Fatalf("%+v", l)
+	}
+	db.InsertHoneytoken(ctx, ported.Honeytoken{ID: "h1", Username: "svc", Secret: "s", PlantedNodeID: "node-00000001", PlantedSensorID: "ts-sensor-f", CreatedAt: now})
+	if err := db.InsertHoneytoken(ctx, ported.Honeytoken{ID: "h2", Username: "svc", Secret: "s", PlantedNodeID: "node-00000001", PlantedSensorID: "ts-sensor-f", CreatedAt: now}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatal("two tokens for one sensor")
+	}
+	if h, _ := db.HoneytokenForSensor(ctx, "node-00000001", "ts-sensor-f"); h == nil || h.Status != "active" {
+		t.Fatal("honeytoken lookup")
+	}
+
+	seedNode(t, db, "node-00000001")
+	db.InsertEvent(ctx, &domain.Event{EventID: "e", NodeID: "node-00000001", SensorID: "ts-sensor-a", Trigger: "x", Severity: "critical",
+		OccurredAt: now, ReceivedAt: now, Source: "s", Target: "t", Details: []byte("{}")})
+	v := "x"
+	db.PutSettings(ctx, map[string]*string{"public_endpoint": &v})
+	db.CreateAdmin(ctx, "h", nil)
+
+	sev, _ := db.SeverityCounts(ctx, now.Add(-time.Hour))
+	total, unread, recent, crit, _ := db.EventCounts(ctx, now.Add(-time.Hour))
+	if sev["critical"] != 1 || sev["low"] != 0 || total != 1 || unread != 1 || recent != 1 || crit != 1 {
+		t.Fatalf("%v %d %d %d %d", sev, total, unread, recent, crit)
+	}
+	vel, _ := db.Velocity(ctx, now.Add(-time.Hour), time.Hour)
+	if len(vel) != 1 {
+		t.Fatalf("%v", vel)
+	}
+
+	if err := db.FactoryReset(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := db.AdminExists(ctx); ok {
+		t.Fatal("admin kept")
+	}
+	if n, _ := db.Nodes(ctx); len(n) != 0 {
+		t.Fatal("nodes kept")
+	}
+	if e, _ := db.Events(ctx, EventFilter{}); len(e) != 0 {
+		t.Fatal("events kept")
+	}
+	if s, _ := db.Settings(ctx); len(s) != 0 {
+		t.Fatal("settings kept")
+	}
+	if l, _ := db.ListBeacons(ctx); len(l) != 0 {
+		t.Fatal("beacons kept")
+	}
+	if l, _ := db.ListHoneytokens(ctx); len(l) != 1 {
+		t.Fatal("honeytokens must survive a reset without purge")
+	}
+	db.FactoryReset(ctx, true)
+	if l, _ := db.ListHoneytokens(ctx); len(l) != 0 {
+		t.Fatal("honeytokens not purged")
 	}
 }

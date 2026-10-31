@@ -33,11 +33,18 @@ Request bodies are never included.
 | `webhook.update` | webhook changed | `PUT /api/v3/settings/webhook` |
 | `webhook.test` | webhook test sent | `POST /api/v3/settings/webhook/test` |
 | `system.arm` | armed state set (true or false) | `PUT /api/v3/system/armed` |
+| `config.update` | settings changed (endpoint, registry, update checks, retention, source lists) | `PATCH /api/v3/settings` |
+| `assets.replace` | asset inventory replaced | `PUT /api/v3/assets` |
+| `beacon.create` / `beacon.download` / `beacon.delete` | beacon lifecycle | `POST /api/v3/beacons`, `GET /api/v3/beacons/{id}/artefact`, `DELETE /api/v3/beacons/{id}` |
+| `events.mark_read` / `events.mark_read_all` | read flags | `POST /api/v3/events/{seq}/read`, `POST /api/v3/events/read-all` |
+| `events.archive` / `events.archive_all` | archive | `POST /api/v3/events/{seq}/archive`, `POST /api/v3/events/archive-all` |
+| `events.delete_all` | every event deleted (confirmation phrase required) | `POST /api/v3/events/delete-all` |
+| `events.export` | evidence exported (JSON or CSV) | `GET /api/v3/events/export` |
+| `honeytokens.export` | honeytoken inventory exported | `GET /api/v3/honeytokens/export` |
+| `system.cli_notice_ack` | new-CLI-release notice acknowledged | `POST /api/v3/system/cli-notice/ack` |
+| `system.factory_reset` | factory reset (password + confirmation; delivered to the SIEM **before** execution, refused if undeliverable) | `POST /api/v3/system/factory-reset` |
 
-Planned (reserved names, routes to follow with their features): `config.update`,
-`events.mark_read`, `events.archive`,
-`events.delete_all`, `system.factory_reset`, `beacon.create`, `beacon.delete`,
-`assets.replace`.
+Exports are audited although they are GET requests: they move evidence out of the Hub.
 
 Read-only routes (`GET …`, and `POST /api/v3/nodes/{node}/compose/preview`,
 which renders without saving) are not audited.

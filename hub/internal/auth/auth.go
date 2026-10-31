@@ -594,3 +594,19 @@ func (s *Service) RegenerateRecoveryCodes(ctx context.Context, ip, password, cod
 	}
 	return plain, nil
 }
+
+// ConfirmPassword re-checks the admin password for a dangerous operation
+// (factory reset). Failures count toward the lockout.
+func (s *Service) ConfirmPassword(ctx context.Context, ip, password string) error {
+	_, err := s.verifyPassword(ctx, ip, password)
+	return err
+}
+
+// ResetSetupToken prepares first-run setup again after a factory reset
+// and returns the new one-time token to print ("" with an override).
+func (s *Service) ResetSetupToken(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	s.setupToken = ""
+	s.mu.Unlock()
+	return s.Init(ctx)
+}

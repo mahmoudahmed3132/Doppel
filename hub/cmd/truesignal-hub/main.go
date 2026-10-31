@@ -29,6 +29,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/enrich"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/httpapi"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/hubsettings"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
@@ -176,8 +177,17 @@ func serve(log *slog.Logger) error {
 	}
 	notifier.Start(ctx)
 
-	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now,
-		Enricher: &enrich.Enricher{Nodes: db}, SIEM: siemSvc, Notifier: notifier}
+	settingsSvc := &hubsettings.Service{Store: db, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log}// Parser and Assets are PORTED: until installed, source lists are
+	// stored but not applied and the asset inventory is read-only.
+
+	if err := settingsSvc.Load(ctx); err != nil {
+		return err
+	}
+	go settingsSvc.RunRetentionLoop(ctx, db)
+	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc}
+
+	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
+		Enricher: enricher, SIEM: siemSvc, Notifier: notifier}
 	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
 		Run(ctx, siem.HeartbeatInterval)
 	live := &liveness.Service{Store: db, Raiser: pipe, Log: log, Now: time.Now, StartedAt: startedAt}
@@ -224,6 +234,29 @@ func serve(log *slog.Logger) error {
 
 	(&httpapi.Catalogue{Cat: cat, Log: log}).Register(admin)
 	(&httpapi.Outputs{SIEM: siemSvc, Store: db, Webhook: notifier, Network: network, Log: log, Now: time.Now}).Register(admin)
+	(&httpapi.Events{Store: db, Enricher: enricher, Log: log}).Register(admin)
+	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
+		Reset: func(ctx context.Context, purge bool) error {
+			if err := db.FactoryReset(ctx, purge); err != nil {
+				return err
+			}
+			keys.Purge() // every node key is revoked immediately
+			if err := siemSvc.Switch(ctx, siem.Config{Protocol: siem.ProtoNone}, nil); err != nil {
+				log.Error("factory reset: SIEM output not cleared", "error", err.Error())
+			}
+			if err := notifier.Load(ctx); err != nil {
+				log.Error("factory reset: webhook state not reloaded", "error", err.Error())
+			}
+			settingsSvc.Load(ctx)
+			tok, err := authSvc.ResetSetupToken(ctx)
+			if err != nil {
+				return err
+			}
+			if tok != "" {
+				log.Warn("factory reset complete: complete setup again with this one-time setup token", "setup_token", tok)
+			}
+			return nil
+		}}).Register(admin)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v3/", admin.Handler())

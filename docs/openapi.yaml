@@ -578,3 +578,59 @@ paths:
                 armed: {type: boolean}
       responses:
         '200': {description: '{"armed": bool}'}
+  /api/v3/events:
+    get:
+      summary: 'Events newest first, enriched. Query: archived (false|true|any), node, sensor, severity (comma list), trigger, from/to (RFC 3339), q (source/target substring), before (cursor), limit (1..500)'
+      responses:
+        '200': {description: '{"events": [EnrichedEvent], "next_cursor": string|null}'}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v3/events/{seq}:
+    parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
+    get: {summary: One event with enrichment, responses: {'200': {description: '{"event"}'}, '404': {$ref: '#/components/responses/Error'}}}
+  /api/v3/events/unread-count:
+    get: {summary: Unread unarchived events, responses: {'200': {description: '{"unread": n}'}}}
+  /api/v3/events/{seq}/read:
+    parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
+    post: {summary: Mark one read, responses: {'200': {description: '{"updated": n}'}}}
+  /api/v3/events/read-all:
+    post: {summary: Mark all read, responses: {'200': {description: '{"updated": n}'}}}
+  /api/v3/events/{seq}/archive:
+    parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
+    post: {summary: Archive one (also marks read), responses: {'200': {description: '{"updated": n}'}}}
+  /api/v3/events/archive-all:
+    post: {summary: Archive all, responses: {'200': {description: '{"updated": n}'}}}
+  /api/v3/events/delete-all:
+    post:
+      summary: 'Delete every event (danger zone). Body {"confirm": "DELETE ALL EVENTS"}'
+      responses: {'200': {description: '{"deleted": n}'}, '400': {$ref: '#/components/responses/Error'}}
+  /api/v3/events/export:
+    get:
+      summary: 'Export with the list filters; format=json (array) or csv (cells starting with = + - @ are prefixed with an apostrophe). Audited.'
+      responses: {'200': {description: attachment}}
+  /api/v3/honeytokens:
+    get: {summary: Honeytokens (never the secret), responses: {'200': {description: '{"honeytokens": [...]}'}}}
+  /api/v3/honeytokens/export:
+    get: {summary: 'CSV username,honeytoken_id,planted_node_id,planted_sensor_id,created_at. Audited.', responses: {'200': {description: attachment}}}
+  /api/v3/settings:
+    get: {summary: Hub settings (no secrets), responses: {'200': {description: '{"settings": View}'}}}
+    patch:
+      summary: 'Partial update: public_endpoint, registry_url ("" = default), catalogue_refresh_hours (1..168), update_check_hours (0..720, 0 = off), retention {archive_after_days, purge_archived_after_days (0 = off), history_days}, whitelist, known_scanners'
+      responses: {'200': {description: '{"settings": View}'}, '400': {$ref: '#/components/responses/Error'}}
+  /api/v3/assets:
+    get: {summary: Asset inventory and whether it is editable, responses: {'200': {description: '{"assets", "editable"}'}}}
+    put: {summary: 'Replace the inventory {"assets": [...]} (validated by the PORTED module; 503 until installed)', responses: {'200': {description: ok}, '503': {$ref: '#/components/responses/Error'}}}
+  /api/v3/beacons:
+    get: {summary: Beacons (never the token) and whether the module is installed, responses: {'200': {description: '{"beacons", "available"}'}}}
+    post: {summary: 'Create {"type","name","memo"} (PORTED; 503 until installed)', responses: {'201': {description: '{"beacon"}'}, '503': {$ref: '#/components/responses/Error'}}}
+  /api/v3/beacons/{id}/artefact:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    get: {summary: Download the beacon artefact (attachment, never inline). Audited., responses: {'200': {description: attachment}}}
+  /api/v3/beacons/{id}:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    delete: {summary: Delete a beacon, responses: {'200': {description: ok}}}
+  /api/v3/system/cli-notice/ack:
+    post: {summary: 'Acknowledge a CLI release notice {"version": "X.Y.Z"}', responses: {'200': {description: ok}}}
+  /api/v3/system/factory-reset:
+    post:
+      summary: 'Factory reset {"password", "confirm": "FACTORY RESET", "purge_honeytokens": bool}. The audit record is delivered to the SIEM first; if that fails the reset is refused (502).'
+      responses: {'200': {description: '{"reset": true, "setup_required": true}'}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '502': {$ref: '#/components/responses/Error'}}

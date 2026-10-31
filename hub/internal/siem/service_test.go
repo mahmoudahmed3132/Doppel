@@ -291,7 +291,7 @@ func TestSwitchAuditReachesPreviousDestination(t *testing.T) {
 
 	audit := domain.AuditRecord{Time: time.Now(), Action: "siem.update", Method: "PUT", Route: "/api/v3/settings/siem",
 		Path: "/api/v3/settings/siem", Status: 200, Outcome: "success", ActorIP: "10.0.0.1"}
-	if err := s.Switch(context.Background(), Config{Protocol: ProtoTCP, Address: b.addr, Format: FormatRFC5424}, audit); err != nil {
+	if err := s.Switch(context.Background(), Config{Protocol: ProtoTCP, Address: b.addr, Format: FormatRFC5424}, &audit); err != nil {
 		t.Fatal(err)
 	}
 	la := a.waitFor(2)
@@ -324,7 +324,7 @@ func TestSwitchInterruptsRetriesAgainstDeadDestination(t *testing.T) {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	s.Switch(ctx, Config{Protocol: ProtoTCP, Address: good.addr, Format: FormatRFC5424}, domain.AuditRecord{Action: "siem.update", Time: time.Now()})
+	s.Switch(ctx, Config{Protocol: ProtoTCP, Address: good.addr, Format: FormatRFC5424}, &domain.AuditRecord{Action: "siem.update", Time: time.Now()})
 	if time.Since(start) > 2*time.Second {
 		t.Fatal("switch blocked behind a dead destination")
 	}
