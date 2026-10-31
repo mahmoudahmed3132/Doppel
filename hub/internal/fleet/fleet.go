@@ -23,6 +23,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ids"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/semver"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
 )
 
@@ -130,7 +131,6 @@ type Service struct {
 var (
 	tagRE       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]*$`)
 	kebabRE     = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-	semverRE    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$`)
 	configKeyRE = regexp.MustCompile(`^TS_[A-Z0-9]+(_[A-Z0-9]+)*$`)
 )
 
@@ -471,7 +471,7 @@ func (s *Service) newSensor(nodeID string, spec SensorSpec) (domain.Sensor, erro
 	if !kebabRE.MatchString(name) || len(name) > 64 {
 		return domain.Sensor{}, invalid("name must be kebab-case, at most 64 characters")
 	}
-	if !semverRE.MatchString(spec.Version) {
+	if !semver.Valid(spec.Version) {
 		return domain.Sensor{}, invalid("version must be a semantic version")
 	}
 	if err := validConfig(spec.Config); err != nil {
@@ -568,7 +568,7 @@ func (s *Service) UpgradeSensor(ctx context.Context, nodeID, sensorID, version s
 			}
 			v = latest
 		}
-		if !semverRE.MatchString(v) {
+		if !semver.Valid(v) {
 			return store.SensorChanges{}, invalid("version must be a semantic version")
 		}
 		sn.Version = v
@@ -668,45 +668,4 @@ func (s *Service) PreviewChange(ctx context.Context, nodeID string, add *SensorS
 	})
 }
 
-// semverLess reports a < b for x.y.z[-pre] versions (pre-release sorts
-// before its release; pre-release identifiers compared as strings).
-func semverLess(a, b string) bool {
-	pa, pb := parseSemver(a), parseSemver(b)
-	if pa == nil || pb == nil {
-		return false
-	}
-	for i := 0; i < 3; i++ {
-		if pa.n[i] != pb.n[i] {
-			return pa.n[i] < pb.n[i]
-		}
-	}
-	switch {
-	case pa.pre == pb.pre:
-		return false
-	case pa.pre == "":
-		return false
-	case pb.pre == "":
-		return true
-	}
-	return pa.pre < pb.pre
-}
-
-type semver struct {
-	n   [3]int
-	pre string
-}
-
-func parseSemver(v string) *semver {
-	m := semverRE.FindStringSubmatch(v)
-	if m == nil {
-		return nil
-	}
-	var s semver
-	for i := 0; i < 3; i++ {
-		fmt.Sscanf(m[i+1], "%d", &s.n[i])
-	}
-	if m[4] != "" {
-		s.pre = m[4][1:]
-	}
-	return &s
-}
+func semverLess(a, b string) bool { return semver.Less(a, b) }

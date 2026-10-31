@@ -483,3 +483,23 @@ paths:
       summary: Re-enable webhook notifications
       responses:
         '200': {description: '{"silenced": false}'}
+  /api/v3/catalogue:
+    get:
+      summary: Sensors and versions from the signed registry, with availability and reasons
+      responses:
+        '200': {description: '{"sensors": [{name, display_name, category, description, latest, versions: [{version, available, verified, deprecated, listed, reason}]}], "status": {registry_url, last_refresh, last_error}}'}
+  /api/v3/catalogue/{name}/{version}:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'}}
+      - {name: version, in: path, required: true, schema: {type: string}}
+    get:
+      summary: One version and its manifest (null when unavailable). documentation is untrusted Markdown; render escaped.
+      responses:
+        '200': {description: '{"name", "version": Version, "manifest": Manifest|null}'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v3/catalogue/refresh:
+    post:
+      summary: Refresh from the registry now
+      responses:
+        '200': {description: '{"status": Status}'}
+        '502': {$ref: '#/components/responses/Error'}

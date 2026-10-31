@@ -196,3 +196,27 @@ read-only), bounded json-file logs, `restart: unless-stopped`, and bind mounts
 with `create_host_path: false` (a missing lure directory fails the deploy
 instead of Docker creating it as root). Tell us if any of these conflicts with
 a PORTED decoy's needs (e.g. memory for the scan detector).
+
+### Q32 — §6.7 / §10 — Registry location and index format
+Neither the default URL nor the index format is specified.
+**Meanwhile:** default `https://raw.githubusercontent.com/mahmoudahmed3132/TrueSignal-Rewrite/registry/`
+(the publish workflow's `registry` branch), overridable by `TS_REGISTRY_URL`
+and the `registry_url` setting; index format in `docs/registry.md`. Bundles are
+`<manifest path>.sigstore.json`.
+
+### Q33 — §6.7 — Which version is "latest"
+The index carries `latest`, but the Hub may not have verified that version.
+**Meanwhile:** the Hub computes latest = highest verified, listed,
+non-deprecated version; the index value is advisory. Upgrades never move to an
+unverified version even if the index points there.
+
+### Q34 — §6.7 — Deprecated or removed versions with deployed instances
+**Meanwhile:** they stay renderable (the deployed decoy keeps working and can
+be edited) but are reported as deprecated and never offered as latest. Removal
+from the index is treated as deprecation. New instances on a deprecated version
+are still accepted — tell us if those should be refused.
+
+### Q35 — §6.7 — Caching verified manifests
+**Meanwhile:** verified manifest + bundle bytes are cached in the database
+(schema v2) and re-verified on every start, so a registry outage does not stop
+renders; a verifier that now rejects (revocation, module missing) unloads them.

@@ -279,3 +279,35 @@ func TestAdminCompareAndSwap(t *testing.T) {
 		t.Fatal("CAS with stale value succeeded")
 	}
 }
+
+func TestMigrationV1ToCurrentKeepsData(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "ts.db")
+	db, err := Open(ctx, path, Options{Migrations: migrations[:1]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedNode(t, db, "node-00000001")
+	db.Close()
+
+	db, err = Open(ctx, path, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if v, _ := db.schemaVersion(ctx); v != SchemaVersion() {
+		t.Fatalf("schema v%d", v)
+	}
+	if snaps, _ := filepath.Glob(path + ".pre-v*.bak"); len(snaps) != 1 {
+		t.Fatalf("snapshots %v", snaps)
+	}
+	if _, err := db.Node(ctx, "node-00000001"); err != nil {
+		t.Fatal("data lost across migration")
+	}
+	if err := db.PutCachedManifest(ctx, CachedManifest{Name: "x", Version: "1.0.0", Manifest: []byte("{}"), FetchedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := db.CachedManifests(ctx); len(c) != 1 || c[0].Verified {
+		t.Fatalf("%+v", c)
+	}
+}

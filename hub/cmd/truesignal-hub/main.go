@@ -22,6 +22,7 @@ import (
 
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/audit"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/catalogue"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/compose"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/config"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
@@ -31,6 +32,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ratelimit"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/secrets"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
@@ -116,7 +118,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules are not installed: TOTP/MFA, beacons, honeytokens, source lists, enrichment and SIEM rendering are inactive")
+	log.Warn("PORTED modules are not installed: manifest verifier (catalogue empty), TOTP/MFA, beacons, honeytokens, source lists, enrichment and SIEM rendering are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
@@ -150,8 +152,27 @@ func serve(log *slog.Logger) error {
 		Development: cfg.Development, Log: log, Now: time.Now}
 
 	keys := nodekey.NewAuthenticator(db) // shared: admin key rotation invalidates ingest auth
+	cat := &catalogue.Catalogue{
+		Store:    db,
+		Settings: db,
+		// PORTED Sigstore verifier not installed: every manifest is
+		// unavailable (fail closed) unless the dev unsigned flag is set.
+		Verifier:      stub.RejectAllVerifier{},
+		Fetcher:       catalogue.NewHTTPFetcher(),
+		DefaultURL:    cfg.RegistryURL,
+		AllowHTTP:     cfg.Development,
+		AllowUnsigned: cfg.DevAllowUnsigned,
+		Options:       manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
+		Log:           log,
+		Now:           time.Now,
+	}
+	if err := cat.Load(ctx); err != nil {
+		return fmt.Errorf("loading catalogue cache: %w", err)
+	}
+	go cat.Run(ctx)
+
 	compiler := &compose.Compiler{
-		Manifests: nil, // catalogue (§6.7) not installed yet: renders answer 422 manifest_unavailable
+		Manifests: cat,
 		Settings:  db,
 		Keys:      &secrets.Keys{Store: db},
 		// Honeytokens: PORTED module; File Canary deploys fail closed until installed.
@@ -159,10 +180,12 @@ func serve(log *slog.Logger) error {
 		Log:     log,
 	}
 	(&httpapi.Fleet{
-		Svc:      &fleet.Service{Store: db, Compiler: compiler, Keys: keys, Log: log, Now: time.Now},
+		Svc:      &fleet.Service{Store: db, Compiler: compiler, Catalogue: cat, Keys: keys, Log: log, Now: time.Now},
 		Settings: db,
 		Log:      log,
 	}).Register(admin)
+
+	(&httpapi.Catalogue{Cat: cat, Log: log}).Register(admin)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v3/", admin.Handler())

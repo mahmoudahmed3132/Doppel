@@ -124,6 +124,17 @@ CREATE TABLE beacons (
 	last_used_at INTEGER
 );
 `},
+	{Version: 2, SQL: `
+CREATE TABLE catalogue_cache (
+	name        TEXT    NOT NULL,
+	version     TEXT    NOT NULL,
+	manifest    BLOB    NOT NULL,
+	bundle      BLOB    NOT NULL,
+	verified    INTEGER NOT NULL,
+	fetched_at  INTEGER NOT NULL,
+	PRIMARY KEY (name, version)
+);
+`},
 }
 
 // SchemaVersion is the schema version this build migrates to.

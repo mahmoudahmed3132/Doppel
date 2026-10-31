@@ -32,6 +32,7 @@ const (
 	EnvSigstoreTrustedRoot = "TS_SIGSTORE_TRUSTED_ROOT"
 	EnvDevAllowUnsigned    = "TS_DEV_ALLOW_UNSIGNED_MANIFESTS"
 	EnvDevAllowUnpinned    = "TS_DEV_ALLOW_UNPINNED_IMAGES"
+	EnvRegistryURL         = "TS_REGISTRY_URL"
 )
 
 // Config is the Hub process configuration.
@@ -53,7 +54,11 @@ type Config struct {
 	SigstoreRoot      string
 	DevAllowUnsigned  bool
 	DevAllowUnpinned  bool
+	RegistryURL       string // default registry; the registry_url setting overrides it
 }
+
+// DefaultRegistryURL is the product's registry branch (§10).
+const DefaultRegistryURL = "https://raw.githubusercontent.com/mahmoudahmed3132/TrueSignal-Rewrite/registry/"
 
 // Load reads the configuration through getenv.
 func Load(getenv func(string) string) (*Config, error) {
@@ -151,6 +156,10 @@ func Load(getenv func(string) string) (*Config, error) {
 	c.GeoIPDB = get(EnvGeoIPDB)
 	c.SignerRepo = get(EnvSignerRepo)
 	c.SigstoreRoot = get(EnvSigstoreTrustedRoot)
+	c.RegistryURL = DefaultRegistryURL
+	if v := get(EnvRegistryURL); v != "" {
+		c.RegistryURL = v
+	}
 
 	if err := errors.Join(errs...); err != nil {
 		return nil, err

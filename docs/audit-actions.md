@@ -27,11 +27,12 @@ Request bodies are never included.
 | `sensor.delete` | sensor deleted (events kept) | `DELETE /api/v3/nodes/{node}/sensors/{sensor}` |
 | `sensor.silence` | webhooks silenced for a sensor | `POST /api/v3/nodes/{node}/sensors/{sensor}/silence` |
 | `sensor.unsilence` | webhooks re-enabled | `POST /api/v3/nodes/{node}/sensors/{sensor}/unsilence` |
+| `catalogue.refresh` | manual catalogue refresh | `POST /api/v3/catalogue/refresh` |
 
 Planned (reserved names, routes to follow with their features): `config.update`,
 `siem.update`, `webhook.update`, `events.mark_read`, `events.archive`,
 `events.delete_all`, `system.factory_reset`, `system.arm`, `beacon.create`, `beacon.delete`,
-`assets.replace`, `catalogue.refresh`.
+`assets.replace`.
 
 Read-only routes (`GET …`, and `POST /api/v3/nodes/{node}/compose/preview`,
 which renders without saving) are not audited.
