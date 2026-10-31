@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Command network-scan-detector passively captures inbound frames (§11.3)
 // and reports sources that touch many distinct ports within a window. It

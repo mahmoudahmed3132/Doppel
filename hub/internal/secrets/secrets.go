@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package secrets holds the Hub master keys (capture-hash and beacon). They
 // are generated on first use, stored in settings, and never leave the Hub:

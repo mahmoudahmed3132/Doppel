@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package livefeed pushes typed messages to connected admin UIs over
 // WebSocket (§6.4 Live feed): new events, sensor status changes, a periodic

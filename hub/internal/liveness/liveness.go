@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package liveness tracks sensor status from heartbeats, events and stop
 // notices and raises the Hub liveness events of §6.6.

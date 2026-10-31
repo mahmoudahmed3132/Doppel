@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Runs inside a registry-branch worktree (via registry-commit.sh): adds one
 # signed, pinned manifest and regenerates index.json. Refuses a version that

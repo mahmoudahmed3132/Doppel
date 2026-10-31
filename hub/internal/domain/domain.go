@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package domain holds the Hub's core types. It has no dependencies on
 // storage, transport or the PORTED modules.

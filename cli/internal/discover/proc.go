@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package discover inspects the host passively (§8): it reads /proc for
 // listening sockets and process names, checks file existence, and matches

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Page shells for the PORTED features (§12): honeytokens, beacons, assets,
 // ATT&CK and the analytics projections. When a module is not installed the

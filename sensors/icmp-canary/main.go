@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Command icmp-canary reports ICMP requests reaching the host (§11.2): a raw
 // ICMP socket (NET_RAW, host network) receives a copy of every ICMP packet;

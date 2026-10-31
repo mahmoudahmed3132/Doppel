@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package hub is the node agent's Hub client. Node calls authenticate with
 // the node key; discover additionally uses a short-lived admin session.

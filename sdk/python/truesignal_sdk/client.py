@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """HTTPS client for the sensor endpoints (contract v3 §4). TLS uses the system
 roots plus an optional CA bundle; verification is never disabled. Redirects
 are not followed (a redirect would carry the node key elsewhere)."""

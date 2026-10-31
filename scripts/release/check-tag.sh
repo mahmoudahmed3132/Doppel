@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Publish guard (§10), part 1: parses a release tag, checks it is SemVer,
 # that it equals the version in code/manifest, and that the tagged commit is

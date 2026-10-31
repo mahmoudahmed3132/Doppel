@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # CLI publish (§10, Q46). Tag cli/vX.Y.Z -> static linux/amd64 and arm64
 # binaries, SHA256SUMS, one Sigstore bundle per binary (keyless, this

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package config holds the node agent's local state: the config file with
 // the Hub endpoint, node id and node key (0600), and the working directory

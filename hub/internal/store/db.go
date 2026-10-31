@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package store persists Hub state in a single SQLite file (WAL mode,
 // foreign keys on) through the pure-Go modernc.org/sqlite driver.

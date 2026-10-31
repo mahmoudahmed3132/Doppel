@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package docker drives the Docker CLI for the node agent. All arguments
 // are passed as an argv list (never through a shell).

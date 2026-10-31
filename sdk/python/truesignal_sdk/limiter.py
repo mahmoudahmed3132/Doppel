@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """Per-source cooldown limiter (same semantics as the Go SDK): at most one
 event per source per cooldown; suppressed events are counted and returned
 with the next allowed one as ``suppressed_since_last``. Bounded LRU."""

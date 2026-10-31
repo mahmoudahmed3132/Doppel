@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Prints the version declared in code for a component (§10: tags must match).
 #   component-version.sh hub | cli | sensor <name>

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 # Runtime: standard library only (spec §11.6). setuptools is needed only to
 # build/install the package with pip; sensors can also vendor truesignal_sdk/.
 [build-system]

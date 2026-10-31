@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package webui serves the embedded admin UI (§7). The UI is built from
 // ui/ into dist/ before the release build; a plain `go build` without it

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package httpapi contains the Hub's HTTP handlers. Handlers parse,
 // validate and serialise only; business logic lives in services.

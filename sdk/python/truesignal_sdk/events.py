@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 """Event model and JSON encoding (contract v3 §4.2)."""
 
 from __future__ import annotations

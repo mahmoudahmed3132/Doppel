@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Creates the release tag for a component from the version in code and pushes
 # it ALONE (GitHub does not trigger workflows for pushes carrying more than

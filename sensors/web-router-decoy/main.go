@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Command web-router-decoy serves a fake device login portal (§11.5) and
 // reports page views, path probes and login attempts. Logins always fail.

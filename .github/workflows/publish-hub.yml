@@ -1,4 +1,4 @@
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Hub publish (§10). Tag hub/vX.Y.Z -> image built (UI embedded), scanned,
 # pushed to GHCR by digest, signed keyless with cosign, verified, released.

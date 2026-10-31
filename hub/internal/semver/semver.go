@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package semver parses and orders x.y.z[-pre] versions (SemVer 2.0.0
 // precedence; build metadata is not accepted).

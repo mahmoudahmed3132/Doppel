@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package audit delivers administrative audit records (§6.10) to the Hub
 // log and to the SIEM output. Audit records are not stored in the database.

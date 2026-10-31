@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // First-run setup: one-time setup token (printed in the Hub log), admin
 // password, public Hub endpoint.

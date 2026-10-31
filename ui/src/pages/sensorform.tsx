@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Sensor configuration form generated from the manifest's config[]:
 // input per type, defaults, descriptions, client-side checks mirroring the

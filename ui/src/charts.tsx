@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Hand-written SVG charts. Geometry uses SVG presentation attributes and
 // colours come from CSS classes, so nothing needs inline style (CSP).

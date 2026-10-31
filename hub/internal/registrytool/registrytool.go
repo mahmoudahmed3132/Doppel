@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package registrytool implements the sensor publish and rollback steps of
 // §10 on a checkout of the registry branch: pinning a manifest to the pushed

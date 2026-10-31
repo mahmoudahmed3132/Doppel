@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Login (password, then TOTP or recovery code when enrolled) and the
 // enrolment-only screen shown when MFA is required but not yet set up.

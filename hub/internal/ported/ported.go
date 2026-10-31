@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package ported declares the integration seams for the modules marked
 // PORTED in specification §12. The owner supplies the implementations; this

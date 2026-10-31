@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # End-to-end test on a real Docker host (CI job `real-docker`, acceptance
 # §14.11/§14.12): sensor images pushed by digest to a local registry, a real

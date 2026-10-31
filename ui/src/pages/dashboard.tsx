@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Dashboard: counters, severity distribution, velocity, live latest events,
 // fleet health and the sensor uptime heatmap. Charts reload on the live

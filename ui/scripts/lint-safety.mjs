@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Fails the build if UI sources use constructs that would bypass output
 // escaping or the CSP: raw HTML injection, eval-like calls, inline style

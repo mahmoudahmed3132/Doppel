@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Command ts-registry runs the registry steps of the sensor publish and
 // rollback workflows (§10) on a checkout of the registry branch:

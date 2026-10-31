@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package catalogue maintains the sensor catalogue from the signed registry
 // (§6.7). Every manifest is verified by the PORTED signing module before it

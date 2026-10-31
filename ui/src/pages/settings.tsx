@@ -1,4 +1,4 @@
-// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Settings: general, source lists, retention, SIEM, webhook, security
 // (MFA, password), danger zone. Secrets are write-only: the API reports only
