@@ -130,6 +130,9 @@ type Meta struct {
 	// NodeKeyEnv names the variable the CLI must add to every service from
 	// its local configuration; the Hub stores only the key's hash.
 	NodeKeyEnv string `json:"node_key_env"`
+	// HostPaths lists the host paths (lure files) the sensors use, so the
+	// CLI can re-check them and list them on uninstall (they are kept).
+	HostPaths []string `json:"host_paths"`
 }
 
 // Service is one compose service.
@@ -213,14 +216,14 @@ func (c *Compiler) Render(ctx context.Context, node domain.Node, sensors []domai
 
 	doc := Document{
 		Name:     "truesignal",
-		Meta:     Meta{NodeID: node.ID, Revision: rev, NodeKeyEnv: manifest.EnvNodeKey},
+		Meta:     Meta{NodeID: node.ID, Revision: rev, NodeKeyEnv: manifest.EnvNodeKey, HostPaths: []string{}},
 		Services: map[string]*Service{},
 	}
 	var warnings []string
 	ports := map[int]portClaim{}
 
 	for _, sn := range sorted {
-		svcs, warn, err := c.renderSensor(ctx, node, sn, endpoint, rev, opts, ports)
+		svcs, warn, err := c.renderSensor(ctx, node, sn, endpoint, rev, opts, ports, &doc.Meta.HostPaths)
 		if err != nil {
 			return fleet.Rendered{}, err
 		}
@@ -233,6 +236,7 @@ func (c *Compiler) Render(ctx context.Context, node domain.Node, sensors []domai
 		}
 	}
 
+	sort.Strings(doc.Meta.HostPaths)
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -244,7 +248,7 @@ func (c *Compiler) Render(ctx context.Context, node domain.Node, sensors []domai
 }
 
 func (c *Compiler) renderSensor(ctx context.Context, node domain.Node, sn domain.Sensor, endpoint, rev string,
-	opts fleet.RenderOptions, ports map[int]portClaim) (map[string]*Service, []string, error) {
+	opts fleet.RenderOptions, ports map[int]portClaim, hostPaths *[]string) (map[string]*Service, []string, error) {
 
 	if !domain.ValidSensorID(sn.ID) {
 		return nil, nil, reject(sn.ID, "invalid_sensor_id", "invalid sensor id")
@@ -329,6 +333,7 @@ func (c *Compiler) renderSensor(ctx context.Context, node domain.Node, sn domain
 			if err := manifest.CheckMountSource(p); err != nil {
 				return nil, nil, fromRule(sn.ID, err)
 			}
+			*hostPaths = append(*hostPaths, p)
 			src := p
 			if hp.Mount == "parent" {
 				src = path.Dir(p)

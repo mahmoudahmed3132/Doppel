@@ -16,6 +16,8 @@ must state why it is needed.
 | `github.com/dustin/go-humanize` | hub (via sqlite) | v1.1.0 | MIT | Transitive |
 | `github.com/google/uuid` | hub (via sqlite) | v1.6.0 | BSD-3-Clause | Transitive (not used directly; Hub UUIDv7 is in `internal/ids`) |
 | `golang.org/x/sys` | hub (via sqlite) | v0.49.0 | BSD-3-Clause | Transitive |
+| `golang.org/x/term` | cli | v0.47.0 | BSD-3-Clause | No-echo password prompt for `discover`; TTY detection for colour |
+| `golang.org/x/sys` | cli (via term) | v0.49.0 | BSD-3-Clause | Transitive |
 
 `sdk/go` has zero third-party dependencies by requirement (§5.9).
 

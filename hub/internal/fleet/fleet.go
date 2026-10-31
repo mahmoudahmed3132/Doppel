@@ -631,6 +631,26 @@ func (s *Service) SetSilenced(ctx context.Context, nodeID, sensorID string, v bo
 	return s.Store.SetSensorSilenced(ctx, nodeID, sensorID, v)
 }
 
+// Deploy renders the node's compose file with real secrets. It is served
+// only to the node itself (node-key authenticated), never to the admin API.
+func (s *Service) Deploy(ctx context.Context, nodeID string) (Rendered, error) {
+	if s.Compiler == nil {
+		return Rendered{}, ErrCompilerUnavailable
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n, err := s.Store.Node(ctx, nodeID)
+	if err != nil {
+		return Rendered{}, err
+	}
+	list, err := s.Store.Sensors(ctx, nodeID)
+	if err != nil {
+		return Rendered{}, err
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
+	return s.Compiler.Render(ctx, *n, list, RenderOptions{Redact: false})
+}
+
 // Compose renders the node's current compose file (read-only).
 func (s *Service) Compose(ctx context.Context, nodeID string) (Rendered, error) {
 	return s.plan(ctx, nodeID, true, func(map[string]domain.Sensor) (store.SensorChanges, error) {

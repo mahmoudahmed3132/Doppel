@@ -215,8 +215,9 @@ func serve(log *slog.Logger) error {
 		Options: manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
 		Log:     log,
 	}
+	fleetSvc := &fleet.Service{Store: db, Compiler: compiler, Catalogue: cat, Keys: keys, Log: log, Now: time.Now}
 	(&httpapi.Fleet{
-		Svc:      &fleet.Service{Store: db, Compiler: compiler, Catalogue: cat, Keys: keys, Log: log, Now: time.Now},
+		Svc:      fleetSvc,
 		Settings: db,
 		Log:      log,
 	}).Register(admin)
@@ -226,7 +227,7 @@ func serve(log *slog.Logger) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v3/", admin.Handler())
-	(&httpapi.Ingest{
+	ingestAPI := &httpapi.Ingest{
 		Auth:     keys,
 		Limiter:  ratelimit.NewKeyed(50, 200),
 		Store:    db,
@@ -235,7 +236,9 @@ func serve(log *slog.Logger) error {
 		Version:  httpapi.Version{Product: "truesignal-hub", Version: Version, Contract: contractVersion},
 		Log:      log,
 		Now:      time.Now,
-	}).Register(mux)
+	}
+	ingestAPI.Register(mux)
+	(&httpapi.NodeAPI{Ingest: ingestAPI, Fleet: fleetSvc, Store: db, HubMajor: 3}).Register(mux)
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort("", strconv.Itoa(cfg.ListenPort)),

@@ -76,3 +76,10 @@ acknowledged heartbeat (queue overflow or undeliverable batches). See Q3.
 - SIGUSR1: queue the sensor's synthetic event with `source = "Fire drill"`.
 - Test mode: send the synthetic event once; exit 0 when the Hub counts it as
   accepted or duplicate within 10 s, else 1.
+
+## Node agent endpoints
+
+See [`cli.md`](cli.md#node-api-hub-side-node-key-authenticated): `GET /v3/node/identity`,
+`GET /v3/node/compose`, `POST /v3/node/applied`. Same bearer node key; additionally
+`X-TrueSignal-CLI-Version` must carry the Hub's major version (`426 version_mismatch`,
+body includes `required_major`).

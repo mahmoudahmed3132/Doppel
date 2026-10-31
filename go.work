@@ -2,6 +2,7 @@ go 1.26.0
 
 use (
 	./sdk/go
+	./cli
 	./hub
 	./sensors/template
 )

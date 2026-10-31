@@ -249,3 +249,36 @@ exclude them.
 Creation happens inside the PORTED honeytoken module. **Meanwhile:** the Hub
 wraps the module's `Ensure` and emits an inventory record the first time it
 sees a token id (seeded from the inventory at start).
+
+### Q41 — §8 — Scheduling `apply`
+The CLI is "on demand (not a daemon)". **Meanwhile:** no timer is installed;
+operators run `truesignal apply` after changes (or schedule it, e.g. a systemd
+timer or cron). Tell us if the installer should install a timer.
+
+### Q42 — §8 / Q28 — Symbolic links in host paths
+**Meanwhile:** `apply` refuses any bind source that resolves through a symlink,
+is missing, or resolves into a forbidden tree. Stricter than needed for some
+setups (e.g. `/home` as a symlink) but closes the gap the Hub cannot see.
+
+### Q43 — §8 — Failed applies
+**Meanwhile:** `rolled_back`/`failed` are reported to the Hub, which logs a
+warning; the applied revision is not advanced, so the node shows `in_sync:
+false`. Proposal: raise a Hub event (e.g. `node_apply_failed`, severity high) so
+the SOC sees decoys that are not running as configured — needs your approval
+since it adds a trigger.
+
+### Q44 — §4.4 — CLI requests without a version header
+**Meanwhile:** node endpoints answer `426` when the header is missing or not
+SemVer, not only on a major mismatch.
+
+### Q45 — §8 — Admin session from the CLI (`discover`)
+**Meanwhile:** the CLI logs in through the normal admin API, sending
+`Origin: <hub endpoint>`; the CSRF check therefore requires the node to be
+linked with the Hub's public URL. The session is logged out at the end;
+credentials are never written.
+
+### Q46 — §8 / §10 — Release asset names and signing identity
+**Meanwhile:** assets `truesignal-linux-{amd64,arm64}`, `SHA256SUMS`,
+`truesignal-linux-<arch>.sigstore.json`; cosign identity
+`https://github.com/mahmoudahmed3132/TrueSignal-Rewrite/.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`.
+The release workflow (§10) must produce exactly these.
