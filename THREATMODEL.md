@@ -92,6 +92,31 @@ production (fail closed). The development flags
 `TS_DEV_ALLOW_UNSIGNED_MANIFESTS` / `TS_DEV_ALLOW_UNPINNED_IMAGES` disable
 these controls and log a warning at every start; never set them in production.
 
+### §6.12 compose rules: threat mitigated by each hard rule
+
+The compose compiler (`hub/internal/compose`) is the boundary between
+untrusted inputs (manifests from the registry, admin-entered values, attacker
+influence on either) and root-equivalent container execution on every node.
+Each rule rejects the whole render with `422` and a precise code; nothing is
+silently dropped except undeclared config keys (rule 6, with a warning).
+
+| Rule | Threat it mitigates | Test (mutation-checked where noted) |
+|---|---|---|
+| 1. Images pinned by `@sha256` from a verified manifest | Tag mutation or registry compromise swapping the code a node runs after review; a manifest pointing at an attacker image | `TestRuleDigest`, `TestRealManifestsRender` |
+| 2. `read_only`, `cap_drop: ALL`, `no-new-privileges`; init containers `network_mode: none` | A compromised decoy persisting in its filesystem, gaining capabilities via setuid/file caps, or an init step exfiltrating | `TestPassingRenderHardening`, `TestRuleMounts` (init) |
+| 3. Capabilities only `NET_RAW`/`NET_BIND_SERVICE`/`DAC_OVERRIDE`; `network_mode` only host/bridge/none | Container-to-host escape or network takeover via `SYS_ADMIN`, `NET_ADMIN`, `container:`/`service:` namespace joins | `TestRuleCapabilitiesAndNetwork` (incl. `NET_ADMIN`) |
+| 4. Bind mounts absolute, normalised, outside `/run`, `/proc`, `/etc`, `/var/lib/docker`, … (including config-derived sources and their ancestors) | Docker-socket or host-config access = full host compromise; `..` traversal; mounting `/` or a parent of a forbidden path | `TestRuleMounts` (incl. `/run/docker.sock`, ancestors; mutation-checked) |
+| 5. No `$`/`{{` in image, network, volume, init command; `$` → `$$` in env | Compose variable interpolation turning attacker-controlled strings into different images, mounts or secrets from the node's environment | `TestRuleInterpolation` (mutation-checked) |
+| 6. Only declared config keys; reserved keys always Hub-set | Overriding `TS_HUB_ENDPOINT` (exfiltrate the node key), `TS_NODE_KEY`, `TS_SENSOR_ID` (impersonate another sensor) or `TS_TEST_MODE`; smuggling arbitrary env | `TestRuleConfigDeclaredAndReserved` (test-mode pinning mutation-checked) |
+| 7. Port conflicts (any protocol) → `409` | Two decoys silently fighting over a port so one never runs: a blind spot the admin believes is covered | `TestRulePortConflict` (UDP vs TCP), `TestConcurrentAddsCannotBothClaimAPort` |
+| 8. Default user `65532:65532`; container name = sensor id | Decoys running as root by default; name collisions hiding or replacing another sensor's container | `TestRealManifestsRender` (users per sensor), `TestPassingRenderHardening` |
+| 9. Per-sensor secrets: node key, HMAC-derived capture key, honeytoken, beacon key; master keys never leave the Hub | A compromised node learning master keys and forging honeytoken/beacon hits fleet-wide; secrets shown in the UI or API | `TestSecretsAndRedaction`, `TestPreviewDoesNotSaveAndIsRedacted` |
+| 10. Deterministic revision | Nodes re-applying (restart churn) or missing a change; inability to prove which configuration a node runs | `TestRevisionDeterministic` |
+| 11. Render before save | A saved-but-unrenderable configuration leaving nodes stuck on stale decoys, or a partially applied change | `TestSensorAddRendersBeforeSaving`, `TestFailClosedWithoutCompiler` |
+
+Rendered files never contain `build:` (compiler test in `TestRealManifestsRender`;
+`scripts/compose-guard.sh` for checked-in compose files).
+
 ### B6: Release pipeline
 | Threat | Control |
 |---|---|

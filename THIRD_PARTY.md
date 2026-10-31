@@ -31,6 +31,12 @@ No runtime CDN, font or analytics dependency: everything is embedded and served
 by the Hub (§7). Charts are hand-written SVG. `npm ci --ignore-scripts` is used
 in CI and release builds.
 
+`sdk/python` has zero runtime dependencies (standard library only, §11.6).
+`setuptools` (MIT) is needed only to `pip install` it (`pyproject.toml` build
+backend); sensors may vendor `truesignal_sdk/` instead. The Python template
+image uses `gcr.io/distroless/python3-debian13:nonroot` (Apache-2.0; CPython
+under the PSF licence), pinned by digest.
+
 `sdk/go` has zero third-party dependencies by requirement (§5.9).
 
 Only modules linked into a build are listed (`go list -deps`). Modules that

@@ -12,5 +12,5 @@ updates:
     directory: /ui
     schedule: {interval: weekly}
   - package-ecosystem: docker
-    directories: ["/hub", "/sensors/*"]
+    directories: ["/hub", "/sensors/*", "/sdk/python/template"]
     schedule: {interval: weekly}

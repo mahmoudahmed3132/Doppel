@@ -19,7 +19,7 @@ def fail(msg):
 schema = json.load(open("docs/manifest-v3.schema.json"))
 jsonschema.Draft202012Validator.check_schema(schema)
 validator = jsonschema.Draft202012Validator(schema)
-manifests = sorted(glob.glob("sensors/*/manifest.json"))
+manifests = sorted(glob.glob("sensors/*/manifest.json")) + ["sdk/python/template/manifest.json"]
 if not manifests:
     fail("no sensor manifests found")
 for p in manifests:

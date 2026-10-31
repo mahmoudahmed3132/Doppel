@@ -1,0 +1,78 @@
+{
+  "schema_version": 3,
+  "name": "python-template",
+  "display_name": "Python template sensor",
+  "version": "1.0.0",
+  "description": "Reference Python sensor: reports every TCP connection to one port and closes it.",
+  "category": "reference",
+  "author": "TrueSignal",
+  "documentation": "Copy `sdk/python/template` to start a community sensor in Python (standard library only).",
+  "image": {
+    "repository": "ghcr.io/mahmoudahmed3132/ts-sensor-python-template",
+    "tag": "1.0.0",
+    "digest": "",
+    "platforms": [
+      "linux/amd64"
+    ]
+  },
+  "runtime": {
+    "network_mode": "host",
+    "listen_ports": [
+      {
+        "config_key": "TS_TEMPLATE_PORT",
+        "protocol": "tcp"
+      }
+    ]
+  },
+  "config": [
+    {
+      "name": "TS_TEMPLATE_PORT",
+      "type": "port",
+      "default": "9099",
+      "description": "TCP port to listen on (≥ 1024; no capabilities are granted)",
+      "validation": {
+        "min": 1024
+      }
+    },
+    {
+      "name": "TS_TEMPLATE_COOLDOWN_SEC",
+      "type": "int",
+      "default": "60",
+      "description": "Per-source cooldown between events",
+      "validation": {
+        "min": 0,
+        "max": 86400
+      }
+    },
+    {
+      "name": "TS_DEFAULT_SEVERITY",
+      "type": "enum",
+      "default": "medium",
+      "description": "Default event severity",
+      "validation": {
+        "enum": [
+          "info",
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ]
+      }
+    }
+  ],
+  "discovery": {
+    "defaults": {
+      "TS_TEMPLATE_PORT": "free_port(9099)"
+    }
+  },
+  "triggers": [
+    {
+      "name": "template_connection",
+      "default_severity": "medium",
+      "description": "A TCP connection reached the template port"
+    }
+  ],
+  "compatibility": {
+    "hub_major": 3
+  }
+}

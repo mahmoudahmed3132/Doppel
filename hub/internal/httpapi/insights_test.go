@@ -21,6 +21,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/hubsettings"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/livefeed"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
 )
@@ -32,7 +33,10 @@ type insightHub struct {
 	jar    http.CookieJar
 }
 
-func newInsightHub(t *testing.T) *insightHub {
+func newInsightHub(t *testing.T) *insightHub { return newInsightHubWith(t, nil) }
+
+// newInsightHubWith lets a test install PORTED stubs before registration.
+func newInsightHubWith(t *testing.T, mod func(*Insights)) *insightHub {
 	t.Helper()
 	ctx := context.Background()
 	db, _ := store.Open(ctx, filepath.Join(t.TempDir(), "ts.db"), store.Options{})
@@ -44,9 +48,13 @@ func newInsightHub(t *testing.T) *insightHub {
 	settings := &hubsettings.Service{Store: db, Log: log}
 	broker := livefeed.NewBroker()
 	admin := &Admin{Auth: svc, Settings: db, Audit: &auditLog{}, Log: log, Now: time.Now, Development: true}
-	(&Insights{Store: db, Settings: settings, Auth: svc, Live: broker, Armed: func() bool { return true },
+	in := &Insights{Store: db, Settings: settings, Auth: svc, Live: broker, Armed: func() bool { return true },
 		SIEMStats: func() (int, uint64) { return 3, 1 }, Version: "3.0.0", Schema: 2, StartedAt: time.Now(),
-		Development: true, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin, TickEvery: 50 * time.Millisecond}).Register(admin)
+		Development: true, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin, TickEvery: 50 * time.Millisecond}
+	if mod != nil {
+		mod(in)
+	}
+	in.Register(admin)
 	srv := httptest.NewServer(admin.Handler())
 	t.Cleanup(srv.Close)
 	jar, _ := cookiejar.New(nil)
@@ -173,5 +181,36 @@ func TestLiveFeedOriginChecked(t *testing.T) {
 	anon := &client{t: t, http: &http.Client{}, base: h.srv.URL}
 	if code, _, _ := anon.do("GET", "/api/v3/live", nil); code != 401 {
 		t.Fatal("live feed without session")
+	}
+}
+
+// With the PORTED modules installed (stubs), projections are mounted with
+// their window and bounded parameter pass-through, the status lists them,
+// and the ATT&CK Navigator layer downloads as an attachment.
+func TestProjectionsAndNavigatorWithModules(t *testing.T) {
+	attack := stub.Attack{Map: map[string]domain.AttackMapping{"x": {Primary: domain.Technique{ID: "T1046", Name: "Network Service Discovery", Tactics: []string{"discovery"}}}}}
+	h := newInsightHubWith(t, func(in *Insights) {
+		in.Projections = map[string]ported.Projection{"sources": stub.Projection{N: "sources"}}
+		in.Attack = attack
+	})
+	_, out, _ := h.c.do("GET", "/api/v3/system/status", nil)
+	mods := out["status"].(map[string]any)["modules"].(map[string]any)
+	if mods["attack"] != true || len(mods["projections"].([]any)) != 1 || mods["projections"].([]any)[0] != "sources" {
+		t.Fatalf("modules %v", mods)
+	}
+	code, out, _ := h.c.do("GET", "/api/v3/analytics/projections/sources?days=1&top=5", nil)
+	data, _ := out["data"].(map[string]any)
+	if code != 200 || out["projection"] != "sources" || data["events"] != 4.0 || data["params"].(map[string]any)["top"] != "5" {
+		t.Fatalf("%d %v", code, out)
+	}
+	if _, ok := data["params"].(map[string]any)["days"]; ok {
+		t.Fatal("days must not be passed through as a projection parameter")
+	}
+	if code, _, _ := h.c.do("GET", "/api/v3/analytics/projections/Bad%20Name", nil); code != 404 {
+		t.Fatalf("invalid projection name: %d", code)
+	}
+	code, _, resp := h.c.do("GET", "/api/v3/analytics/attack/navigator?days=1", nil)
+	if code != 200 || !strings.HasPrefix(resp.Header.Get("Content-Disposition"), "attachment;") || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+		t.Fatalf("navigator %d %v", code, resp.Header)
 	}
 }
