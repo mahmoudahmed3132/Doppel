@@ -13,7 +13,7 @@ containerised decoy sensors. Clean-room implementation of specification v1.
 | `ui/` | admin web UI (Preact + TypeScript, embedded in the Hub) | done (§7); PORTED pages are shells |
 | `.github/`, `scripts/release/` | CI, CodeQL, publish (Hub, CLI, sensors), registry rollback | done (§10); not yet run on GitHub |
 | `deploy/` | production Hub compose | done |
-| `docs/` | contract, manifest schema, API, registry, SIEM, CLI, sensors, operations | done except threat model |
+| `docs/`, `THREATMODEL.md` | contract, manifest schema, API, registry, SIEM, CLI, sensors, operations, threat model | done |
 
 Governance files: `PROVENANCE.md`, `QUESTIONS.md`, `THIRD_PARTY.md`.
 

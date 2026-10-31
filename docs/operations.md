@@ -58,8 +58,10 @@ refuse unsigned manifests and unpinned images.
    of record for PCI DSS 10.x retention.
 
 Back up the `hub-data` volume (SQLite database) with the Hub stopped, or use
-`sqlite3 truesignal.db ".backup out.db"` while running. It contains hashed
-credentials and encrypted secrets; treat backups as sensitive.
+`sqlite3 truesignal.db ".backup out.db"` while running. It contains the argon2id
+password hash, node-key hashes and, **in plaintext**, the Hub master keys, the SIEM
+token, the webhook URL and the TOTP seed: encrypt backups and restrict the
+volume to the Hub user (see THREATMODEL.md R1).
 
 ## 3. Upgrade the Hub
 
