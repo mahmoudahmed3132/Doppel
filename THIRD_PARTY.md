@@ -37,3 +37,20 @@ Only modules linked into a build are listed (`go list -deps`). Modules that
 appear in `go.sum` solely through dependencies' tests or tooling are not
 linked; at the time of writing that includes `github.com/hashicorp/golang-lru/v2`
 (MPL-2.0, file-level — permitted) and `golang.org/x/tools`.
+
+### CI and release tooling (not shipped)
+
+Pinned by commit SHA in `.github/workflows/` (Dependabot proposes bumps):
+`actions/checkout` v7.0.1, `actions/setup-go` v7.0.0, `actions/setup-node`
+v7.1.0 (MIT); `github/codeql-action` v4.39.1 (MIT); `docker/login-action`
+v4.7.0, `docker/setup-buildx-action` v4.4.1, `docker/build-push-action`
+v7.4.0 (Apache-2.0); `sigstore/cosign-installer` v4.1.2 (Apache-2.0) installing
+cosign v3.0.6 (Apache-2.0); `aquasecurity/trivy-action` v0.36.0 (Apache-2.0)
+running Trivy v0.70.0 (Apache-2.0). `crane` v0.22.1
+(`github.com/google/go-containerregistry`, Apache-2.0) via `go install`
+(checksum-verified by sum.golang.org). `python3-yaml` (MIT) and
+`python3-jsonschema` (MIT) from the Ubuntu archive.
+Base images (pinned by digest): `golang:1.26.2-bookworm` (BSD-3-Clause Go;
+Debian packages under their own licences, build stage only) and
+`gcr.io/distroless/static-debian12:nonroot` (Apache-2.0; shipped runtime base).
+

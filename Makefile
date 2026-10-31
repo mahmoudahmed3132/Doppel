@@ -3,7 +3,7 @@
 GO_MODULES := $(shell sed -n 's/^\t\.\/\(.*\)$$/\1/p' go.work)
 export CGO_ENABLED := 0
 
-.PHONY: all vet test check-headers ui hub-bin
+.PHONY: all vet test check-headers ui hub-bin tag-hub tag-cli tag-sensor tag-sensors
 
 all: check-headers vet test
 
@@ -23,3 +23,21 @@ ui:
 
 hub-bin: ui
 	cd hub && go build -trimpath -ldflags "-s -w" -o ../bin/truesignal-hub ./cmd/truesignal-hub
+
+# Release tags (§10): version read from code/manifest, one tag per push.
+#   make tag-hub | make tag-cli | make tag-sensor NAME=tcp-tarpit | make tag-sensors
+tag-hub:
+	@./scripts/release/tag.sh hub
+
+tag-cli:
+	@./scripts/release/tag.sh cli
+
+tag-sensor:
+	@test -n "$(NAME)" || { echo "NAME=<sensor> required"; exit 2; }
+	@./scripts/release/tag.sh sensor $(NAME)
+
+# Tags every sensor whose current manifest version is not tagged yet, each in
+# its own push.
+tag-sensors:
+	@for d in sensors/*/manifest.json; do n=$$(basename $$(dirname $$d)); [ "$$n" = template ] && continue; \
+		./scripts/release/tag.sh sensor $$n --skip-existing || exit 1; done

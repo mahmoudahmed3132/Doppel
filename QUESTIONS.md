@@ -380,3 +380,26 @@ view only (the Hub image is upgraded by the operator, not from the UI); the
 CLI release notice is acknowledged per version via
 `POST /system/cli-notice/ack` and stays hidden until the next CLI release.
 
+### Q60 — §0, §10 — Container image names
+The names the earlier milestones used for sensor images
+(`ghcr.io/mahmoudahmed3132/truesignal-sensor-*`) fall inside the namespace §0
+forbids (`ghcr.io/mahmoudahmed3132/truesignal-*`): publishing there would push
+into, and the "already published" guard would read from, the prior project's
+packages. **Meanwhile:** images are `ghcr.io/<owner>/ts-hub` and
+`ghcr.io/<owner>/ts-sensor-<name>` (manifests updated; a test pins the
+prefix). No prior image was ever pulled or inspected. Confirm or choose
+other names (one constant per workflow plus `sensors/*/manifest.json`).
+
+### Q61 — §10 — Extra publish guards
+Beyond the spec, publish workflows also refuse (a) a tag whose commit is not
+on the default branch (only reviewed code is released) and (b) a sensor whose
+image tag already exists although the version is not in the registry (a
+previous run died between push and registry commit). (b) keeps image tags
+immutable; recovery is a deliberate deletion of that package version. Say if
+either is unwanted.
+
+### Q62 — §10 — `:latest` and pre-releases
+**Meanwhile:** `:latest` only ever points at a plain `X.Y.Z` release;
+pre-release tags (`hub/v4.0.0-rc.1`) publish their version tag but are never
+`:latest` candidates. The update check (Q55) ignores GitHub pre-releases too.
+
