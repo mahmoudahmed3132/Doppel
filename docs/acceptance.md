@@ -17,7 +17,7 @@ some cases automated; **todo** = component not yet implemented.
 | 10 | SIEM delivery | pass (HTTP parts against a PORTED-transport stand-in) | `hub/internal/siem`: `TestTCPCollectorRestartLosesNothing` (mutation-checked: fails 3/3 without the peer-closed check), `TestHTTPTransientRetriedTerminalDropped` (500→retry, 400→drop, 10-attempt cap), `TestQueueOverflowCounted`, `TestSwitchAuditReachesPreviousDestination`, `TestSwitchInterruptsRetriesAgainstDeadDestination`, `TestHubHeartbeat` (5 min interval), `TestTLSVerifiesCollector`, `TestUDP`, `TestShutdownFlushes`, `TestHoneytokenInventory`. "Redirect not followed" for HTTP outputs is the PORTED transport's duty; webhooks: `hub/internal/webhook` `TestRetriesAndRedirects` |
 | 11 | CLI | pass (Docker simulated) | `cli/internal/apply`: `TestApplyNoOpWhenUnchanged`, `TestRollbackOnExitedService`, `TestRestartingAndUpFailureRollBack`, `TestFirstDeployFailureTearsDown`, `TestPullFailureChangesNothing`, `TestHostPathChecks`; `cli/internal/app`: `TestApplyAndUninstallKeepsLures`, `TestVersionMismatchMessage`, `TestLinkSavesConfig0600`; Hub side `hub/internal/httpapi` `TestNodeAPI` (426, unredacted compose only for the own node). Live run of the real Hub + CLI with a fake `docker` on PATH; a run against a real Docker host is still pending |
 | 12 | Sensor test mode / fire drill | pass | each sensor has `TestTestModeAgainstMockHub` (`sensors/{tcp-tarpit,icmp-canary,network-scan-detector,file-canary,web-router-decoy}`); SDK `TestServiceLifecycle` (SIGUSR1 drill); real Hub `hub/internal/httpapi` `TestSDKEndToEnd`; live runs: raw ICMP echo → event, AF_PACKET connect scan → event, real inotify in `file-canary` tests. All manifests validated (`hub/internal/manifest` `TestAllSensorManifests`) and rendered (`hub/internal/compose` `TestRealManifestsRender`) |
-| 13 | CI publish guards | pass (local self-test; first GitHub run pending) | `scripts/release/selftest.sh` (CI job `release-tooling`): tag/version mismatch, non-SemVer, unknown sensor, off-default-branch refused; registry first publish, concurrent publishes both land, republish refused, rollback deprecates latest; `:latest` = highest published + signature-verified (SemVer, no pre-release). `hub/internal/registrytool` tests (pinning, index via the Hub decoder, unsigned/unpinned refused). Hub image tag / CLI assets existence checks run only against GHCR/GitHub |
+| 13 | CI publish guards | pass (GitHub Actions, job `release-tooling`) | `scripts/release/selftest.sh` (CI job `release-tooling`): tag/version mismatch, non-SemVer, unknown sensor, off-default-branch refused; registry first publish, concurrent publishes both land, republish refused, rollback deprecates latest; `:latest` = highest published + signature-verified (SemVer, no pre-release). `hub/internal/registrytool` tests (pinning, index via the Hub decoder, unsigned/unpinned refused). Hub image tag / CLI assets existence checks run only against GHCR/GitHub |
 | 14 | Independence check | n/a | run by the specification team |
 
 ## Admin UI (§7)
@@ -26,4 +26,16 @@ Not a §14 item. `ui/` passes `tsc --noEmit` and the safety lint in `make ui`;
 `hub/internal/webui` tests SPA routing, cache headers and that the embedded
 `index.html` is CSP-clean. `ui/e2e/smoke.cjs` (Playwright, run manually against
 a development Hub) passes all steps with zero CSP violations or page errors.
+
+## Python SDK (§11.6)
+
+`sdk/python/tests` (16 tests, run in CI on the runner's Python and inside the
+pinned distroless Python image): configuration rules, UUIDv7 order across
+counter exhaustion and clock steps, drop-oldest queue, limiter, test mode
+(success, rejection, 401), exit 2 on bad config, batching ≤ 100 with order
+kept, heartbeats with `dropped_events`, retries resending the same
+`event_id`, 4xx not retried, attempt cap, redirect not followed, real
+SIGUSR1/SIGTERM in a child process. Live run against the real Hub: test mode,
+TCP connections, fire drill, heartbeat (`sdk_version`), SIGTERM →
+`sensor_stopped` and sensor offline.
 

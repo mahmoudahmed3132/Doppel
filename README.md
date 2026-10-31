@@ -7,6 +7,7 @@ containerised decoy sensors. Clean-room implementation of specification v1.
 |---|---|---|
 | `sdk/go` | Go Sensor SDK (contract v3) | implemented |
 | `sensors/template` | reference sensor + Dockerfile | implemented |
+| `sdk/python` | Python SDK (§11.6, stdlib only) + template sensor | implemented |
 | `sensors/{tcp-tarpit,icmp-canary,network-scan-detector,file-canary,web-router-decoy}` | §11 sensors (lure content and web skins are PORTED seams with stubs) | implemented |
 | `hub/` | Hub server | storage, ingest API, pipeline, liveness, syslog formatter, admin auth + MFA flows, nodes/sensors API, compose compiler + manifest v3, catalogue, SIEM output, webhooks, audit delivery, events/settings/analytics/system APIs, retention, factory reset, update check, live feed done |
 | `cli/` | node agent CLI `truesignal` + `install.sh` | implemented (tested with simulated Docker) |

@@ -147,7 +147,8 @@ func TestMountSources(t *testing.T) {
 // validates official manifests against the schema and §6.12 rules).
 func TestAllSensorManifests(t *testing.T) {
 	paths, _ := filepath.Glob("../../../sensors/*/manifest.json")
-	if len(paths) == 0 {
+	paths = append(paths, "../../../sdk/python/template/manifest.json")
+	if len(paths) < 2 {
 		t.Fatal("no manifests found")
 	}
 	for _, p := range paths {
@@ -160,7 +161,7 @@ func TestAllSensorManifests(t *testing.T) {
 			t.Errorf("%s: %v", p, err)
 			continue
 		}
-		if filepath.Base(filepath.Dir(p)) != m.Name {
+		if dir := filepath.Base(filepath.Dir(p)); dir != m.Name && !(dir == "template" && m.Name == "python-template") {
 			t.Errorf("%s: name %q does not match its directory", p, m.Name)
 		}
 	}

@@ -10,3 +10,5 @@ node_modules/
 ui/node_modules/
 hub/internal/webui/dist/*
 !hub/internal/webui/dist/.placeholder
+__pycache__/
+*.pyc
