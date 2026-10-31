@@ -263,3 +263,174 @@ func (RejectAllVerifier) Verify([]byte, []byte, string, string) error {
 type AcceptAllVerifier struct{}
 
 func (AcceptAllVerifier) Verify([]byte, []byte, string, string) error { return nil }
+
+// ---- GeoIP --------------------------------------------------------------------
+
+// Geo locates sources from a fixed table keyed by IP (a ":port" suffix is
+// ignored). No GeoIP data is shipped; the real module (§12) is PORTED.
+type Geo struct {
+	Table    map[string]domain.Location
+	Disabled bool
+}
+
+func (g Geo) Enabled() bool { return !g.Disabled }
+
+func (g Geo) Locate(source string, _ map[string]any) *domain.Location {
+	ip := hostOnly(source)
+	l, ok := g.Table[ip]
+	if !ok {
+		return nil
+	}
+	l.Basis, l.Address = "source", ip
+	return &l
+}
+
+func hostOnly(s string) string {
+	if strings.HasPrefix(s, "[") {
+		if i := strings.Index(s, "]"); i > 0 {
+			return s[1:i]
+		}
+	}
+	if strings.Count(s, ":") == 1 {
+		return s[:strings.IndexByte(s, ':')]
+	}
+	return s
+}
+
+// ---- Asset inventory ------------------------------------------------------------
+
+// Assets accepts a JSON array of {"match": "<exact source>", "name", "criticality"}
+// and matches sources exactly. The real inventory module (§12) is PORTED.
+type Assets struct{}
+
+type stubAsset struct {
+	Match       string `json:"match"`
+	Name        string `json:"name"`
+	Criticality string `json:"criticality"`
+}
+
+func (Assets) Validate(raw json.RawMessage) (json.RawMessage, error) {
+	var list []stubAsset
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&list); err != nil {
+		return nil, fmt.Errorf("assets: %w", err)
+	}
+	for i, a := range list {
+		if strings.TrimSpace(a.Match) == "" || strings.TrimSpace(a.Name) == "" {
+			return nil, fmt.Errorf("assets[%d]: match and name are required", i)
+		}
+		switch a.Criticality {
+		case "low", "medium", "high", "critical":
+		default:
+			return nil, fmt.Errorf("assets[%d]: criticality must be low, medium, high or critical", i)
+		}
+	}
+	if list == nil {
+		list = []stubAsset{}
+	}
+	return json.Marshal(list)
+}
+
+func (Assets) Index(norm json.RawMessage) (ported.AssetIndex, error) {
+	var list []stubAsset
+	if err := json.Unmarshal(norm, &list); err != nil {
+		return nil, err
+	}
+	ix := assetIndex{}
+	for _, a := range list {
+		ix[a.Match] = domain.AssetMatch{Name: a.Name, Criticality: a.Criticality}
+	}
+	return ix, nil
+}
+
+type assetIndex map[string]domain.AssetMatch
+
+func (ix assetIndex) Lookup(source string) *domain.AssetMatch {
+	if a, ok := ix[hostOnly(source)]; ok {
+		return &a
+	}
+	return nil
+}
+
+// ---- ATT&CK -------------------------------------------------------------------
+
+// Attack maps triggers from a fixed table and exports a minimal layer
+// (technique id → event count). The real mapping module (§12) is PORTED.
+type Attack struct {
+	Map map[string]domain.AttackMapping
+}
+
+func (a Attack) For(trigger string) *domain.AttackMapping {
+	m, ok := a.Map[trigger]
+	if !ok {
+		return nil
+	}
+	return &m
+}
+
+func (a Attack) NavigatorLayer(events []domain.EnrichedEvent) (json.RawMessage, error) {
+	counts := map[string]int{}
+	for _, ev := range events {
+		if m := a.For(ev.Trigger); m != nil {
+			counts[m.Primary.ID]++
+		}
+	}
+	type tech struct {
+		TechniqueID string `json:"techniqueID"`
+		Score       int    `json:"score"`
+	}
+	layer := struct {
+		Name       string `json:"name"`
+		Techniques []tech `json:"techniques"`
+	}{Name: "truesignal (stub)", Techniques: []tech{}}
+	for id, n := range counts {
+		layer.Techniques = append(layer.Techniques, tech{id, n})
+	}
+	return json.Marshal(layer)
+}
+
+// ---- Analytics projection -------------------------------------------------------
+
+// Projection counts the events it was given and echoes its parameters, so
+// tests can check mounting, windowing and parameter pass-through.
+type Projection struct{ N string }
+
+func (p Projection) Name() string { return p.N }
+
+func (p Projection) Build(_ context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+	return map[string]any{"events": len(events), "params": params}, nil
+}
+
+// ---- HTTP SIEM transport ----------------------------------------------------------
+
+// HTTPTransport records documents and returns a scripted outcome.
+type HTTPTransport struct {
+	mu      sync.Mutex
+	Outcome ported.SendOutcome
+	Err     error
+	Sent    [][]byte
+}
+
+func (h *HTTPTransport) Send(_ context.Context, _, _, _ string, document []byte) (ported.SendOutcome, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.Sent = append(h.Sent, append([]byte(nil), document...))
+	return h.Outcome, h.Err
+}
+
+// Every PORTED seam has a stub (§15).
+var (
+	_ ported.ManifestVerifier  = RejectAllVerifier{}
+	_ ported.ManifestVerifier  = AcceptAllVerifier{}
+	_ ported.GeoLocator        = Geo{}
+	_ ported.AssetInventory    = Assets{}
+	_ ported.AttackMapper      = Attack{}
+	_ ported.SourceListParser  = ExactSourceList{}
+	_ ported.TOTP              = TOTP{}
+	_ ported.BeaconService     = (*Beacons)(nil)
+	_ ported.HoneytokenService = (*Honeytokens)(nil)
+	_ ported.ECSRenderer       = ECS{}
+	_ ported.HTTPSIEMTransport = (*HTTPTransport)(nil)
+	_ ported.Projection        = Projection{}
+)

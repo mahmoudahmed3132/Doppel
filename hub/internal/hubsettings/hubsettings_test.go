@@ -140,3 +140,38 @@ func TestRetention(t *testing.T) {
 		t.Fatalf("all %d unarchived %d", len(all), len(unarchived))
 	}
 }
+
+// With the asset module installed (stub): validated, normalised, stored,
+// indexed for enrichment, rebuilt from storage on restart; invalid or
+// oversized inventories are refused without replacing the current one.
+func TestAssetInventoryWithModule(t *testing.T) {
+	s, db := newSvc(t, false)
+	ctx := context.Background()
+	if _, err := s.ReplaceAssets(ctx, []byte(`[]`)); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("without the module: %v", err)
+	}
+	s.Assets = stub.Assets{}
+	norm, err := s.ReplaceAssets(ctx, []byte(` [ {"match":"10.0.0.7", "name":"jump-host", "criticality":"high"} ] `))
+	if err != nil || !strings.HasPrefix(string(norm), `[{"match":"10.0.0.7"`) {
+		t.Fatalf("%s %v", norm, err)
+	}
+	if a := s.AssetIndex(ctx).Lookup("10.0.0.7:22"); a == nil || a.Name != "jump-host" || a.Criticality != "high" {
+		t.Fatalf("lookup %+v", a)
+	}
+	for _, bad := range []string{`{"not":"a list"}`, `[{"match":"","name":"x","criticality":"low"}]`,
+		`[{"match":"a","name":"x","criticality":"severe"}]`, `[{"match":"a","name":"x","criticality":"low","extra":1}]`,
+		`[` + strings.Repeat(`{"match":"a","name":"x","criticality":"low"},`, MaxAssetsBytes/40) + `{}]`} {
+		if _, err := s.ReplaceAssets(ctx, []byte(bad)); err == nil {
+			t.Errorf("accepted %.60s", bad)
+		}
+	}
+	if s.AssetIndex(ctx).Lookup("10.0.0.7") == nil {
+		t.Fatal("a refused replacement must keep the current inventory")
+	}
+	// Restart: the index is rebuilt from the stored inventory.
+	s2 := &Service{Store: db, Assets: stub.Assets{}, Log: s.Log}
+	s2.Load(ctx)
+	if a := s2.AssetIndex(ctx).Lookup("10.0.0.7"); a == nil || a.Name != "jump-host" {
+		t.Fatalf("after reload %+v", a)
+	}
+}
