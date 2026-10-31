@@ -30,3 +30,5 @@ analysis of §14.14 is the objective control.
 | 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | Repository scaffolding, `PROVENANCE.md`, `QUESTIONS.md`, `THIRD_PARTY.md`, `Makefile`, `go.work` | Spec §0, §2, §10, §15 | None |
 | 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | `sdk/go` (Go Sensor SDK), `sensors/template` | Spec §4, §5; RFC 9562 (UUIDv7); Go standard library docs | None |
 | 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | `docs/contract-v3.md` | Spec §4 | None |
+| 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | `hub/internal/{domain,ported,ported/stub,store,ids,nodekey,ingest}` | Spec §3, §4.2, §6.2, §6.3 (node keys), §6.5, §12; SQLite docs (`PRAGMA user_version`, `VACUUM INTO`, UPSERT/RETURNING); modernc.org/sqlite docs | None |
+| 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | `hub/internal/siem/syslog` | Spec §6.9; RFC 5424 §6 | None |

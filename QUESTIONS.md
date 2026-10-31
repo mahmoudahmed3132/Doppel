@@ -41,3 +41,39 @@ shutdown budget; failure is logged and the process still exits 0.
 ### Q7 — §4.1 — Error code for a valid node key with an unknown sensor in heartbeats
 §4.1 gives `404 sensor_not_registered` for events. **Meanwhile:** the same code
 is used for heartbeats and stop notices.
+
+### Q8 — §4.2 — Strictness of `event_id` and `trigger`
+The spec says `event_id` is a UUIDv7 and `trigger` is snake_case, but only
+lists clamping as normalisation.
+**Meanwhile:** events whose `event_id` is not a canonical UUIDv7 are rejected
+(`invalid_event_id`); triggers not matching `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`
+(≤ 64 bytes) are rejected (`invalid_trigger`). Rationale: both flow into
+SIEM fields and syslog parameters; rejecting is safer than rewriting. Sensor
+ids not matching `ts-sensor-<kebab>` are rejected as `sensor_not_registered`.
+
+### Q9 — §4.1 / §4.2 — HTTP status for a batch where every event fails the same way
+§14.5 expects `403` for a reserved trigger and `404` for another node's
+sensor, while §4.2 says one bad event must not reject the others.
+**Meanwhile:** per-event failures are reported in `rejected` with `200`.
+When **every** event of a batch is rejected with the same code
+`reserved_trigger` or `sensor_not_registered`, the Hub answers `403` / `404`
+with that code instead.
+
+### Q10 — §6.9 — Content of the RFC 5424 MSG part
+"the full record as single-line JSON": the ECS document from the PORTED
+renderer, or the Hub's own record JSON?
+**Meanwhile:** the Hub's own record JSON (event with enrichment, audit,
+honeytoken inventory, heartbeat), so syslog output does not depend on the
+PORTED renderer. No UTF-8 BOM is emitted before MSG.
+
+### Q11 — §6.9 — Structured-data parameters for HONEYTOKEN and HEARTBEAT
+Only EVENT and AUDIT parameter lists are specified.
+**Meanwhile:** HONEYTOKEN: `honeytoken_id, username, planted_node_id,
+planted_sensor_id, status`. HEARTBEAT: `version, uptime_seconds, nodes_total,
+nodes_online, sensors_total, sensors_online, siem_queue_depth, siem_dropped`.
+PRI severity for HEARTBEAT: 6. AUDIT `route` = `<METHOD> <route template>`.
+`mitre_tactic` = primary technique tactics joined with `,`.
+
+### Q12 — §6.3 — Encryption of the MFA secret at rest
+Not required by the spec. **Meanwhile:** stored in the SQLite file, which is
+protected by file permissions (0600) and the volume. Flagged in the threat model.
