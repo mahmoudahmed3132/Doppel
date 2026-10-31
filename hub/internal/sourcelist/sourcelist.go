@@ -1,3 +1,5 @@
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
+
 // Package sourcelist matches event sources against an operator list of IP
 // addresses, CIDR ranges and plain source names (the whitelist and the
 // known-scanner list).
@@ -9,6 +11,8 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
 )
 
 const (
@@ -160,3 +164,29 @@ func (c *Cache) Get(raw string) *List {
 	}
 	return c.list
 }
+
+// Parser adapts this package to the PORTED seam ported.SourceListParser,
+// which passes the list as stored entries. Entries are joined with newlines
+// and parsed as one list, so the entry cap, CIDR validation and exact-name
+// matching above apply unchanged.
+type Parser struct{}
+
+// Parse validates the entries strictly (used when an admin saves a list).
+func (Parser) Parse(entries []string) (ported.SourceMatcher, error) {
+	l, err := Parse(strings.Join(entries, "\n"))
+	if err != nil {
+		return nil, err
+	}
+	return l, nil
+}
+
+// ParseStored parses a list read back from storage leniently and never
+// fails (see parse), so a list saved before CIDR validation keeps working.
+func (Parser) ParseStored(entries []string) ported.SourceMatcher {
+	return ParseStored(strings.Join(entries, "\n"))
+}
+
+var (
+	_ ported.SourceListParser = Parser{}
+	_ ported.SourceMatcher    = (*List)(nil)
+)

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-31T19:54:29Z",
+  "sensors": {
+    "file-canary": {
+      "latest": "1.0.0",
+      "versions": {
+        "1.0.0": {
+          "manifest": "sensors/file-canary/1.0.0/manifest.json",
+          "deprecated": false
+        }
+      }
+    },
+    "icmp-canary": {
+      "latest": "1.0.0",
+      "versions": {
+        "1.0.0": {
+          "manifest": "sensors/icmp-canary/1.0.0/manifest.json",
+          "deprecated": false
+        }
+      }
+    },
+    "network-scan-detector": {
+      "latest": "1.0.0",
+      "versions": {
+        "1.0.0": {
+          "manifest": "sensors/network-scan-detector/1.0.0/manifest.json",
+          "deprecated": false
+        }
+      }
+    },
+    "tcp-tarpit": {
+      "latest": "1.0.0",
+      "versions": {
+        "1.0.0": {
+          "manifest": "sensors/tcp-tarpit/1.0.0/manifest.json",
+          "deprecated": false
+        }
+      }
+    },
+    "web-router-decoy": {
+      "latest": "1.0.0",
+      "versions": {
+        "1.0.0": {
+          "manifest": "sensors/web-router-decoy/1.0.0/manifest.json",
+          "deprecated": false
+        }
+      }
+    }
+  }
+}

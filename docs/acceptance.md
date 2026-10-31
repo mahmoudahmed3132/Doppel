@@ -10,7 +10,7 @@ some cases automated; **todo** = component not yet implemented.
 | 3 | Require-MFA enrolment-only session | pass (stub TOTP) | `hub/internal/auth` `TestRequireMFAMode`; `hub/internal/httpapi` `TestRequireMFAEnrolOnlySession` |
 | 4 | Node key once, hashed, rotation/deletion immediate | pass | `hub/internal/httpapi` `TestFleetNodeKeyLifecycleEndToEnd` (create via admin API → ingest → rotate → old key 401 → delete → 401, no restart; key absent from GET/list/audit); `hub/internal/nodekey`; `hub/internal/fleet` `TestNodeLifecycle` |
 | 5 | Ingestion: partial batch, duplicates, reserved 403, other node 404, oversized details, invalid UTF-8, syslog `"]\n` | pass | `hub/internal/httpapi` `TestEventsBatchSemantics`, `TestEventsWholeBatchStatuses`; `hub/internal/ingest` `TestNormalize`; `hub/internal/siem/syslog` `TestHostileValueStaysOneLine` |
-| 6 | Whitelist / known beacon / honeytoken interplay | pass (pipeline level) | `hub/internal/ingest` `TestPipelineWhitelisted`, `TestPipelineBeacon`, `TestPipelineHoneytokenOnWhitelistedSource` (PORTED stubs) |
+| 6 | Whitelist / known beacon / honeytoken interplay | pass (real source-list matcher, PORTED step 1) | `hub/internal/ingest` `TestPipelineWhitelisted`, `TestPipelineBeacon`, `TestPipelineHoneytokenOnWhitelistedSource` (PORTED stubs) |
 | 7 | Liveness: timeout, stop + escalation, recovery, restart | pass | `hub/internal/liveness` |
 | 8 | Compose rules | pass | `hub/internal/compose`: `TestRuleDigest` (1), `TestPassingRenderHardening` + `TestRuleMounts` init (2), `TestRuleCapabilitiesAndNetwork` (3, incl. `NET_ADMIN`), `TestRuleMounts` (4, incl. `/run/docker.sock`, ancestors), `TestRuleInterpolation` (5, `$` in image, `$$` escaping), `TestRuleConfigDeclaredAndReserved` (6), `TestRulePortConflict` (7, UDP vs TCP same number), `TestRevisionDeterministic` (10), `TestSecretsAndRedaction` (9); `hub/internal/fleet` (11). Mutation-checked: disabling the ancestor check, `$` escaping or `TS_TEST_MODE` pinning fails tests |
 | 9 | Migrations: snapshot, newer schema refused, deletion keeps events | pass | `hub/internal/store` `TestMigrationSnapshotAndNewerSchema`, `TestFailedMigrationRollsBack`, `TestEventsSurviveNodeAndSensorDeletion` |
@@ -47,4 +47,18 @@ each stub implements its interface. Paths with a module installed are tested:
 `enrich` (GeoIP, assets, ATT&CK), `hubsettings` `TestAssetInventoryWithModule`,
 `httpapi` `TestProjectionsAndNavigatorWithModules`, plus the MFA, pipeline,
 SIEM, catalogue and sensor tests listed there.
+
+## PORTED step 1 (Sigstore verifier, source lists)
+
+* Verifier: `hub/internal/catalogue` `TestProductionHubListsPublishedSensors`
+  — production configuration (real verifier, https, no development flags)
+  lists the five published `1.0.0` sensors from the registry branch content
+  and keeps them after a restart; `TestProductionHubRefusesTamperedManifest`.
+  `hub/internal/signing`: the real published bundles verify through the seam;
+  a bundle is refused for another sensor, version, repository, manifest or
+  swapped arguments; mutation-checked (the module's original workflow name or
+  signer repository rejects every real bundle).
+* Source lists: acceptance #6 runs on the real matcher (`ingest`
+  `TestPipelineWhitelisted`, including a CIDR entry); `hubsettings`
+  `TestSourceListsWithRealMatcher` (strict on save, lenient on load).
 

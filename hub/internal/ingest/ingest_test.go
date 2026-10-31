@@ -17,6 +17,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ids"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/sourcelist"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
 )
 
@@ -146,8 +147,12 @@ func newPipeline(t *testing.T) (*Pipeline, *store.DB, *recorder, *stub.Beacons, 
 	db.CreateNode(ctx, &domain.Node{ID: "node-00000001", Alias: "dmz-1", KeyHash: []byte("k"), CreatedAt: now})
 	db.CreateSensor(ctx, &domain.Sensor{NodeID: "node-00000001", ID: "ts-sensor-ssh", CatalogueName: "x", Version: "1.0.0", CreatedAt: now})
 
-	wl, _ := stub.ExactSourceList{}.Parse([]string{"10.0.0.7"})
-	sc, _ := stub.ExactSourceList{}.Parse([]string{"10.0.0.99"})
+	// Real PORTED matcher (step 1): acceptance #6 runs on it.
+	wl, err := sourcelist.Parser{}.Parse([]string{"10.0.0.7", "198.51.100.0/24"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, _ := sourcelist.Parser{}.Parse([]string{"10.0.0.99"})
 	rec := &recorder{}
 	bc := stub.NewBeacons()
 	ht := &stub.Honeytokens{}
@@ -203,6 +208,22 @@ func TestPipelineWhitelisted(t *testing.T) {
 	ev, _ = db.Events(ctx, store.EventFilter{Limit: 1})
 	if !ev[0].KnownScanner || ev[0].Whitelisted || !ev[0].Archived {
 		t.Fatalf("known scanner %+v", ev[0])
+	}
+
+	// CIDR entry (real matcher): an address inside the range, with a port,
+	// is whitelisted; one just outside it is not.
+	p.Process(ctx, normalized(t, func(r *RawEvent) { r.Source = "198.51.100.23:22" }))
+	ev, _ = db.Events(ctx, store.EventFilter{Limit: 1})
+	if !ev[0].Whitelisted || !ev[0].Archived {
+		t.Fatalf("CIDR-whitelisted source %+v", ev[0])
+	}
+	p.Process(ctx, normalized(t, func(r *RawEvent) { r.Source = "198.51.101.1" }))
+	ev, _ = db.Events(ctx, store.EventFilter{Limit: 1})
+	if ev[0].Whitelisted {
+		t.Fatalf("source outside the range whitelisted %+v", ev[0])
+	}
+	if len(rec.notify) != 1 {
+		t.Fatalf("notifications %d, want 1 (only the non-whitelisted, non-scanner event)", len(rec.notify))
 	}
 }
 

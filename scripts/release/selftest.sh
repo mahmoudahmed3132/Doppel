@@ -37,6 +37,7 @@ git tag cli/v0.0.1; expect_fail "tag/version mismatch" scripts/release/check-tag
 git tag hub/v1.0; expect_fail "non-SemVer tag" scripts/release/check-tag.sh hub/v1.0 main
 expect_fail "unknown sensor" scripts/release/check-tag.sh sensor/nope/v1.0.0 main
 expect_fail "malformed tag" scripts/release/check-tag.sh release-1 main
+expect_fail "pre-release sensor tag" scripts/release/check-tag.sh sensor/tcp-tarpit/v1.0.0-rc.1 main
 git switch -q -c side && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m side
 git tag -f "hub/v$hubv" >/dev/null
 expect_fail "tag off the default branch" scripts/release/check-tag.sh "hub/v$hubv" main

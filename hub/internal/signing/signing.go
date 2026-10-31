@@ -1,3 +1,5 @@
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
+
 // Package signing verifies that sensor manifests were published by this
 // project's release pipeline.
 //
@@ -19,6 +21,7 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
 	"github.com/sigstore/sigstore-go/pkg/bundle"
 	"github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/sigstore/sigstore-go/pkg/verify"
@@ -26,8 +29,10 @@ import (
 
 // publicGoodTrustedRoot is the Sigstore public-good trusted root
 // (trusted_root.json from the sigstore/root-signing TUF repository, verified
-// through the TUF chain when it was added; sha256 6494e21e...). Refresh it
-// with Hub releases; TS_SIGSTORE_TRUSTED_ROOT overrides it at runtime.
+// through the TUF chain when it was added). Embedded file sha256:
+// 6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66
+// Refresh it with Hub releases (docs/operations.md "Sigstore trusted root");
+// TS_SIGSTORE_TRUSTED_ROOT overrides it at runtime.
 //
 //go:embed trusted_root.json
 var publicGoodTrustedRoot []byte
@@ -36,12 +41,11 @@ const (
 	// GitHubOIDCIssuer issues the identity tokens of GitHub Actions.
 	GitHubOIDCIssuer = "https://token.actions.githubusercontent.com"
 	// DefaultSignerRepo is the repository whose publish workflow signs the
-	// official registry.
-	DefaultSignerRepo = "mahmoudahmed3132/TrueSignal"
-	// BundleSuffix is appended to a manifest URL to fetch its bundle.
-	BundleSuffix = ".sigstore.json"
+	// official registry. TS_MANIFEST_SIGNER_REPO overrides it.
+	DefaultSignerRepo = "mahmoudahmed3132/TrueSignal-Rewrite"
 
-	publishWorkflow = ".github/workflows/publish-sensor-registry.yml"
+	// publishWorkflow is the workflow that signs sensor manifests (§10).
+	publishWorkflow = ".github/workflows/publish-sensor.yml"
 )
 
 var (
@@ -50,12 +54,8 @@ var (
 	versionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 )
 
-// ManifestVerifier checks a manifest's signature bundle.
-type ManifestVerifier interface {
-	VerifyManifest(sensorName, version string, manifest, bundleJSON []byte) error
-}
-
-// Verifier is the Sigstore ManifestVerifier.
+// Verifier is the Sigstore manifest verifier (the PORTED seam
+// ported.ManifestVerifier, see Verify).
 type Verifier struct {
 	v      *verify.Verifier
 	repo   string
@@ -139,3 +139,11 @@ func (v *Verifier) verifyEntity(entity verify.SignedEntity, sensorName, version 
 	}
 	return nil
 }
+
+// Verify implements ported.ManifestVerifier, whose argument order differs
+// from VerifyManifest.
+func (v *Verifier) Verify(manifest, bundleJSON []byte, sensorName, version string) error {
+	return v.VerifyManifest(sensorName, version, manifest, bundleJSON)
+}
+
+var _ ported.ManifestVerifier = (*Verifier)(nil)

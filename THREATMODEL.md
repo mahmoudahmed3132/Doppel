@@ -87,8 +87,16 @@ admin can point them at internal hosts (accepted: admin is trusted).
 | Privilege escalation through compose | Compiler rules: no `build:`, no Docker socket or ancestor mounts, `cap_drop: ALL` + allow-listed single capability, read-only rootfs, no-new-privileges, no interpolation (`$` escaped), Hub-reserved env enforced (`hub/internal/compose`, mutation-checked) |
 | Rollback to a vulnerable version | Versions immutable; deprecation stops new deployments and "latest" |
 
-**Residual:** until the PORTED verifier is installed the catalogue is empty in
-production (fail closed). The development flags
+The verifier is installed (PORTED step 1, `hub/internal/signing`): every
+manifest must carry a Sigstore bundle whose Fulcio certificate is this
+repository's `publish-sensor.yml` at `refs/tags/sensor/<name>/v<version>`,
+with an SCT, a Rekor entry and a timestamp, checked offline against the
+embedded public-good trusted root. A signature for one sensor or version is
+refused for another (`signing` tests use the real published 1.0.0 bundles).
+
+**Residual:** trust is rooted in GitHub Actions OIDC, Fulcio/Rekor (Sigstore
+public good) and this repository's workflow file: anyone who can change
+`publish-sensor.yml` on a release tag can sign manifests (tag ruleset). The development flags
 `TS_DEV_ALLOW_UNSIGNED_MANIFESTS` / `TS_DEV_ALLOW_UNPINNED_IMAGES` disable
 these controls and log a warning at every start; never set them in production.
 
@@ -126,7 +134,7 @@ Rendered files never contain `build:` (compiler test in `TestRealManifestsRender
 | Vulnerable dependencies | Trivy gates (fixable HIGH/CRITICAL) on the repo and on every image before push; CodeQL; Dependabot |
 
 **Residual:** tag immutability and restricted pushes to `registry` depend on
-repository rulesets (docs/operations.md §8); without them a maintainer token
+repository rulesets (docs/operations.md §9); without them a maintainer token
 can move a tag. GitHub and Sigstore themselves are trusted.
 
 ### B7: Hub host

@@ -28,6 +28,11 @@ sensor/*/v*)
 *) die "unrecognised tag $tag (want hub/vX.Y.Z, cli/vX.Y.Z or sensor/<name>/vX.Y.Z)" ;;
 esac
 echo "$version" | grep -Eq "$semver" || die "version '$version' is not SemVer"
+# Hubs verify sensor manifests only for plain X.Y.Z versions (signing module,
+# PORTED step 1): a pre-release sensor would publish a manifest no Hub accepts.
+if [ "$component" = sensor ]; then
+	echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || die "sensor versions must be plain X.Y.Z (Hubs refuse pre-release sensor manifests)"
+fi
 
 if [ "$component" = sensor ]; then
 	code=$("$here/component-version.sh" sensor "$name") || die "sensor $name not found"

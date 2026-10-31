@@ -105,7 +105,26 @@ it). Nothing is deleted; versions are immutable. Deployed instances keep
 running the deprecated version until you upgrade/downgrade them from the
 node page.
 
-## 7. MFA break-glass
+## 7. Sigstore trusted root and signer identity
+
+Hubs verify sensor manifests offline against the Sigstore public-good trusted
+root embedded in the binary (`hub/internal/signing/trusted_root.json`, sha256
+recorded next to its `//go:embed` in `signing.go`). Signatures must come from
+`https://github.com/<TS_MANIFEST_SIGNER_REPO>/.github/workflows/publish-sensor.yml@refs/tags/sensor/<name>/v<version>`
+(default repository `mahmoudahmed3132/TrueSignal-Rewrite`).
+
+* **Refresh the embedded root** (with a Hub release, or when Sigstore rotates
+  keys): fetch `trusted_root.json` through the TUF client of the
+  `sigstore/root-signing` repository (for example `sigstore-go`'s
+  `pkg/tuf` client), never by a plain download; replace the
+  file, update the sha256 comment, run `go test ./internal/signing` (it
+  verifies the real published bundles), release the Hub.
+* **Override at runtime** without a release: `TS_SIGSTORE_TRUSTED_ROOT=/path/trusted_root.json`.
+  An unreadable or invalid file stops the Hub (fail closed).
+* **Private registry or fork:** set `TS_MANIFEST_SIGNER_REPO=owner/repo` to the
+  repository whose `publish-sensor.yml` signs your registry.
+
+## 8. MFA break-glass
 
 If every factor is lost:
 
@@ -120,7 +139,7 @@ emitted as an audit record (`mfa.reset_cli`) to the SIEM at next start.
 Re-enrol immediately. Access to the Docker host is therefore equivalent to
 admin access; restrict it accordingly.
 
-## 8. Releasing (maintainers)
+## 9. Releasing (maintainers)
 
 * Bump the version in code (`hub/cmd/truesignal-hub/main.go`,
   `cli/cmd/truesignal/main.go`, or `sensors/<name>/manifest.json` version and

@@ -1,3 +1,5 @@
+// Copyright (c) 2026 TrueSignal Deception. All rights reserved.
+
 package sourcelist
 
 import (

@@ -414,3 +414,11 @@ pre-release tags (`hub/v4.0.0-rc.1`) publish their version tag but are never
 `:latest` candidates. The update check (Q55) ignores GitHub pre-releases too.
 **Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
 
+### Q63 — §10, §12 — Sensor pre-release versions
+The PORTED verifier accepts only plain `X.Y.Z` sensor versions (step-1 README,
+note 3). **Meanwhile:** kept as is, and `scripts/release/check-tag.sh` now
+refuses `sensor/<name>/vX.Y.Z-<pre>` tags, so a pre-release sensor manifest
+that every Hub would reject is never published. Q62 (pre-releases) still
+applies to the Hub only. Extend both together if sensor pre-releases are
+wanted.
+

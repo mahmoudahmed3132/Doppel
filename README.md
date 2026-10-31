@@ -9,7 +9,7 @@ containerised decoy sensors. Clean-room implementation of specification v1.
 | `sensors/template` | reference sensor + Dockerfile | implemented |
 | `sdk/python` | Python SDK (§11.6, stdlib only) + template sensor | implemented |
 | `sensors/{tcp-tarpit,icmp-canary,network-scan-detector,file-canary,web-router-decoy}` | §11 sensors (lure content and web skins are PORTED seams with stubs) | implemented |
-| `hub/` | Hub server | storage, ingest API, pipeline, liveness, syslog formatter, admin auth + MFA flows, nodes/sensors API, compose compiler + manifest v3, catalogue, SIEM output, webhooks, audit delivery, events/settings/analytics/system APIs, retention, factory reset, update check, live feed done |
+| `hub/` | Hub server | storage, ingest API, pipeline, liveness, syslog formatter, admin auth + MFA flows, nodes/sensors API, compose compiler + manifest v3, catalogue, SIEM output, webhooks, audit delivery, events/settings/analytics/system APIs, retention, factory reset, update check, live feed done; PORTED step 1 installed (Sigstore manifest verifier, source-list matcher) |
 | `cli/` | node agent CLI `truesignal` + `install.sh` | implemented (tested with simulated and real Docker; `cli/v3.0.0` released) |
 | `ui/` | admin web UI (Preact + TypeScript, embedded in the Hub) | done (§7); PORTED pages are shells |
 | `.github/`, `scripts/release/` | CI, CodeQL, publish (Hub, CLI, sensors), registry rollback | done (§10); publish-hub (`hub/v3.0.0-rc.1`), publish-cli (`cli/v3.0.0`) and publish-sensor (five sensors at `1.0.0`) have run on GitHub; registry-rollback has not been run yet |
@@ -28,7 +28,7 @@ make ui         # admin UI: npm ci, type-check, safety lint, build (Node 22+)
 make hub-bin    # UI + Hub binary with the UI embedded -> bin/truesignal-hub
 ```
 
-Releases: `docs/operations.md` §8 (`make tag-hub`, `tag-cli`, `tag-sensor NAME=…`).
+Releases: `docs/operations.md` §9 (`make tag-hub`, `tag-cli`, `tag-sensor NAME=…`).
 
 A Hub built without `make ui` runs normally and serves a placeholder page
 instead of the UI.
