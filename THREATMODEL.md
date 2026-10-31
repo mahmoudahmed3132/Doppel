@@ -128,14 +128,23 @@ Rendered files never contain `build:` (compiler test in `TestRealManifestsRender
 ### B6: Release pipeline
 | Threat | Control |
 |---|---|
-| Compromised third-party action | All actions pinned by commit SHA; least-privilege `permissions:` per job; credentials not persisted except where a job pushes the registry branch |
+| Compromised third-party action | All actions pinned by commit SHA; least-privilege `permissions:` per job (`contents: read` on this repository for every publish job); checkout credentials never persisted |
+| Tampering with the public releases repository (`truesignal-releases`: registry branch, releases, `install.sh`) | Written only with a GitHub App installation token minted per job (contents:write on that one repository, ≤ 1 h), passed to git through environment-only config (no argv, URL or `.git/config`) and masked; rulesets there allow updates and tag creation only by the App. Hosting is not trusted for integrity: manifests and CLI binaries are verified against the **source** repository's workflow identity, which nobody can obtain by writing to the releases repository |
 | Tampered artefacts | Keyless Sigstore signatures bound to the workflow file and tag; consumers verify identity (install.sh, Hub verifier, `cosign verify` in docs) |
 | Releasing unreviewed code / overwriting a release | Tag must equal code version and be on the default branch; existing versions are never rebuilt; `:latest` only moves to a signature-verified digest |
 | Vulnerable dependencies | Trivy gates (fixable HIGH/CRITICAL) on the repo and on every image before push; CodeQL; Dependabot |
 
 **Residual:** tag immutability and restricted pushes to `registry` depend on
-repository rulesets (docs/operations.md §9); without them a maintainer token
-can move a tag. GitHub and Sigstore themselves are trusted.
+repository rulesets in both repositories (docs/operations.md §9, §9.1);
+without them a maintainer token can move a tag. A leaked App key lets an
+attacker rewrite the releases repository: they can withhold or roll back
+content (the Hub then keeps its last verified catalogue or sees older,
+still-signed versions; deprecations could be hidden) and replace
+`install.sh` on `main`, which an operator who pipes it to `sh` without
+pinning would run. Mitigations: rotate the key, pin installs by version and
+`--sha256` (docs/operations.md §5), and install cosign so binaries are
+identity-checked. The source repository's name is public in every
+certificate and in the Rekor log (accepted, Q64). GitHub and Sigstore themselves are trusted.
 
 ### B7: Hub host
 **Residual (R1):** the Hub master keys, SIEM token, webhook URL and TOTP seed

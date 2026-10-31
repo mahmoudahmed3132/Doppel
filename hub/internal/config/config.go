@@ -59,8 +59,16 @@ type Config struct {
 	UpdateCheckURL    string // releases API queried by the update check (§6.11)
 }
 
+// ReleasesRepo is the public repository that serves the product's public
+// artefacts: the registry branch, CLI and Hub releases, install.sh. The
+// source repository is private; signatures still name it (signing.DefaultSignerRepo).
+const ReleasesRepo = "mahmoudahmed3132/truesignal-releases"
+
 // DefaultRegistryURL is the product's registry branch (§10).
-const DefaultRegistryURL = "https://raw.githubusercontent.com/mahmoudahmed3132/TrueSignal-Rewrite/registry/"
+const DefaultRegistryURL = "https://raw.githubusercontent.com/" + ReleasesRepo + "/registry/"
+
+// DefaultUpdateCheckURL lists the product's releases (§6.11).
+const DefaultUpdateCheckURL = "https://api.github.com/repos/" + ReleasesRepo + "/releases?per_page=100"
 
 // Load reads the configuration through getenv.
 func Load(getenv func(string) string) (*Config, error) {
@@ -158,7 +166,7 @@ func Load(getenv func(string) string) (*Config, error) {
 	c.GeoIPDB = get(EnvGeoIPDB)
 	c.SignerRepo = get(EnvSignerRepo)
 	c.SigstoreRoot = get(EnvSigstoreTrustedRoot)
-	c.UpdateCheckURL = "https://api.github.com/repos/mahmoudahmed3132/TrueSignal-Rewrite/releases?per_page=100"
+	c.UpdateCheckURL = DefaultUpdateCheckURL
 	if v := get(EnvUpdateCheckURL); v != "" {
 		if !strings.HasPrefix(v, "https://") {
 			fail(EnvUpdateCheckURL, "must be an https:// URL")

@@ -1,7 +1,9 @@
 # Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
 # Hub publish (§10). Tag hub/vX.Y.Z -> image built (UI embedded), scanned,
-# pushed to GHCR by digest, signed keyless with cosign, verified, released.
+# pushed to GHCR by digest, signed keyless with cosign, verified, released in
+# the public releases repository (<owner>/truesignal-releases; this
+# repository is private), where the Hub's update check reads it.
 # Then a serialised job (one concurrency group across all Hub tags) moves
 # :latest to the highest published, signature-verified version.
 name: publish-hub
@@ -21,6 +23,7 @@ env:
   NODE_VERSION: "22"
   GO_VERSION: "1.26.10"
   ISSUER: https://token.actions.githubusercontent.com
+  RELEASES_REPO: ${{ github.repository_owner }}/truesignal-releases
 
 jobs:
   guard:
@@ -135,7 +138,7 @@ jobs:
     needs: [guard, build]
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read    # the release is created in the releases repository with the App token
     env:
       VERSION: ${{ needs.guard.outputs.version }}
       IMAGE: ${{ needs.guard.outputs.image }}
@@ -146,9 +149,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: create the release (notes vs the previous Hub tag)
+      - id: releases-token
+        name: token for the public releases repository (GitHub App, contents:write on that repository only)
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASES_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASES_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: truesignal-releases
+          permission-contents: write
+      - name: create the release in the public releases repository (notes vs the previous Hub tag)
         env:
-          GH_TOKEN: ${{ github.token }}
+          RELEASES_TOKEN: ${{ steps.releases-token.outputs.token }}
         run: |
           scripts/release/release-notes.sh "$GITHUB_REF_NAME" > notes.md
           cat >> notes.md <<NOTES
@@ -163,9 +175,7 @@ jobs:
           \`\`\`
           Pin the digest in deploy/compose.yaml. Upgrade and rollback: docs/operations.md.
           NOTES
-          pre=""; case "$VERSION" in *-*) pre="--prerelease" ;; esac  # SemVer pre-release -> GitHub pre-release
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $pre \
-            --title "Hub v$VERSION" --notes-file notes.md
+          scripts/release/publish-release.sh "$GITHUB_REF_NAME" "Hub v$VERSION" notes.md
 
   latest:
     needs: [guard, release]

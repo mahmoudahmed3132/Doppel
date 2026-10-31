@@ -24,6 +24,24 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
+// The source repository is private, so public artefacts come from the public
+// releases repository; an anonymous Hub could not read the source repository.
+func TestDefaultsUsePublicReleasesRepo(t *testing.T) {
+	c, err := Load(env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.RegistryURL != "https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/registry/" {
+		t.Fatalf("registry URL %q", c.RegistryURL)
+	}
+	if c.UpdateCheckURL != "https://api.github.com/repos/mahmoudahmed3132/truesignal-releases/releases?per_page=100" {
+		t.Fatalf("update check URL %q", c.UpdateCheckURL)
+	}
+	if strings.Contains(c.RegistryURL+c.UpdateCheckURL, "TrueSignal-Rewrite") {
+		t.Fatal("a default points at the private source repository")
+	}
+}
+
 func TestTrustedProxies(t *testing.T) {
 	c, err := Load(env(map[string]string{EnvTrustedProxies: "10.0.0.1, 172.16.0.0/12,::1"}))
 	if err != nil {

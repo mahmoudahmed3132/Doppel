@@ -29,6 +29,9 @@ make hub-bin    # UI + Hub binary with the UI embedded -> bin/truesignal-hub
 ```
 
 Releases: `docs/operations.md` §9 (`make tag-hub`, `tag-cli`, `tag-sensor NAME=…`).
+This repository is private: releases, `install.sh` and the sensor registry are
+published to the public repository `mahmoudahmed3132/truesignal-releases`
+(setup and migration: `docs/operations.md` §9.1).
 
 A Hub built without `make ui` runs normally and serves a placeholder page
 instead of the UI.

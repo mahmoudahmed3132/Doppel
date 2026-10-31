@@ -133,7 +133,9 @@ linked; at the time of writing that includes `github.com/hashicorp/golang-lru/v2
 
 Pinned by commit SHA in `.github/workflows/` (Dependabot proposes bumps):
 `actions/checkout` v7.0.1, `actions/setup-go` v7.0.0, `actions/setup-node`
-v7.1.0 (MIT); `github/codeql-action` v4.39.1 (MIT); `docker/login-action`
+v7.1.0 (MIT); `actions/create-github-app-token` v3.3.0 (MIT; mints the
+short-lived token that publishes to the public releases repository);
+`github/codeql-action` v4.39.1 (MIT); `docker/login-action`
 v4.7.0, `docker/setup-buildx-action` v4.4.1, `docker/build-push-action`
 v7.4.0 (Apache-2.0); `sigstore/cosign-installer` v4.1.2 (Apache-2.0) installing
 cosign v3.0.6 (Apache-2.0); `aquasecurity/trivy-action` v0.36.0 (Apache-2.0)

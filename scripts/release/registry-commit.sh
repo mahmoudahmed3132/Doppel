@@ -7,19 +7,31 @@
 # top of the winner's commit, never merged blindly.
 #   registry-commit.sh <message> <command> [args...]
 # <command> runs inside the worktree (cwd) and must be idempotent per attempt.
+# REGISTRY_REMOTE (default: origin) is the remote name or URL that holds the
+# branch; publishing uses the public releases repository's URL.
 set -eu
 msg="${1:?message}"; shift
 [ $# -gt 0 ] || { echo "registry-commit: no command" >&2; exit 2; }
 root=$(git rev-parse --show-toplevel)
 wt="$root/.registry-worktree"
 branch=registry
+remote="${REGISTRY_REMOTE:-origin}"
+track="refs/remotes/registry-remote/$branch"
 attempt=1
 max=8
 while :; do
 	git -C "$root" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
 	git -C "$root" worktree prune
-	if git -C "$root" fetch --quiet --no-tags origin "refs/heads/$branch:refs/remotes/origin/$branch" 2>/dev/null; then
-		git -C "$root" worktree add --quiet --detach "$wt" "refs/remotes/origin/$branch"
+	git -C "$root" branch -D registry-new >/dev/null 2>&1 || true  # left by an earlier branch creation
+	# Create the branch only when the remote answers and lacks it (exit 2);
+	# an unreachable or unauthorised remote must fail, not start a new history.
+	set +e; git -C "$root" ls-remote --exit-code --heads "$remote" "refs/heads/$branch" >/dev/null; rc=$?; set -e
+	if [ "$rc" -eq 0 ]; then
+		git -C "$root" fetch --quiet --no-tags "$remote" "+refs/heads/$branch:$track"
+		git -C "$root" worktree add --quiet --detach "$wt" "$track"
+	elif [ "$rc" -ne 2 ]; then
+		echo "registry-commit: cannot read $branch from the registry remote (git exit $rc)" >&2
+		exit 1
 	else
 		echo "registry-commit: creating the $branch branch"
 		git -C "$root" worktree add --quiet --detach "$wt" HEAD
@@ -35,7 +47,7 @@ while :; do
 	fi
 	git -C "$wt" -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
 		commit --quiet -m "$msg"
-	if git -C "$wt" push --quiet origin "HEAD:refs/heads/$branch"; then
+	if git -C "$wt" push --quiet "$remote" "HEAD:refs/heads/$branch"; then
 		echo "registry-commit: pushed ($msg) on attempt $attempt"
 		break
 	fi
