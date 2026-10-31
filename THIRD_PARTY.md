@@ -29,6 +29,11 @@ Its transitive modules linked into the Hub binary (`go list -deps ./cmd/truesign
 permissive; none is used directly by TrueSignal code. They take the Hub from 9
 to 77 linked third-party modules: CI's Trivy scan and Dependabot cover them.
 
+`github.com/go-jose/go-jose/v4` is required in `hub/go.mod` (via sigstore's
+OIDC signing flow) but not linked into the binary; it is held at v4.1.6, the
+first release without CVE-2026-116587. `google.golang.org/grpc` is held at
+v1.83.2 for CVE-2026-84304 and CVE-2026-84445.
+
 | Module | Version | Licence |
 |---|---|---|
 | `github.com/asaskevich/govalidator` | v0.0.0-20230301143203-a9d515a09cc2 | MIT |
@@ -94,8 +99,8 @@ to 77 linked third-party modules: CI's Trivy scan and Dependabot cover them.
 | `golang.org/x/term` | v0.47.0 | BSD-3-Clause |
 | `golang.org/x/text` | v0.43.0 | BSD-3-Clause |
 | `google.golang.org/genproto/googleapis/api` | v0.0.0-20260526163538-3dc84a4a5aaa | Apache-2.0 |
-| `google.golang.org/genproto/googleapis/rpc` | v0.0.0-20260523011958-0a33c5d7ca68 | Apache-2.0 |
-| `google.golang.org/grpc` | v1.82.1 | Apache-2.0 |
+| `google.golang.org/genproto/googleapis/rpc` | v0.0.0-20260526163538-3dc84a4a5aaa | Apache-2.0 |
+| `google.golang.org/grpc` | v1.83.2 | Apache-2.0 |
 | `google.golang.org/protobuf` | v1.36.11 | BSD-3-Clause |
 | `k8s.io/klog/v2` | v2.140.0 | Apache-2.0 |
 
