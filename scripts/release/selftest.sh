@@ -85,5 +85,12 @@ echo "sha256:3.10.0" > "$T/reg/bad"
 PATH="$T/bin:$PATH" scripts/release/hub-latest.sh ghcr.io/x/ts-hub o/r >/dev/null 2>&1
 [ "$(cat "$T/reg/latest")" = "sha256:3.1.0" ] && pass ":latest = highest published+verified, SemVer, no pre-release" || fail ":latest = $(cat "$T/reg/latest")"
 
+rm -f "$T/reg/latest"
+for v in 3.0.0 3.1.0 3.10.0; do rm -f "$T/reg/$v"; done
+PATH="$T/bin:$PATH" scripts/release/hub-latest.sh ghcr.io/x/ts-hub o/r >/dev/null 2>&1 && [ ! -f "$T/reg/latest" ] &&
+	pass "only pre-releases published: :latest left unset, job succeeds" || fail "pre-release-only :latest handling"
+echo "sha256:3.0.0" > "$T/reg/3.0.0"; echo "sha256:3.0.0" > "$T/reg/bad"
+if PATH="$T/bin:$PATH" scripts/release/hub-latest.sh ghcr.io/x/ts-hub o/r >/dev/null 2>&1; then fail "unverifiable stable release accepted"; else pass "stable release with a bad signature fails the job"; fi
+
 echo
 [ "$fails" -eq 0 ] && echo "release selftest: all passed" || { echo "release selftest: $fails failed"; exit 1; }

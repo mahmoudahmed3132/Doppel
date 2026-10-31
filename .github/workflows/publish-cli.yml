@@ -110,7 +110,8 @@ jobs:
             --certificate-oidc-issuer $ISSUER truesignal-linux-amd64
           \`\`\`
           NOTES
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+          pre=""; case "$VERSION" in *-*) pre="--prerelease" ;; esac  # SemVer pre-release -> GitHub pre-release
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $pre \
             --title "CLI v$VERSION" --notes-file notes.md \
             dist/truesignal-linux-amd64 dist/truesignal-linux-arm64 dist/SHA256SUMS \
             dist/truesignal-linux-amd64.sigstore.json dist/truesignal-linux-arm64.sigstore.json
