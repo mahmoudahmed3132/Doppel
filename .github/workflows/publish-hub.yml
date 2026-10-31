@@ -163,7 +163,8 @@ jobs:
           \`\`\`
           Pin the digest in deploy/compose.yaml. Upgrade and rollback: docs/operations.md.
           NOTES
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+          pre=""; case "$VERSION" in *-*) pre="--prerelease" ;; esac  # SemVer pre-release -> GitHub pre-release
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $pre \
             --title "Hub v$VERSION" --notes-file notes.md
 
   latest:

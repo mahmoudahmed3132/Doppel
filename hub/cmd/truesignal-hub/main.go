@@ -46,7 +46,7 @@ import (
 )
 
 // Version is the Hub version; overridden at build time with -ldflags -X.
-var Version = "3.0.0"
+var Version = "3.0.0-rc.1"
 
 const contractVersion = 3
 
