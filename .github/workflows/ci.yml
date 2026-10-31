@@ -78,7 +78,7 @@ jobs:
       - name: manifests vs JSON Schema; OpenAPI vs registered routes
         run: python3 scripts/validate-docs.py
       - name: shell syntax
-        run: for f in install.sh scripts/*.sh scripts/release/*.sh; do sh -n "$f"; done
+        run: for f in install.sh scripts/*.sh scripts/release/*.sh scripts/e2e/*.sh; do sh -n "$f"; done
 
   ui:
     name: admin UI type-check, lint, build, embed
@@ -187,6 +187,21 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+
+  real-docker:
+    name: end-to-end on real Docker (Hub + CLI + sensors)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/go.sum"
+      - name: deploy, exercise and uninstall decoys through the real CLI
+        run: scripts/e2e/real-docker.sh
 
   vuln-scan:
     name: dependency vulnerability scan
