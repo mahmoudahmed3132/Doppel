@@ -36,3 +36,15 @@ func TestSourceLimiter(t *testing.T) {
 		t.Fatalf("limiter not bounded: %d", l.Len())
 	}
 }
+
+func TestPrintableAndClean(t *testing.T) {
+	if got := Printable([]byte("GET /\r\n\x00\xff\\x"), 100); got != `GET /\r\n\x00\xff\\x` {
+		t.Fatalf("%q", got)
+	}
+	if got := Printable([]byte("abcdef"), 3); got != "abc" {
+		t.Fatalf("%q", got)
+	}
+	if got := Clean("a\nb\xffc"+string(make([]byte, 10)), 6); got != "a b�" {
+		t.Fatalf("%q", got)
+	}
+}

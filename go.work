@@ -4,5 +4,10 @@ use (
 	./sdk/go
 	./cli
 	./hub
+	./sensors/file-canary
+	./sensors/icmp-canary
+	./sensors/network-scan-detector
+	./sensors/tcp-tarpit
 	./sensors/template
+	./sensors/web-router-decoy
 )

@@ -5,6 +5,7 @@ package manifest
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -138,6 +139,29 @@ func TestMountSources(t *testing.T) {
 		"/var/lib/docker", "/var/lib/kubelet/pods", "/lib64", "/usr/local", "/root/.ssh", "/proc/self", "/sys/fs", "/dev/sda", "/boot"} {
 		if err := CheckMountSource(p); err == nil {
 			t.Errorf("%s accepted", p)
+		}
+	}
+}
+
+// TestAllSensorManifests validates every manifest in the repository (§9: CI
+// validates official manifests against the schema and §6.12 rules).
+func TestAllSensorManifests(t *testing.T) {
+	paths, _ := filepath.Glob("../../../sensors/*/manifest.json")
+	if len(paths) == 0 {
+		t.Fatal("no manifests found")
+	}
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, err := Decode(b, Options{AllowUnpinned: true}) // digests are filled at publish
+		if err != nil {
+			t.Errorf("%s: %v", p, err)
+			continue
+		}
+		if filepath.Base(filepath.Dir(p)) != m.Name {
+			t.Errorf("%s: name %q does not match its directory", p, m.Name)
 		}
 	}
 }
