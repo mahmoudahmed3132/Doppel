@@ -588,7 +588,7 @@ paths:
     parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
     get: {summary: One event with enrichment, responses: {'200': {description: '{"event"}'}, '404': {$ref: '#/components/responses/Error'}}}
   /api/v3/events/unread-count:
-    get: {summary: Unread unarchived events, responses: {'200': {description: '{"unread": n}'}}}
+    get: {summary: 'Unread unarchived events', responses: {'200': {description: '{"unread": n}'}}}
   /api/v3/events/{seq}/read:
     parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
     post: {summary: Mark one read, responses: {'200': {description: '{"updated": n}'}}}
@@ -643,7 +643,7 @@ paths:
   /api/v3/analytics/uptime:
     get: {summary: 'Per sensor, per UTC day % online over ?days=1..90 (14); -1 = not yet created', responses: {'200': {description: '{"days","sensors":[{node_id,sensor_id,days,percent}]}'}}}
   /api/v3/analytics/attack/navigator:
-    get: {summary: ATT&CK Navigator layer for ?days (PORTED; 503 until installed), responses: {'200': {description: attachment}, '503': {$ref: '#/components/responses/Error'}}}
+    get: {summary: 'ATT&CK Navigator layer for ?days (PORTED; 503 until installed)', responses: {'200': {description: attachment}, '503': {$ref: '#/components/responses/Error'}}}
   /api/v3/analytics/projections/{name}:
     parameters: [{name: name, in: path, required: true, schema: {type: string}}]
     get: {summary: 'PORTED projections (insights, sources, attack matrix, attack path, geo map, report) over ?days; other query parameters passed through', responses: {'200': {description: '{"projection","days","data"}'}, '404': {$ref: '#/components/responses/Error'}}}
