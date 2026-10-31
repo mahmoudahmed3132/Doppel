@@ -41,6 +41,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
+          # Push the registry branch as a deploy key, not GITHUB_TOKEN, so the
+          # registry ruleset can restrict updates to this one bypassable actor.
+          ssh-key: ${{ secrets.REGISTRY_DEPLOY_KEY }}
           persist-credentials: true   # needed to push the registry branch
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
