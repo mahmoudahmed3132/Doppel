@@ -77,3 +77,10 @@ PRI severity for HEARTBEAT: 6. AUDIT `route` = `<METHOD> <route template>`.
 ### Q12 — §6.3 — Encryption of the MFA secret at rest
 Not required by the spec. **Meanwhile:** stored in the SQLite file, which is
 protected by file permissions (0600) and the volume. Flagged in the threat model.
+
+### Q13 — §4.1 — Rate limiting of unauthenticated ingest requests
+The token bucket is per node key, so requests with invalid keys are not
+limited by it. Keys are 256-bit, so guessing is infeasible; the residual risk
+is load (one indexed lookup per request).
+**Meanwhile:** no extra limiter. Proposal: a per-source-IP limiter on
+authentication failures, applied together with the admin login limiter.

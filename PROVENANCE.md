@@ -32,3 +32,4 @@ analysis of §14.14 is the objective control.
 | 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | `docs/contract-v3.md` | Spec §4 | None |
 | 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | `hub/internal/{domain,ported,ported/stub,store,ids,nodekey,ingest}` | Spec §3, §4.2, §6.2, §6.3 (node keys), §6.5, §12; SQLite docs (`PRAGMA user_version`, `VACUUM INTO`, UPSERT/RETURNING); modernc.org/sqlite docs | None |
 | 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | `hub/internal/siem/syslog` | Spec §6.9; RFC 5424 §6 | None |
+| 2026-10-31 | AI agent, session `session_01TGdGKDp6wnhogyaRQY1eEm` | `hub/internal/{config,liveness,ratelimit,httpapi}`, `hub/cmd/truesignal-hub`, `docs/acceptance.md` | Spec §4.1, §4.3, §4.4, §6.1, §6.3 (break-glass), §6.6, §14; Go `net/http` docs | None |

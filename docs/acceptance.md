@@ -1,0 +1,21 @@
+# Acceptance test mapping (§14)
+
+Status legend: **pass** = automated test passing in CI (`make`); **partial** =
+some cases automated; **todo** = component not yet implemented.
+
+| # | Test | Status | Implementation |
+|---|---|---|---|
+| 1 | Setup token, single setup, password ≥ 12 | todo | admin auth not yet implemented |
+| 2 | Login lockouts, MFA flow, recovery single use, TOTP replay | todo | — |
+| 3 | Require-MFA enrolment-only session | todo | — |
+| 4 | Node key once, hashed, rotation/deletion immediate | partial | `hub/internal/nodekey` `TestRotationAndDeletionImmediate`; `hub/internal/httpapi` `TestAuthAndRotation`; "shown once" pending admin API |
+| 5 | Ingestion: partial batch, duplicates, reserved 403, other node 404, oversized details, invalid UTF-8, syslog `"]\n` | pass | `hub/internal/httpapi` `TestEventsBatchSemantics`, `TestEventsWholeBatchStatuses`; `hub/internal/ingest` `TestNormalize`; `hub/internal/siem/syslog` `TestHostileValueStaysOneLine` |
+| 6 | Whitelist / known beacon / honeytoken interplay | pass (pipeline level) | `hub/internal/ingest` `TestPipelineWhitelisted`, `TestPipelineBeacon`, `TestPipelineHoneytokenOnWhitelistedSource` (PORTED stubs) |
+| 7 | Liveness: timeout, stop + escalation, recovery, restart | pass | `hub/internal/liveness` |
+| 8 | Compose rules | todo | — |
+| 9 | Migrations: snapshot, newer schema refused, deletion keeps events | pass | `hub/internal/store` `TestMigrationSnapshotAndNewerSchema`, `TestFailedMigrationRollsBack`, `TestEventsSurviveNodeAndSensorDeletion` |
+| 10 | SIEM delivery | todo | formatter done; transport/queue pending |
+| 11 | CLI | todo | — |
+| 12 | Sensor test mode / fire drill | partial | SDK: `sdk/go/sensor` `TestTestModeSuccessAndFailure`, `TestServiceLifecycle`; real Hub: `hub/internal/httpapi` `TestSDKEndToEnd`; per-sensor tests pending (§11 sensors not started) |
+| 13 | CI publish guards | todo | — |
+| 14 | Independence check | n/a | run by the specification team |
