@@ -364,3 +364,14 @@ func TestClientIP(t *testing.T) {
 		t.Fatal("untrusted proto believed")
 	}
 }
+
+func TestClearCookieSecureOutsideDevelopment(t *testing.T) {
+	for _, dev := range []bool{false, true} {
+		w := httptest.NewRecorder()
+		(&Admin{Development: dev}).clearCookie(w)
+		c := w.Result().Cookies()
+		if len(c) != 1 || c[0].Secure == dev || !c[0].HttpOnly || c[0].MaxAge >= 0 || c[0].SameSite != http.SameSiteStrictMode {
+			t.Fatalf("development=%v: %+v", dev, c)
+		}
+	}
+}

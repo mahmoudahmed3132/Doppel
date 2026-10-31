@@ -41,10 +41,13 @@ type System struct {
 	Network  Network
 	Log      *slog.Logger
 	Now      func() time.Time
+
+	admin *Admin // set by Register
 }
 
 // Register mounts the routes.
 func (s *System) Register(a *Admin) {
+	s.admin = a
 	a.RouteFull("GET /api/v3/settings", "", s.getSettings)
 	a.RouteFull("PATCH /api/v3/settings", "config.update", s.patchSettings)
 	a.RouteFull("GET /api/v3/assets", "", s.getAssets)
@@ -251,6 +254,6 @@ func (s *System) factoryReset(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+	s.admin.clearCookie(w) // same attributes as the session cookie (Secure outside development)
 	OK(w, map[string]any{"reset": true, "setup_required": true})
 }

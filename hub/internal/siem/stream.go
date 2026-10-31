@@ -152,7 +152,7 @@ func (t *streamTransport) Send(ctx context.Context, record []byte) error {
 	}
 	line := record
 	if t.proto != ProtoUDP {
-		line = append(append(make([]byte, 0, len(record)+1), record...), '\n')
+		line = append(record[:len(record):len(record)], '\n') // full slice expression: always copies, never touches the caller's buffer
 	}
 	_ = c.SetWriteDeadline(time.Now().Add(writeTimeout))
 	if _, err := c.Write(line); err != nil {

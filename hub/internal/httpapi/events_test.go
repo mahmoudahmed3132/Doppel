@@ -44,6 +44,7 @@ type sysHub struct {
 	siem  *deliverer
 	reset []bool
 	srv   *httptest.Server
+	admin *Admin
 }
 
 func newSysHub(t *testing.T) *sysHub {
@@ -62,6 +63,7 @@ func newSysHub(t *testing.T) *sysHub {
 	settings := &hubsettings.Service{Store: db, Parser: stub.ExactSourceList{}, Log: log}
 	settings.Load(ctx)
 	admin := &Admin{Auth: svc, Settings: db, Audit: h.audit, Log: log, Now: time.Now, Development: true}
+	h.admin = admin
 	(&Events{Store: db, Enricher: &enrich.Enricher{Nodes: db}, Log: log}).Register(admin)
 	(&System{Settings: settings, Auth: svc, BeaconDB: db, SIEM: h.siem, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
@@ -234,9 +236,17 @@ func TestFactoryReset(t *testing.T) {
 		t.Fatalf("reset ran without a delivered audit: %d %v %v", code, out, h.reset)
 	}
 	h.siem.err = nil
-	code, out, _ = h.c.do("POST", "/api/v3/system/factory-reset", map[string]any{"password": adminPW, "confirm": ConfirmFactoryReset})
+	h.admin.Development = false // production cookie attributes for the reset response
+	code, out, resp := h.c.do("POST", "/api/v3/system/factory-reset", map[string]any{"password": adminPW, "confirm": ConfirmFactoryReset})
 	if code != 200 || len(h.reset) != 1 || h.reset[0] {
 		t.Fatalf("%d %v %v", code, out, h.reset)
+	}
+	// The session cookie is cleared with exactly the attributes logout uses
+	// (Secure outside development; CodeQL go/cookie-secure-not-set).
+	want := httptest.NewRecorder()
+	h.admin.clearCookie(want)
+	if got := resp.Header.Get("Set-Cookie"); got == "" || got != want.Header().Get("Set-Cookie") {
+		t.Fatalf("reset cookie %q, logout cookie %q", got, want.Header().Get("Set-Cookie"))
 	}
 	last := h.siem.recs[len(h.siem.recs)-1]
 	if last.Kind != domain.RecordAudit || last.Audit.Action != "system.factory_reset" {
@@ -250,5 +260,24 @@ func TestFactoryReset(t *testing.T) {
 	}
 	if l, _ := h.db.ListHoneytokens(context.Background()); len(l) != 1 {
 		t.Fatal("honeytokens purged without the option")
+	}
+}
+
+// Every non-JSON body the admin API returns carries attacker-influenced data
+// (event details, honeytoken usernames, beacon artefacts). None may be
+// renderable as a page: attachment disposition, a non-HTML type, nosniff and
+// the CSP on every one (CodeQL go/reflected-xss triage, PR #1).
+func TestDownloadsNeverRenderInline(t *testing.T) {
+	h := newSysHub(t)
+	for _, p := range []string{"/api/v3/events/export?format=csv", "/api/v3/events/export?format=json", "/api/v3/honeytokens/export"} {
+		code, _, resp := h.c.do("GET", p, nil)
+		if code != 200 {
+			t.Fatalf("%s: %d", p, code)
+		}
+		ct := resp.Header.Get("Content-Type")
+		if strings.Contains(ct, "html") || !strings.HasPrefix(resp.Header.Get("Content-Disposition"), "attachment;") ||
+			resp.Header.Get("X-Content-Type-Options") != "nosniff" || !strings.Contains(resp.Header.Get("Content-Security-Policy"), "default-src 'self'") {
+			t.Errorf("%s: type %q disposition %q nosniff %q", p, ct, resp.Header.Get("Content-Disposition"), resp.Header.Get("X-Content-Type-Options"))
+		}
 	}
 }
