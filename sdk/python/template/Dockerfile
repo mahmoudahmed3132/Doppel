@@ -3,7 +3,7 @@
 # Python template sensor. Build from the repository root:
 #   docker build -f sdk/python/template/Dockerfile -t ts-sensor-python-template .
 # Distroless Python (no shell, non-root); pinned by digest, bump deliberately.
-FROM gcr.io/distroless/python3-debian12:nonroot@sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5
+FROM gcr.io/distroless/python3-debian13:nonroot@sha256:64e54c4b1200da244d80181d98e86fc01d73c8101f107d5baf472152d8e119a2
 WORKDIR /app
 COPY sdk/python/truesignal_sdk/ /app/truesignal_sdk/
 COPY sdk/python/template/sensor.py /app/sensor.py
