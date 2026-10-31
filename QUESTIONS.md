@@ -128,3 +128,36 @@ the origin the request arrived on (scheme from TLS or a trusted proxy's
 **Meanwhile:** MFA endpoints answer `503 mfa_unavailable`; an admin with MFA
 enrolled cannot log in until the module is installed (break-glass:
 `mfa-reset`); `TS_REQUIRE_MFA=true` refuses to start. All fail closed.
+
+### Q21 — §6.4 — "mark node for upgrade of all sensors"
+**Meanwhile:** the request immediately moves every sensor of the node to its
+latest non-deprecated catalogue version as one rendered, atomic change; the
+node picks it up on its next `apply`. No separate "marked" state is kept.
+Requires the catalogue (503 `catalogue_unavailable` otherwise).
+
+### Q22 — §7 — Masking secret configuration values without a verified manifest
+**Meanwhile:** values of keys the manifest marks secret are returned as
+`********`. When the manifest is unknown or unverified, **all** values are
+masked (`config_masked` lists them). Edits send `null` for a key to keep its
+current value, so masked values never need to be re-entered.
+
+### Q23 — §3 — Who chooses the sensor instance id
+**Meanwhile:** the admin may give a kebab-case instance `name`; the id is
+`ts-sensor-<name>`, defaulting to the catalogue name. A second instance of the
+same sensor on one node needs an explicit name (`409 sensor_exists` otherwise).
+
+### Q24 — §6.12.11 — Deleting a sensor when rendering is impossible
+**Meanwhile:** add/edit/upgrade are refused without a successful render, but
+deletion is always allowed (removing a decoy must never be blocked); if the
+remaining set cannot be rendered, the node's desired revision is cleared.
+
+### Q25 — §6.4 — Node health "online"
+**Meanwhile:** a node is online when it made an authenticated request within
+the last 90 s (three SDK heartbeat intervals); `in_sync` = desired revision
+equals the revision last applied by the CLI.
+
+### Q26 — §6.4 / §6.12.9 — Secrets in the admin compose preview
+The rendered compose contains injected secrets (node key, capture key,
+honeytoken, beacon key). **Meanwhile:** admin previews are always rendered
+with secrets replaced by placeholders; only the node-authenticated CLI fetch
+(to be built with §8) receives real values.

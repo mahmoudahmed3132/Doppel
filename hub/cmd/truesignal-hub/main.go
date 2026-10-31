@@ -24,6 +24,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/config"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/httpapi"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
@@ -145,10 +146,19 @@ func serve(log *slog.Logger) error {
 	admin := &httpapi.Admin{Auth: authSvc, Settings: db, Audit: auditor, Network: network,
 		Development: cfg.Development, Log: log, Now: time.Now}
 
+	keys := nodekey.NewAuthenticator(db) // shared: admin key rotation invalidates ingest auth
+	(&httpapi.Fleet{
+		// Compiler and Catalogue are not installed yet: sensor changes and
+		// compose previews answer 503; node management works.
+		Svc:      &fleet.Service{Store: db, Keys: keys, Log: log, Now: time.Now},
+		Settings: db,
+		Log:      log,
+	}).Register(admin)
+
 	mux := http.NewServeMux()
 	mux.Handle("/api/v3/", admin.Handler())
 	(&httpapi.Ingest{
-		Auth:     nodekey.NewAuthenticator(db),
+		Auth:     keys,
 		Limiter:  ratelimit.NewKeyed(50, 200),
 		Store:    db,
 		Pipeline: pipe,

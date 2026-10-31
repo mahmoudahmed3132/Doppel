@@ -104,7 +104,7 @@ type Node struct {
 	LastSeenAt       *time.Time `json:"last_seen_at"`
 	DesiredRevision  string     `json:"desired_revision"`
 	AppliedRevision  string     `json:"applied_revision"`
-	UpgradeRequested bool       `json:"upgrade_requested"`
+	UpgradeRequested bool       `json:"-"` // unused: node upgrades apply immediately (Q21)
 }
 
 // SensorStatus is the liveness state of a sensor instance.

@@ -207,3 +207,56 @@ func (db *DB) PurgeStatusHistory(ctx context.Context, before time.Time) (int64, 
 	}
 	return res.RowsAffected()
 }
+
+// SensorChanges is one atomic change to a node's sensor set.
+type SensorChanges struct {
+	Create  []domain.Sensor // new instances (pending)
+	Update  []domain.Sensor // version and config replaced
+	Delete  []string        // sensor ids
+	Desired string          // new desired revision of the node ("" = unknown)
+}
+
+// ApplySensorChanges applies c and stores the node's desired revision in
+// one transaction. Liveness state of updated sensors is preserved.
+func (db *DB) ApplySensorChanges(ctx context.Context, nodeID string, c SensorChanges) error {
+	return db.withTx(ctx, func(tx *sql.Tx) error {
+		for _, s := range c.Create {
+			cfg, err := json.Marshal(nonNilMap(s.Config))
+			if err != nil {
+				return err
+			}
+			_, err = tx.ExecContext(ctx, `INSERT INTO sensors (node_id, id, catalogue_name, version, config, silenced, status, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
+				nodeID, s.ID, s.CatalogueName, s.Version, string(cfg), boolInt(s.Silenced), ms(s.CreatedAt))
+			if isUniqueViolation(err) {
+				return domain.ErrConflict
+			}
+			if err != nil {
+				return err
+			}
+		}
+		for _, s := range c.Update {
+			cfg, err := json.Marshal(nonNilMap(s.Config))
+			if err != nil {
+				return err
+			}
+			if err := affectedOne(tx.ExecContext(ctx, `UPDATE sensors SET version = ?, config = ? WHERE node_id = ? AND id = ?`,
+				s.Version, string(cfg), nodeID, s.ID)); err != nil {
+				return err
+			}
+		}
+		for _, id := range c.Delete {
+			if err := affectedOne(tx.ExecContext(ctx, `DELETE FROM sensors WHERE node_id = ? AND id = ?`, nodeID, id)); err != nil {
+				return err
+			}
+		}
+		return affectedOne(tx.ExecContext(ctx, `UPDATE nodes SET desired_revision = ? WHERE id = ?`, c.Desired, nodeID))
+	})
+}
+
+func nonNilMap(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
+}
