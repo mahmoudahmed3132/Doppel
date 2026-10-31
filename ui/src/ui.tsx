@@ -2,7 +2,7 @@
 //
 // Shared components. Everything renders data as text (Preact escapes it);
 // nothing here builds HTML from strings.
-import type { ComponentChildren, JSX } from "preact";
+import type { ComponentChildren, ComponentProps } from "preact";
 import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
 import { errorText } from "./api";
 import { store, useStore } from "./store";
@@ -75,7 +75,7 @@ export function Toasts() {
 
 // ---- basic elements --------------------------------------------------------
 
-type BtnProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "danger" | "ghost" | "default"; busy?: boolean; small?: boolean };
+type BtnProps = ComponentProps<"button"> & { variant?: "primary" | "danger" | "ghost" | "default"; busy?: boolean; small?: boolean };
 
 export function Button({ variant = "default", busy, small, children, disabled, class: cls, type, ...rest }: BtnProps) {
   return (
