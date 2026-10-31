@@ -1,0 +1,48 @@
+#!/bin/sh
+# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+#
+# Applies a change to the registry branch and pushes it, retrying on
+# conflict (§10: concurrent sensor publishes). Each attempt starts from the
+# current remote branch in a fresh worktree, so a lost race is re-applied on
+# top of the winner's commit, never merged blindly.
+#   registry-commit.sh <message> <command> [args...]
+# <command> runs inside the worktree (cwd) and must be idempotent per attempt.
+set -eu
+msg="${1:?message}"; shift
+[ $# -gt 0 ] || { echo "registry-commit: no command" >&2; exit 2; }
+root=$(git rev-parse --show-toplevel)
+wt="$root/.registry-worktree"
+branch=registry
+attempt=1
+max=8
+while :; do
+	git -C "$root" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+	git -C "$root" worktree prune
+	if git -C "$root" fetch --quiet --no-tags origin "refs/heads/$branch:refs/remotes/origin/$branch" 2>/dev/null; then
+		git -C "$root" worktree add --quiet --detach "$wt" "refs/remotes/origin/$branch"
+	else
+		echo "registry-commit: creating the $branch branch"
+		git -C "$root" worktree add --quiet --detach "$wt" HEAD
+		git -C "$wt" switch --quiet --orphan "registry-new"
+		git -C "$wt" rm -rq --cached . 2>/dev/null || true
+		find "$wt" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+	fi
+	(cd "$wt" && "$@")
+	git -C "$wt" add -A
+	if git -C "$wt" diff --cached --quiet; then
+		echo "registry-commit: nothing to commit"
+		break
+	fi
+	git -C "$wt" -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+		commit --quiet -m "$msg"
+	if git -C "$wt" push --quiet origin "HEAD:refs/heads/$branch"; then
+		echo "registry-commit: pushed ($msg) on attempt $attempt"
+		break
+	fi
+	[ "$attempt" -lt "$max" ] || { echo "registry-commit: giving up after $max attempts" >&2; exit 1; }
+	delay=$(( (attempt * 3) + $(od -An -N1 -tu1 /dev/urandom | tr -d ' ') % 5 ))
+	echo "registry-commit: push rejected (concurrent publish?); retrying in ${delay}s" >&2
+	sleep "$delay"
+	attempt=$((attempt + 1))
+done
+git -C "$root" worktree remove --force "$wt" 2>/dev/null || true

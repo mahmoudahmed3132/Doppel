@@ -1,0 +1,334 @@
+// Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+
+// Command truesignal-hub is the TrueSignal Hub.
+//
+//	truesignal-hub [serve]   run the Hub (default)
+//	truesignal-hub mfa-reset remove MFA from the admin account (Hub stopped)
+//	truesignal-hub version   print the version
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
+
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/audit"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/catalogue"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/compose"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/config"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/enrich"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/httpapi"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/hubsettings"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/livefeed"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ratelimit"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/secrets"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/siem"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/updatecheck"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webhook"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webui"
+)
+
+// Version is the Hub version; overridden at build time with -ldflags -X.
+var Version = "3.0.0"
+
+const contractVersion = 3
+
+func main() {
+	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	cmd := "serve"
+	if len(os.Args) > 1 {
+		cmd = os.Args[1]
+	}
+	var err error
+	switch cmd {
+	case "serve":
+		err = serve(log)
+	case "mfa-reset":
+		err = mfaReset(log)
+	case "version":
+		fmt.Printf("truesignal-hub %s (contract %d, schema v%d)\n", Version, contractVersion, store.SchemaVersion())
+	default:
+		fmt.Fprintf(os.Stderr, "usage: truesignal-hub [serve|mfa-reset|version]\n")
+		os.Exit(2)
+	}
+	if err != nil {
+		log.Error("fatal", "error", err.Error())
+		os.Exit(1)
+	}
+}
+
+func mfaReset(log *slog.Logger) error {
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(cfg.DBPath); err != nil {
+		return fmt.Errorf("database %s: %w", cfg.DBPath, err)
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := db.ResetMFA(ctx); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return errors.New("no admin account exists; nothing to reset")
+		}
+		return err
+	}
+	log.Warn("MFA removed from the admin account; all sessions invalidated; an audit record (mfa.reset_cli) will be emitted on next Hub start")
+	return nil
+}
+
+func serve(log *slog.Logger) error {
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+	for _, w := range cfg.DevWarnings() {
+		log.Warn("DEVELOPMENT RELAXATION ACTIVE — DO NOT USE IN PRODUCTION", "detail", w)
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	startedAt := time.Now().UTC()
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// SIEM output first, so every later audit record reaches it.
+	siemSvc := &siem.Service{PEN: cfg.SyslogPEN, CABundle: cfg.SIEMCABundle, Log: log}
+	// Renderer and HTTP transports are PORTED; until installed only
+	// tcp/udp/tls with RFC 5424 are available.
+	siemCfg, err := siem.LoadConfig(ctx, db)
+	if err == nil {
+		siemCfg, err = siemCfg.Normalize(siemSvc.Capabilities())
+	}
+	if err != nil {
+		log.Error("stored SIEM output is unusable; SIEM delivery is OFF until reconfigured", "error", err.Error())
+		siemCfg = siem.Config{Protocol: siem.ProtoNone}
+	}
+	if err := siemSvc.Start(siemCfg); err != nil {
+		log.Error("SIEM output could not start; SIEM delivery is OFF until reconfigured", "error", err.Error())
+		if err := siemSvc.Start(siem.Config{Protocol: siem.ProtoNone}); err != nil {
+			return err
+		}
+	}
+	defer func() {
+		fctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		siemSvc.Shutdown(fctx)
+	}()
+
+	auditor := &audit.Recorder{Log: log, SIEM: siemSvc}
+	if pending, err := db.TakeMFAResetMarker(ctx); err != nil {
+		return err
+	} else if pending {
+		auditor.Record(ctx, domain.AuditRecord{Time: time.Now().UTC(), Action: "mfa.reset_cli", Method: "CLI",
+			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
+	}
+
+	log.Warn("PORTED modules are not installed: manifest verifier (catalogue empty), TOTP/MFA, beacons, honeytokens, source lists, ATT&CK/asset/GeoIP enrichment, ECS rendering and Elastic/LogScale transports are inactive")
+
+	authSvc, err := auth.New(auth.Options{
+		Store:              db,
+		Hasher:             auth.NewHasher(auth.DefaultArgon2, 4),
+		TOTP:               nil, // PORTED module; MFA endpoints answer 503 until it is installed
+		Log:                log,
+		Now:                time.Now,
+		SessionTTL:         cfg.SessionTTL,
+		SessionIdle:        cfg.SessionIdle,
+		RequireMFA:         cfg.RequireMFA,
+		PasswordOverride:   cfg.DashboardPassword,
+		SetupTokenOverride: cfg.SetupToken,
+	})
+	if err != nil {
+		return err
+	}
+	if tok, err := authSvc.Init(ctx); err != nil {
+		return err
+	} else if tok != "" {
+		// Printed exactly once by design (§6.3); required to complete setup.
+		log.Warn("first start: complete setup in the web UI with this one-time setup token", "setup_token", tok)
+	}
+	go purgeSessions(ctx, authSvc, log)
+
+	notifier := &webhook.Notifier{Store: db, AllowHTTP: cfg.Development, Log: log, Now: time.Now}
+	if err := notifier.Load(ctx); err != nil {
+		return err
+	}
+	notifier.Start(ctx)
+
+	settingsSvc := &hubsettings.Service{Store: db, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log} // Parser and Assets are PORTED: until installed, source lists are
+	// stored but not applied and the asset inventory is read-only.
+
+	if err := settingsSvc.Load(ctx); err != nil {
+		return err
+	}
+	go settingsSvc.RunRetentionLoop(ctx, db)
+	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc}
+
+	broker := livefeed.NewBroker()
+	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
+		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker}
+	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
+		Run(ctx, siem.HeartbeatInterval)
+	live := &liveness.Service{Store: db, Raiser: pipe, Publisher: broker, Log: log, Now: time.Now, StartedAt: startedAt}
+	go live.Run(ctx, 5*time.Second)
+
+	network := httpapi.Network{Trusted: cfg.TrustedProxies}
+	admin := &httpapi.Admin{Auth: authSvc, Settings: db, Audit: auditor, Network: network,
+		Development: cfg.Development, Log: log, Now: time.Now}
+
+	keys := nodekey.NewAuthenticator(db) // shared: admin key rotation invalidates ingest auth
+	cat := &catalogue.Catalogue{
+		Store:    db,
+		Settings: db,
+		// PORTED Sigstore verifier not installed: every manifest is
+		// unavailable (fail closed) unless the dev unsigned flag is set.
+		Verifier:      stub.RejectAllVerifier{},
+		Fetcher:       catalogue.NewHTTPFetcher(),
+		DefaultURL:    cfg.RegistryURL,
+		AllowHTTP:     cfg.Development,
+		AllowUnsigned: cfg.DevAllowUnsigned,
+		Options:       manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
+		Log:           log,
+		Now:           time.Now,
+	}
+	if err := cat.Load(ctx); err != nil {
+		return fmt.Errorf("loading catalogue cache: %w", err)
+	}
+	go cat.Run(ctx)
+
+	compiler := &compose.Compiler{
+		Manifests: cat,
+		Settings:  db,
+		Keys:      &secrets.Keys{Store: db},
+		// Honeytokens: PORTED module; File Canary deploys fail closed until installed.
+		Options: manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
+		Log:     log,
+	}
+	fleetSvc := &fleet.Service{Store: db, Compiler: compiler, Catalogue: cat, Keys: keys, Log: log, Now: time.Now}
+	(&httpapi.Fleet{
+		Svc:      fleetSvc,
+		Settings: db,
+		Log:      log,
+	}).Register(admin)
+
+	(&httpapi.Catalogue{Cat: cat, Log: log}).Register(admin)
+	(&httpapi.Outputs{SIEM: siemSvc, Store: db, Webhook: notifier, Network: network, Log: log, Now: time.Now}).Register(admin)
+	(&httpapi.Events{Store: db, Enricher: enricher, Log: log}).Register(admin)
+	updates := &updatecheck.Checker{URL: cfg.UpdateCheckURL, Log: log, Now: time.Now,
+		Interval: func(ctx context.Context) time.Duration {
+			return time.Duration(settingsSvc.Get(ctx).UpdateCheckHours) * time.Hour
+		}}
+	go updates.Run(ctx)
+	(&httpapi.Insights{Store: db, Enricher: enricher, Updates: updates, Settings: settingsSvc, Auth: authSvc, Live: broker,
+		Armed: notifier.Armed, SIEMStats: siemSvc.Stats, Version: Version, Schema: store.SchemaVersion(),
+		StartedAt: startedAt, Development: cfg.Development, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin,
+		// Projections and the ATT&CK mapper are PORTED.
+	}).Register(admin)
+	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
+		Reset: func(ctx context.Context, purge bool) error {
+			if err := db.FactoryReset(ctx, purge); err != nil {
+				return err
+			}
+			keys.Purge() // every node key is revoked immediately
+			if err := siemSvc.Switch(ctx, siem.Config{Protocol: siem.ProtoNone}, nil); err != nil {
+				log.Error("factory reset: SIEM output not cleared", "error", err.Error())
+			}
+			if err := notifier.Load(ctx); err != nil {
+				log.Error("factory reset: webhook state not reloaded", "error", err.Error())
+			}
+			settingsSvc.Load(ctx)
+			tok, err := authSvc.ResetSetupToken(ctx)
+			if err != nil {
+				return err
+			}
+			if tok != "" {
+				log.Warn("factory reset complete: complete setup again with this one-time setup token", "setup_token", tok)
+			}
+			return nil
+		}}).Register(admin)
+
+	mux := http.NewServeMux()
+	mux.Handle("/api/v3/", admin.Handler())
+	ui := webui.Handler()
+	if !ui.Built() {
+		log.Warn("admin UI not embedded in this build; serving a placeholder page")
+	}
+	mux.Handle("/", ui)
+	ingestAPI := &httpapi.Ingest{
+		Auth:     keys,
+		Limiter:  ratelimit.NewKeyed(50, 200),
+		Store:    db,
+		Pipeline: pipe,
+		Liveness: live,
+		Version:  httpapi.Version{Product: "truesignal-hub", Version: Version, Contract: contractVersion},
+		Log:      log,
+		Now:      time.Now,
+	}
+	ingestAPI.Register(mux)
+	(&httpapi.NodeAPI{Ingest: ingestAPI, Fleet: fleetSvc, Store: db, Raiser: pipe, HubMajor: 3}).Register(mux)
+
+	srv := &http.Server{
+		Addr:              net.JoinHostPort("", strconv.Itoa(cfg.ListenPort)),
+		Handler:           httpapi.SecurityHeaders(network, mux),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    32 << 10,
+		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+	}
+	errc := make(chan error, 1)
+	go func() {
+		log.Info("hub listening", "port", cfg.ListenPort, "version", Version, "schema", store.SchemaVersion())
+		errc <- srv.ListenAndServe()
+	}()
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+	}
+	log.Info("shutting down")
+	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return srv.Shutdown(shutCtx)
+}
+
+func purgeSessions(ctx context.Context, a *auth.Service, log *slog.Logger) {
+	t := time.NewTicker(10 * time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if _, err := a.PurgeExpired(ctx); err != nil && ctx.Err() == nil {
+				log.Warn("purging expired sessions failed", "error", err.Error())
+			}
+		}
+	}
+}

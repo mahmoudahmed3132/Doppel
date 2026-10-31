@@ -1,0 +1,15 @@
+go 1.26.0
+
+toolchain go1.26.10
+
+use (
+	./cli
+	./hub
+	./sdk/go
+	./sensors/file-canary
+	./sensors/icmp-canary
+	./sensors/network-scan-detector
+	./sensors/tcp-tarpit
+	./sensors/template
+	./sensors/web-router-decoy
+)

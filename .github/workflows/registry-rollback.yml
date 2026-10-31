@@ -1,0 +1,54 @@
+# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+#
+# Registry rollback (§10, manual): marks the latest version of a sensor
+# deprecated. Hubs stop offering it for new deployments and stop counting it
+# as "latest"; the previous non-deprecated version becomes latest. Nothing is
+# deleted (versions are immutable).
+name: registry-rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      sensor:
+        description: Sensor name whose latest version is deprecated
+        required: true
+        type: string
+      confirm:
+        description: Type the sensor name again to confirm
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-rollback
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      SENSOR: ${{ inputs.sensor }}
+      CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - name: validate input
+        run: |
+          echo "$SENSOR" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$' || { echo "::error::invalid sensor name"; exit 1; }
+          [ "$SENSOR" = "$CONFIRM" ] || { echo "::error::confirmation does not match"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: true   # needed to push the registry branch
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache-dependency-path: "**/go.sum"
+      - run: cd hub && go build -o "$RUNNER_TEMP/ts-registry" ./cmd/ts-registry
+      - name: deprecate and push (retry on conflict)
+        run: |
+          git rev-parse -q --verify refs/remotes/origin/registry >/dev/null || git fetch --quiet origin registry:refs/remotes/origin/registry
+          scripts/release/registry-commit.sh "registry: deprecate latest $SENSOR (rollback by $GITHUB_ACTOR)" \
+            "$RUNNER_TEMP/ts-registry" deprecate -dir . -name "$SENSOR"

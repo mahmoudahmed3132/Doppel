@@ -1,0 +1,12 @@
+/bin/
+/dist/
+*.db
+*.db-wal
+*.db-shm
+*.bak
+node_modules/
+
+# Admin UI build output (embedded by the Hub; built in CI/release)
+ui/node_modules/
+hub/internal/webui/dist/*
+!hub/internal/webui/dist/.placeholder

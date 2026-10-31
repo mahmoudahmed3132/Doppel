@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truesignal.invalid/schemas/manifest-v3.json",
+  "title": "TrueSignal sensor manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "display_name", "version", "description", "category", "author", "image", "runtime", "config", "triggers", "compatibility"],
+  "$defs": {
+    "kebab": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "maxLength": 64},
+    "semver": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$"},
+    "configName": {"type": "string", "pattern": "^TS_[A-Z0-9]+(_[A-Z0-9]+)*$", "maxLength": 64},
+    "cap": {"enum": ["NET_RAW", "NET_BIND_SERVICE", "DAC_OVERRIDE"]},
+    "user": {"type": "string", "pattern": "^[0-9]{1,10}(:[0-9]{1,10})?$"},
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "digest", "platforms"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)+$"},
+        "tag": {"type": "string", "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"},
+        "digest": {"type": "string", "pattern": "^(sha256:[0-9a-f]{64})?$", "description": "Filled by CI; empty only in source manifests before publish"},
+        "platforms": {"type": "array", "minItems": 1, "items": {"enum": ["linux/amd64", "linux/arm64"]}}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": 3},
+    "name": {"$ref": "#/$defs/kebab"},
+    "display_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "version": {"$ref": "#/$defs/semver"},
+    "description": {"type": "string", "minLength": 1, "maxLength": 2048},
+    "category": {"$ref": "#/$defs/kebab"},
+    "author": {"type": "string", "minLength": 1, "maxLength": 128},
+    "documentation": {"type": "string", "maxLength": 65536},
+    "image": {"$ref": "#/$defs/image"},
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["network_mode"],
+      "properties": {
+        "user": {"$ref": "#/$defs/user"},
+        "network_mode": {"enum": ["host", "bridge", "none"]},
+        "cap_add": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/cap"}},
+        "memory_mb": {"type": "integer", "minimum": 0, "maximum": 4096},
+        "listen_ports": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["config_key", "protocol"],
+          "properties": {"config_key": {"$ref": "#/$defs/configName"}, "protocol": {"enum": ["tcp", "udp"]},
+            "container_port": {"type": "integer", "minimum": 1, "maximum": 65535, "description": "bridge only: fixed port inside the container; the config value is the published host port"}}}},
+        "host_paths": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["config_key", "mount"],
+          "properties": {"config_key": {"$ref": "#/$defs/configName"}, "mount": {"enum": ["self", "parent"]}, "read_only": {"type": "boolean"}}}}
+      }
+    },
+    "init": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "command"],
+      "properties": {
+        "image": {"$ref": "#/$defs/image"},
+        "command": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"type": "string", "maxLength": 1024, "not": {"pattern": "\\$|\\{\\{"}}},
+        "cap_add": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/cap"}},
+        "writable_host_paths": {"type": "array", "items": {"$ref": "#/$defs/configName"}},
+        "user": {"$ref": "#/$defs/user"}
+      }
+    },
+    "config": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type", "description"],
+        "properties": {
+          "name": {"$ref": "#/$defs/configName"},
+          "type": {"enum": ["string", "int", "bool", "enum", "list", "port", "path"]},
+          "item_type": {"enum": ["string", "int", "enum", "port", "path"]},
+          "default": {"type": "string", "maxLength": 4096},
+          "required": {"type": "boolean"},
+          "secret": {"type": "boolean"},
+          "hub_reserved": {"type": "boolean"},
+          "description": {"type": "string", "minLength": 1},
+          "validation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pattern": {"type": "string", "maxLength": 512},
+              "min": {"type": "integer"},
+              "max": {"type": "integer"},
+              "enum": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+              "max_items": {"type": "integer", "minimum": 1},
+              "max_length": {"type": "integer", "minimum": 1}
+            }
+          }
+        }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "process_names": {"type": "array", "items": {"type": "string", "maxLength": 256}},
+        "listening_ports": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 65535}},
+        "files": {"type": "array", "items": {"type": "string", "maxLength": 1024}},
+        "defaults": {"type": "object", "propertyNames": {"$ref": "#/$defs/configName"},
+          "additionalProperties": {"type": "string", "maxLength": 1024}}
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "object", "additionalProperties": false, "required": ["name", "default_severity", "description"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", "maxLength": 64},
+          "default_severity": {"enum": ["info", "low", "medium", "high", "critical"]},
+          "description": {"type": "string"}
+        }}
+    },
+    "compatibility": {"type": "object", "additionalProperties": false, "required": ["hub_major"], "properties": {"hub_major": {"const": 3}}},
+    "status": {"enum": ["active", "deprecated"], "description": "Set by the registry index; ignored in author manifests"}
+  }
+}

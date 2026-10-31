@@ -1,0 +1,20 @@
+{
+  "name": "truesignal-ui",
+  "private": true,
+  "version": "3.0.0",
+  "description": "TrueSignal Hub admin UI",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node build.mjs",
+    "check": "npm run typecheck && node scripts/lint-safety.mjs && npm run build"
+  },
+  "dependencies": {
+    "preact": "10.28.4"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "typescript": "5.9.3"
+  }
+}

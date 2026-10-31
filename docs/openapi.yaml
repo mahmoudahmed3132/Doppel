@@ -1,0 +1,691 @@
+# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+openapi: 3.1.0
+info:
+  title: TrueSignal Hub admin API
+  version: 3.0.0
+  description: |
+    Cookie-authenticated admin API. State-changing requests require an
+    Origin (or Referer) equal to the Hub origin. Bodies are JSON, at most
+    1 MiB, decoded strictly (unknown fields → 400 unknown_field).
+    Sections are added as features land; see docs/acceptance.md.
+servers:
+  - url: /
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: ts_session
+    nodeKey:
+      type: http
+      scheme: bearer
+      description: Node key (tsk_ + 64 hex); see docs/contract-v3.md
+  schemas:
+    Error:
+      type: object
+      required: [ok, error, message]
+      properties:
+        ok: {const: false}
+        error: {type: string}
+        message: {type: string}
+    Session:
+      type: object
+      properties:
+        enrol_only: {type: boolean}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        idle_expires_at: {type: string, format: date-time}
+    MFAStatus:
+      type: object
+      properties:
+        available: {type: boolean, description: false until the PORTED TOTP module is installed}
+        enabled: {type: boolean}
+        enrolment_pending: {type: boolean}
+        required: {type: boolean}
+        recovery_codes_remaining: {type: integer}
+    Reauth:
+      type: object
+      additionalProperties: false
+      required: [password, code]
+      properties:
+        password: {type: string}
+        code: {type: string, description: current 6-digit TOTP code}
+    SensorSpec:
+      type: object
+      additionalProperties: false
+      required: [catalogue_name, version]
+      properties:
+        name: {type: string, description: 'kebab-case instance name; id = ts-sensor-<name>; default catalogue_name'}
+        catalogue_name: {type: string}
+        version: {type: string}
+        config: {type: object, maxProperties: 64, additionalProperties: {type: string, maxLength: 4096}, propertyNames: {pattern: '^TS_[A-Z0-9]+(_[A-Z0-9]+)*$'}}
+    ConfigPatch:
+      type: object
+      additionalProperties: {type: [string, 'null']}
+      description: null keeps the current value (masked secrets); absent keys are removed
+    NodeKeyIssued:
+      type: object
+      properties:
+        node: {type: object}
+        node_key: {type: string, pattern: '^tsk_[0-9a-f]{64}$', description: shown once; only its SHA-256 is stored}
+        link:
+          type: object
+          properties:
+            key_env: {const: TS_NODE_KEY}
+            hub_url: {type: string}
+            command: {type: string}
+        warning: {type: string}
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Locked:
+      description: Lockout active (5 failures per IP or 10 account-wide within 15 min → 15 min)
+      headers:
+        Retry-After: {schema: {type: integer}}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+security:
+  - session: []
+paths:
+  /v3/ingest/events:
+    post:
+      security: [{nodeKey: []}]
+      summary: Sensor event batch (1-100 events; per-event accept/duplicate/reject). Body and semantics in docs/contract-v3.md
+      responses: {'200': {description: '{"accepted","duplicates","rejected"[]}'}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '413': {$ref: '#/components/responses/Error'}, '429': {$ref: '#/components/responses/Error'}}
+  /v3/ingest/heartbeats:
+    post:
+      security: [{nodeKey: []}]
+      summary: Sensor heartbeat (liveness, sdk_version, dropped_events). See docs/contract-v3.md
+      responses: {'200': {description: OK}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
+  /v3/ingest/stopping:
+    post:
+      security: [{nodeKey: []}]
+      summary: Sensor graceful-stop notice. See docs/contract-v3.md
+      responses: {'200': {description: OK}, '401': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
+  /v3/node/identity:
+    get:
+      security: [{nodeKey: []}]
+      summary: The calling node's id, alias and desired revision (CLI link/status). Requires X-TrueSignal-CLI-Version of the same major (426 otherwise)
+      responses: {'200': {description: Node identity}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}}
+  /v3/node/compose:
+    get:
+      security: [{nodeKey: []}]
+      summary: Unredacted rendered compose for the calling node only (CLI apply); the node key itself is never included
+      responses: {'200': {description: '{"compose","revision"}'}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+  /v3/node/applied:
+    post:
+      security: [{nodeKey: []}]
+      summary: CLI reports the applied revision or an apply failure (raises node_apply_failed)
+      responses: {'200': {description: OK}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}}
+  /v3/version:
+    get:
+      security: []
+      summary: Product and contract version
+      responses:
+        '200':
+          description: Version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: {const: truesignal-hub}
+                  version: {type: string}
+                  contract: {const: 3}
+  /api/v3/setup:
+    get:
+      security: []
+      summary: Setup status
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {const: true}
+                  setup_completed: {type: boolean}
+                  password_managed: {type: boolean}
+                  mfa_required: {type: boolean}
+    post:
+      security: []
+      summary: Complete first-run setup (once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [setup_token, password, public_endpoint]
+              properties:
+                setup_token: {type: string}
+                password: {type: string, minLength: 12}
+                public_endpoint: {type: string, format: uri}
+      responses:
+        '200': {description: Setup completed}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/session/login:
+    post:
+      security: []
+      summary: Log in (password, then TOTP or recovery code when MFA is enrolled)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password]
+              properties:
+                password: {type: string}
+                code: {type: string}
+      responses:
+        '200':
+          description: Session created; cookie ts_session set (HttpOnly, Secure, SameSite=Strict)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {const: true}
+                  session: {$ref: '#/components/schemas/Session'}
+        '401':
+          description: invalid_credentials, mfa_required or invalid_code
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v3/session/logout:
+    post:
+      summary: Log out (allowed for enrolment-only sessions)
+      responses:
+        '200': {description: Logged out}
+        '401': {$ref: '#/components/responses/Error'}
+  /api/v3/session:
+    get:
+      summary: Current session
+      responses:
+        '200': {description: Session info}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v3/mfa:
+    get:
+      summary: MFA status (allowed for enrolment-only sessions)
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {const: true}
+                  mfa: {$ref: '#/components/schemas/MFAStatus'}
+  /api/v3/mfa/enrolment:
+    post:
+      summary: Begin enrolment (password required); returns secret and otpauth URI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password]
+              properties:
+                password: {type: string}
+      responses:
+        '200':
+          description: Secret issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret: {type: string}
+                  otpauth_uri: {type: string}
+        '401': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v3/mfa/enrolment/confirm:
+    post:
+      summary: Confirm enrolment; returns 10 recovery codes once and invalidates all sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: {type: string}
+      responses:
+        '200':
+          description: MFA enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes: {type: array, items: {type: string}, minItems: 10, maxItems: 10}
+                  relogin_required: {const: true}
+        '401': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/mfa/disable:
+    post:
+      summary: Disable MFA (password + current code); refused in require-MFA mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Reauth'}
+      responses:
+        '200': {description: MFA disabled; all sessions invalidated}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/mfa/recovery-codes:
+    post:
+      summary: Regenerate recovery codes (password + current code); other sessions invalidated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Reauth'}
+      responses:
+        '200':
+          description: New codes (shown once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes: {type: array, items: {type: string}}
+        '401': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/system/password:
+    post:
+      summary: Change the admin password; all sessions invalidated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [current_password, new_password]
+              properties:
+                current_password: {type: string}
+                new_password: {type: string, minLength: 12}
+      responses:
+        '200': {description: Password changed}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/nodes:
+    get:
+      summary: List nodes with health summary
+      responses:
+        '200': {description: '{"nodes": [Node + health]}'}
+    post:
+      summary: Create a node; the node key is returned once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [alias]
+              properties:
+                alias: {type: string, maxLength: 64}
+                tags: {type: array, maxItems: 32, items: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9_.:-]{0,31}$'}}
+      responses:
+        '201':
+          description: Node created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NodeKeyIssued'}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v3/nodes/{node}:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string, pattern: '^node-[0-9a-f]{8}$'}}
+    get:
+      summary: Node with health and sensors (secret config values masked)
+      responses:
+        '200': {description: '{"node": Node + health + sensors}'}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      summary: Rename / retag (absent fields unchanged)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                alias: {type: string}
+                tags: {type: array, items: {type: string}}
+      responses:
+        '200': {description: Updated node}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    delete:
+      summary: Delete node and its sensor instances; events are kept; key revoked immediately
+      responses:
+        '200': {description: Deleted}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v3/nodes/{node}/key:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+    post:
+      summary: Rotate the node key; the old key stops working immediately; new key returned once
+      responses:
+        '200':
+          description: New key
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NodeKeyIssued'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v3/nodes/{node}/upgrade:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+    post:
+      summary: Move every sensor to its latest catalogue version (rendered, atomic)
+      responses:
+        '200': {description: '{"upgraded": [sensor ids], "render": Render}'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v3/nodes/{node}/compose:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+    get:
+      summary: Rendered compose file (read-only, secrets redacted)
+      responses:
+        '200': {description: '{"compose": string, "render": Render, "redacted": true}'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v3/nodes/{node}/compose/preview:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+    post:
+      summary: Render with an unsaved add or edit applied (nothing stored, secrets redacted)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                add: {$ref: '#/components/schemas/SensorSpec'}
+                sensor_id: {type: string}
+                config: {$ref: '#/components/schemas/ConfigPatch'}
+      responses:
+        '200': {description: '{"compose": string, "render": Render, "redacted": true}'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v3/nodes/{node}/sensors:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+    post:
+      summary: Add a sensor; the full compose is rendered first and nothing is saved on error
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SensorSpec'}
+      responses:
+        '201': {description: '{"sensor": SensorView, "render": Render}'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {description: 'port_conflict or sensor_exists'}
+        '422': {description: 'compose rule violation (error code names the rule)'}
+        '503': {description: compose compiler unavailable}
+  /api/v3/nodes/{node}/sensors/{sensor}:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+      - {name: sensor, in: path, required: true, schema: {type: string, pattern: '^ts-sensor-[a-z0-9]+(-[a-z0-9]+)*$'}}
+    patch:
+      summary: Replace configuration (null keeps the current value; absent keys are removed)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [config]
+              properties:
+                config: {$ref: '#/components/schemas/ConfigPatch'}
+      responses:
+        '200': {description: '{"sensor": SensorView, "render": Render}'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+    delete:
+      summary: Delete a sensor instance; events are kept
+      responses:
+        '200': {description: Deleted}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v3/nodes/{node}/sensors/{sensor}/upgrade:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+      - {name: sensor, in: path, required: true, schema: {type: string}}
+    post:
+      summary: Change version (empty = latest from the catalogue)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                version: {type: string}
+      responses:
+        '200': {description: '{"sensor": SensorView, "render": Render}'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v3/nodes/{node}/sensors/{sensor}/silence:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+      - {name: sensor, in: path, required: true, schema: {type: string}}
+    post:
+      summary: Stop webhook notifications for this sensor (SIEM delivery unaffected)
+      responses:
+        '200': {description: '{"silenced": true}'}
+  /api/v3/nodes/{node}/sensors/{sensor}/unsilence:
+    parameters:
+      - {name: node, in: path, required: true, schema: {type: string}}
+      - {name: sensor, in: path, required: true, schema: {type: string}}
+    post:
+      summary: Re-enable webhook notifications
+      responses:
+        '200': {description: '{"silenced": false}'}
+  /api/v3/catalogue:
+    get:
+      summary: Sensors and versions from the signed registry, with availability and reasons
+      responses:
+        '200': {description: '{"sensors": [{name, display_name, category, description, latest, versions: [{version, available, verified, deprecated, listed, reason}]}], "status": {registry_url, last_refresh, last_error}}'}
+  /api/v3/catalogue/{name}/{version}:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'}}
+      - {name: version, in: path, required: true, schema: {type: string}}
+    get:
+      summary: One version and its manifest (null when unavailable). documentation is untrusted Markdown; render escaped.
+      responses:
+        '200': {description: '{"name", "version": Version, "manifest": Manifest|null}'}
+        '404': {$ref: '#/components/responses/Error'}
+  /api/v3/catalogue/refresh:
+    post:
+      summary: Refresh from the registry now
+      responses:
+        '200': {description: '{"status": Status}'}
+        '502': {$ref: '#/components/responses/Error'}
+  /api/v3/settings/siem:
+    get:
+      summary: SIEM output (token reported only as token_set), installed capabilities, queue depth and drops
+      responses:
+        '200': {description: '{"siem": {protocol, address, format, token_set}, "capabilities": {ecs, http_transports}, "queue": {depth, dropped}}'}
+    put:
+      summary: Change the SIEM output; applies immediately (audit delivered to the previous and the new destination)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                protocol: {enum: [none, tcp, udp, tls, elastic, logscale]}
+                address: {type: string}
+                format: {enum: [rfc5424, ecs]}
+                token: {type: [string, 'null'], description: 'null/absent keeps the stored token; "" clears it'}
+      responses:
+        '200': {description: as GET}
+        '400': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v3/settings/siem/test:
+    post:
+      summary: Send a synthetic record to the active output over a separate connection
+      responses:
+        '200': {description: '{"delivered": true}'}
+        '502': {$ref: '#/components/responses/Error'}
+  /api/v3/settings/webhook:
+    get:
+      summary: Webhook (URL reported only as url_set), dropped count, armed state
+      responses:
+        '200': {description: '{"webhook": {type, severities, url_set}, "dropped", "armed"}'}
+    put:
+      summary: Change the webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                type: {enum: [none, ntfy, gotify, discord, slack]}
+                url: {type: [string, 'null'], description: 'https only; null/absent keeps the stored URL'}
+                severities: {type: array, items: {enum: [info, low, medium, high, critical]}, description: default all except info}
+      responses:
+        '200': {description: as GET}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v3/settings/webhook/test:
+    post:
+      summary: Send a test notification (ignores armed state and severity filter)
+      responses:
+        '200': {description: '{"delivered": true}'}
+        '502': {$ref: '#/components/responses/Error'}
+  /api/v3/system/armed:
+    get:
+      summary: Armed state (webhooks are sent only when armed; default armed)
+      responses:
+        '200': {description: '{"armed": bool}'}
+    put:
+      summary: Arm or disarm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [armed]
+              properties:
+                armed: {type: boolean}
+      responses:
+        '200': {description: '{"armed": bool}'}
+  /api/v3/events:
+    get:
+      summary: 'Events newest first, enriched. Query: archived (false|true|any), node, sensor, severity (comma list), trigger, from/to (RFC 3339), q (source/target substring), before (cursor), limit (1..500)'
+      responses:
+        '200': {description: '{"events": [EnrichedEvent], "next_cursor": string|null}'}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v3/events/{seq}:
+    parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
+    get: {summary: One event with enrichment, responses: {'200': {description: '{"event"}'}, '404': {$ref: '#/components/responses/Error'}}}
+  /api/v3/events/unread-count:
+    get: {summary: 'Unread unarchived events', responses: {'200': {description: '{"unread": n}'}}}
+  /api/v3/events/{seq}/read:
+    parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
+    post: {summary: Mark one read, responses: {'200': {description: '{"updated": n}'}}}
+  /api/v3/events/read-all:
+    post: {summary: Mark all read, responses: {'200': {description: '{"updated": n}'}}}
+  /api/v3/events/{seq}/archive:
+    parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
+    post: {summary: Archive one (also marks read), responses: {'200': {description: '{"updated": n}'}}}
+  /api/v3/events/archive-all:
+    post: {summary: Archive all, responses: {'200': {description: '{"updated": n}'}}}
+  /api/v3/events/delete-all:
+    post:
+      summary: 'Delete every event (danger zone). Body {"confirm": "DELETE ALL EVENTS"}'
+      responses: {'200': {description: '{"deleted": n}'}, '400': {$ref: '#/components/responses/Error'}}
+  /api/v3/events/export:
+    get:
+      summary: 'Export with the list filters; format=json (array) or csv (cells starting with = + - @ are prefixed with an apostrophe). Audited.'
+      responses: {'200': {description: attachment}}
+  /api/v3/honeytokens:
+    get: {summary: Honeytokens (never the secret), responses: {'200': {description: '{"honeytokens": [...]}'}}}
+  /api/v3/honeytokens/export:
+    get: {summary: 'CSV username,honeytoken_id,planted_node_id,planted_sensor_id,created_at. Audited.', responses: {'200': {description: attachment}}}
+  /api/v3/settings:
+    get: {summary: Hub settings (no secrets), responses: {'200': {description: '{"settings": View}'}}}
+    patch:
+      summary: 'Partial update: public_endpoint, registry_url ("" = default), catalogue_refresh_hours (1..168), update_check_hours (0..720, 0 = off), retention {archive_after_days, purge_archived_after_days (0 = off), history_days}, whitelist, known_scanners'
+      responses: {'200': {description: '{"settings": View}'}, '400': {$ref: '#/components/responses/Error'}}
+  /api/v3/assets:
+    get: {summary: Asset inventory and whether it is editable, responses: {'200': {description: '{"assets", "editable"}'}}}
+    put: {summary: 'Replace the inventory {"assets": [...]} (validated by the PORTED module; 503 until installed)', responses: {'200': {description: ok}, '503': {$ref: '#/components/responses/Error'}}}
+  /api/v3/beacons:
+    get: {summary: Beacons (never the token) and whether the module is installed, responses: {'200': {description: '{"beacons", "available"}'}}}
+    post: {summary: 'Create {"type","name","memo"} (PORTED; 503 until installed)', responses: {'201': {description: '{"beacon"}'}, '503': {$ref: '#/components/responses/Error'}}}
+  /api/v3/beacons/{id}/artefact:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    get: {summary: Download the beacon artefact (attachment, never inline). Audited., responses: {'200': {description: attachment}}}
+  /api/v3/beacons/{id}:
+    parameters: [{name: id, in: path, required: true, schema: {type: string}}]
+    delete: {summary: Delete a beacon, responses: {'200': {description: ok}}}
+  /api/v3/system/cli-notice/ack:
+    post: {summary: 'Acknowledge a CLI release notice {"version": "X.Y.Z"}', responses: {'200': {description: ok}}}
+  /api/v3/system/factory-reset:
+    post:
+      summary: 'Factory reset {"password", "confirm": "FACTORY RESET", "purge_honeytokens": bool}. The audit record is delivered to the SIEM first; if that fails the reset is refused (502).'
+      responses: {'200': {description: '{"reset": true, "setup_required": true}'}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '502': {$ref: '#/components/responses/Error'}}
+  /api/v3/analytics/summary:
+    get: {summary: 'Counters: events_total/unread/24h, critical_24h, nodes/sensors total and online', responses: {'200': {description: '{"summary"}'}}}
+  /api/v3/analytics/severity:
+    get: {summary: 'Unarchived events by severity over ?days=1..365 (default 7)', responses: {'200': {description: '{"days","severity"}'}}}
+  /api/v3/analytics/velocity:
+    get: {summary: 'Events per bucket: ?hours=1..2160 (24), ?bucket=60..86400 s (3600), ≤ 1000 buckets, gaps filled', responses: {'200': {description: '{"bucket_seconds","series":[{t,count}]}'}}}
+  /api/v3/analytics/uptime:
+    get: {summary: 'Per sensor, per UTC day % online over ?days=1..90 (14); -1 = not yet created', responses: {'200': {description: '{"days","sensors":[{node_id,sensor_id,days,percent}]}'}}}
+  /api/v3/analytics/attack/navigator:
+    get: {summary: 'ATT&CK Navigator layer for ?days (PORTED; 503 until installed)', responses: {'200': {description: attachment}, '503': {$ref: '#/components/responses/Error'}}}
+  /api/v3/analytics/projections/{name}:
+    parameters: [{name: name, in: path, required: true, schema: {type: string}}]
+    get: {summary: 'PORTED projections (insights, sources, attack matrix, attack path, geo map, report) over ?days; other query parameters passed through', responses: {'200': {description: '{"projection","days","data"}'}, '404': {$ref: '#/components/responses/Error'}}}
+  /api/v3/system/status:
+    get: {summary: 'Version, schema, uptime, armed, SIEM queue, update state, hub_update_available, cli_release_notice, installed modules, live clients', responses: {'200': {description: '{"status"}'}}}
+  /api/v3/system/update-check:
+    post: {summary: Check releases now. Audited., responses: {'200': {description: '{"status"}'}}}
+  /api/v3/live:
+    get:
+      summary: 'WebSocket (RFC 6455). Session cookie; Origin must equal the Hub origin (except development). Server sends text messages {"type": "event"|"status"|"tick"|"refresh", "data"}; clients may send only control frames (masked, ≤ 4 KiB). The session is re-checked every tick (15 s) without refreshing its idle timer; the feed closes (1008) when it ends. Slow clients are dropped.'
+      responses: {'101': {description: Switching Protocols}, '401': {$ref: '#/components/responses/Error'}, '403': {$ref: '#/components/responses/Error'}}
