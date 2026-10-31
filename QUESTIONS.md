@@ -220,3 +220,32 @@ are still accepted — tell us if those should be refused.
 **Meanwhile:** verified manifest + bundle bytes are cached in the database
 (schema v2) and re-verified on every start, so a registry outage does not stop
 renders; a verifier that now rejects (revocation, module missing) unloads them.
+
+### Q36 — §6.8 — Plain-HTTP webhooks
+**Meanwhile:** webhook URLs must be `https://` (the URL carries tokens);
+`http://` is accepted only with `TS_ENV=development`. Self-hosted ntfy/gotify
+on plain HTTP need a TLS proxy.
+
+### Q37 — §6.9 — Ordering versus "applies immediately" when switching SIEM output
+**Meanwhile:** the switch interrupts retries against the old destination,
+delivers the pre-switch `siem.update` audit to it with a 10 s bound (failure
+logged), then swaps; queued and in-flight records go to the new destination.
+The request answers only after the swap.
+
+### Q38 — §6.9 — Unusable stored SIEM output at start
+E.g. ECS selected but the renderer module is absent. **Meanwhile:** the Hub
+starts with SIEM delivery off and logs an ERROR on every start until the output
+is reconfigured; refusing to start would take down ingestion and liveness too.
+Tell us if you prefer fail-to-start.
+
+### Q39 — §6.8 — Default armed state and test buttons
+**Meanwhile:** a fresh Hub is armed. Test buttons ignore armed state and the
+severity filter (they verify connectivity). Test records use trigger
+`siem_test` / `webhook_test`, severity `info`, source `truesignal-hub` and the
+all-zero UUIDv7 `00000000-0000-7000-8000-000000000000`, so SIEM rules can
+exclude them.
+
+### Q40 — §6.9 — Honeytoken inventory "on creation"
+Creation happens inside the PORTED honeytoken module. **Meanwhile:** the Hub
+wraps the module's `Ensure` and emits an inventory record the first time it
+sees a token id (seeded from the inventory at start).

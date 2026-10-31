@@ -26,6 +26,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/compose"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/config"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/enrich"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/httpapi"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
@@ -35,7 +36,9 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ratelimit"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/secrets"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/siem"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webhook"
 )
 
 // Version is the Hub version; overridden at build time with -ldflags -X.
@@ -110,7 +113,31 @@ func serve(log *slog.Logger) error {
 	}
 	defer db.Close()
 
-	auditor := &audit.Recorder{Log: log}
+	// SIEM output first, so every later audit record reaches it.
+	siemSvc := &siem.Service{PEN: cfg.SyslogPEN, CABundle: cfg.SIEMCABundle, Log: log}
+	// Renderer and HTTP transports are PORTED; until installed only
+	// tcp/udp/tls with RFC 5424 are available.
+	siemCfg, err := siem.LoadConfig(ctx, db)
+	if err == nil {
+		siemCfg, err = siemCfg.Normalize(siemSvc.Capabilities())
+	}
+	if err != nil {
+		log.Error("stored SIEM output is unusable; SIEM delivery is OFF until reconfigured", "error", err.Error())
+		siemCfg = siem.Config{Protocol: siem.ProtoNone}
+	}
+	if err := siemSvc.Start(siemCfg); err != nil {
+		log.Error("SIEM output could not start; SIEM delivery is OFF until reconfigured", "error", err.Error())
+		if err := siemSvc.Start(siem.Config{Protocol: siem.ProtoNone}); err != nil {
+			return err
+		}
+	}
+	defer func() {
+		fctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		siemSvc.Shutdown(fctx)
+	}()
+
+	auditor := &audit.Recorder{Log: log, SIEM: siemSvc}
 	if pending, err := db.TakeMFAResetMarker(ctx); err != nil {
 		return err
 	} else if pending {
@@ -118,7 +145,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules are not installed: manifest verifier (catalogue empty), TOTP/MFA, beacons, honeytokens, source lists, enrichment and SIEM rendering are inactive")
+	log.Warn("PORTED modules are not installed: manifest verifier (catalogue empty), TOTP/MFA, beacons, honeytokens, source lists, ATT&CK/asset/GeoIP enrichment, ECS rendering and Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
@@ -143,7 +170,16 @@ func serve(log *slog.Logger) error {
 	}
 	go purgeSessions(ctx, authSvc, log)
 
-	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now}
+	notifier := &webhook.Notifier{Store: db, AllowHTTP: cfg.Development, Log: log, Now: time.Now}
+	if err := notifier.Load(ctx); err != nil {
+		return err
+	}
+	notifier.Start(ctx)
+
+	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now,
+		Enricher: &enrich.Enricher{Nodes: db}, SIEM: siemSvc, Notifier: notifier}
+	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
+		Run(ctx, siem.HeartbeatInterval)
 	live := &liveness.Service{Store: db, Raiser: pipe, Log: log, Now: time.Now, StartedAt: startedAt}
 	go live.Run(ctx, 5*time.Second)
 
@@ -186,6 +222,7 @@ func serve(log *slog.Logger) error {
 	}).Register(admin)
 
 	(&httpapi.Catalogue{Cat: cat, Log: log}).Register(admin)
+	(&httpapi.Outputs{SIEM: siemSvc, Store: db, Webhook: notifier, Network: network, Log: log, Now: time.Now}).Register(admin)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v3/", admin.Handler())

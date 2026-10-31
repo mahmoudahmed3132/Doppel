@@ -503,3 +503,78 @@ paths:
       responses:
         '200': {description: '{"status": Status}'}
         '502': {$ref: '#/components/responses/Error'}
+  /api/v3/settings/siem:
+    get:
+      summary: SIEM output (token reported only as token_set), installed capabilities, queue depth and drops
+      responses:
+        '200': {description: '{"siem": {protocol, address, format, token_set}, "capabilities": {ecs, http_transports}, "queue": {depth, dropped}}'}
+    put:
+      summary: Change the SIEM output; applies immediately (audit delivered to the previous and the new destination)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                protocol: {enum: [none, tcp, udp, tls, elastic, logscale]}
+                address: {type: string}
+                format: {enum: [rfc5424, ecs]}
+                token: {type: [string, 'null'], description: 'null/absent keeps the stored token; "" clears it'}
+      responses:
+        '200': {description: as GET}
+        '400': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /api/v3/settings/siem/test:
+    post:
+      summary: Send a synthetic record to the active output over a separate connection
+      responses:
+        '200': {description: '{"delivered": true}'}
+        '502': {$ref: '#/components/responses/Error'}
+  /api/v3/settings/webhook:
+    get:
+      summary: Webhook (URL reported only as url_set), dropped count, armed state
+      responses:
+        '200': {description: '{"webhook": {type, severities, url_set}, "dropped", "armed"}'}
+    put:
+      summary: Change the webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                type: {enum: [none, ntfy, gotify, discord, slack]}
+                url: {type: [string, 'null'], description: 'https only; null/absent keeps the stored URL'}
+                severities: {type: array, items: {enum: [info, low, medium, high, critical]}, description: default all except info}
+      responses:
+        '200': {description: as GET}
+        '400': {$ref: '#/components/responses/Error'}
+  /api/v3/settings/webhook/test:
+    post:
+      summary: Send a test notification (ignores armed state and severity filter)
+      responses:
+        '200': {description: '{"delivered": true}'}
+        '502': {$ref: '#/components/responses/Error'}
+  /api/v3/system/armed:
+    get:
+      summary: Armed state (webhooks are sent only when armed; default armed)
+      responses:
+        '200': {description: '{"armed": bool}'}
+    put:
+      summary: Arm or disarm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [armed]
+              properties:
+                armed: {type: boolean}
+      responses:
+        '200': {description: '{"armed": bool}'}

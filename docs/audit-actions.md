@@ -28,10 +28,15 @@ Request bodies are never included.
 | `sensor.silence` | webhooks silenced for a sensor | `POST /api/v3/nodes/{node}/sensors/{sensor}/silence` |
 | `sensor.unsilence` | webhooks re-enabled | `POST /api/v3/nodes/{node}/sensors/{sensor}/unsilence` |
 | `catalogue.refresh` | manual catalogue refresh | `POST /api/v3/catalogue/refresh` |
+| `siem.update` | SIEM output changed (also delivered to the previous destination) | `PUT /api/v3/settings/siem` |
+| `siem.test` | SIEM test record sent | `POST /api/v3/settings/siem/test` |
+| `webhook.update` | webhook changed | `PUT /api/v3/settings/webhook` |
+| `webhook.test` | webhook test sent | `POST /api/v3/settings/webhook/test` |
+| `system.arm` | armed state set (true or false) | `PUT /api/v3/system/armed` |
 
 Planned (reserved names, routes to follow with their features): `config.update`,
-`siem.update`, `webhook.update`, `events.mark_read`, `events.archive`,
-`events.delete_all`, `system.factory_reset`, `system.arm`, `beacon.create`, `beacon.delete`,
+`events.mark_read`, `events.archive`,
+`events.delete_all`, `system.factory_reset`, `beacon.create`, `beacon.delete`,
 `assets.replace`.
 
 Read-only routes (`GET …`, and `POST /api/v3/nodes/{node}/compose/preview`,
