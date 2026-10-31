@@ -8,7 +8,7 @@
   "author": "TrueSignal",
   "documentation": "Copy `sensors/template` to start a new sensor.",
   "image": {
-    "repository": "ghcr.io/mahmoudahmed3132/truesignal-sensor-template",
+    "repository": "ghcr.io/mahmoudahmed3132/ts-sensor-template",
     "tag": "1.0.0",
     "digest": "",
     "platforms": ["linux/amd64"]

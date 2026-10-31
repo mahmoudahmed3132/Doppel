@@ -7,7 +7,7 @@
   "category": "network",
   "author": "TrueSignal",
   "documentation": "Uses a raw ICMP socket: runs as UID 0 with every capability dropped except NET_RAW, host network, read-only filesystem, no-new-privileges. IPv6 is used when available.",
-  "image": {"repository": "ghcr.io/mahmoudahmed3132/truesignal-sensor-icmp-canary", "tag": "1.0.0", "digest": "", "platforms": ["linux/amd64"]},
+  "image": {"repository": "ghcr.io/mahmoudahmed3132/ts-sensor-icmp-canary", "tag": "1.0.0", "digest": "", "platforms": ["linux/amd64"]},
   "runtime": {"user": "0:0", "network_mode": "host", "cap_add": ["NET_RAW"], "memory_mb": 64},
   "config": [
     {"name": "TS_COOLDOWN_SEC", "type": "int", "default": "60", "description": "Minimum seconds between events per source (suppressed packets are counted)", "validation": {"min": 0, "max": 86400}},

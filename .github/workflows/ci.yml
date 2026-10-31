@@ -1,0 +1,164 @@
+# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+#
+# CI on every push and pull request (§10). Third-party actions are pinned by
+# commit SHA (version in the trailing comment; Dependabot proposes bumps).
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26.2"
+  NODE_VERSION: "22"
+
+jobs:
+  modules:
+    name: list Go modules
+    runs-on: ubuntu-24.04
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: list
+        run: |
+          list=$(sed -n 's/^\t\.\/\(.*\)$/\1/p' go.work | jq -R . | jq -cs .)
+          [ "$(echo "$list" | jq length)" -ge 3 ] || { echo "go.work parse failed" >&2; exit 1; }
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+
+  go:
+    name: go ${{ matrix.module }}
+    needs: modules
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.modules.outputs.list) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/go.sum"
+      - name: go vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+      - name: gofmt
+        working-directory: ${{ matrix.module }}
+        run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - name: go test -race
+        working-directory: ${{ matrix.module }}
+        run: CGO_ENABLED=1 go test -race -count=1 ./...
+
+  hygiene:
+    name: headers, compose guard, manifests, OpenAPI
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: licence headers
+        run: ./scripts/check-headers.sh
+      - name: compose guard (no build:, digests only)
+        run: ./scripts/compose-guard.sh
+      - name: install validators (Ubuntu archive packages)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-yaml python3-jsonschema
+      - name: manifests vs JSON Schema; OpenAPI vs registered routes
+        run: python3 scripts/validate-docs.py
+      - name: shell syntax
+        run: for f in install.sh scripts/*.sh scripts/release/*.sh; do sh -n "$f"; done
+
+  ui:
+    name: admin UI type-check, lint, build, embed
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "**/go.sum"
+      - name: npm ci, tsc, safety lint, build
+        run: make ui
+      - name: embedded build is CSP-clean and routable
+        working-directory: hub
+        run: go test -count=1 ./internal/webui/ && go build -o /dev/null ./cmd/truesignal-hub
+
+  images:
+    name: image builds + scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: make ui
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: ver
+        run: echo "hub=$(scripts/release/component-version.sh hub)" >> "$GITHUB_OUTPUT"
+      - name: build hub image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: hub/Dockerfile
+          platforms: linux/amd64
+          build-args: VERSION=${{ steps.ver.outputs.hub }}
+          load: true
+          push: false
+          tags: ci/ts-hub:scan
+      - name: build sensor images
+        run: |
+          for d in sensors/*/; do
+            n=$(basename "$d")
+            docker buildx build --load --platform linux/amd64 -f "$d/Dockerfile" -t "ci/ts-sensor-$n:scan" .
+          done
+      - name: scan hub image (fixable HIGH/CRITICAL fail)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: image
+          image-ref: ci/ts-hub:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  vuln-scan:
+    name: dependency vulnerability scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: trivy fs (go.sum, package-lock.json; fixable HIGH/CRITICAL fail)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

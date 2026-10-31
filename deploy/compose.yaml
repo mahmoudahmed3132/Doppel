@@ -1,0 +1,33 @@
+# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+#
+# Production Hub deployment (see docs/operations.md). Pin the image by digest:
+# replace <digest> with the value from the release notes and verify the
+# signature first (cosign verify, docs/operations.md "Verify the image").
+# The Hub listens on loopback only; terminate TLS in a reverse proxy in front
+# of it and list that proxy in TS_TRUSTED_PROXIES.
+# CI (compose-guard) refuses any production compose file containing "build:".
+name: truesignal-hub
+services:
+  hub:
+    image: ghcr.io/mahmoudahmed3132/ts-hub:3.0.0@sha256:<digest>
+    restart: unless-stopped
+    read_only: true
+    user: "65532:65532"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:size=16m,mode=1777"]
+    environment:
+      TS_ENV: production
+      TS_TRUSTED_PROXIES: "127.0.0.1/32"
+      TS_REQUIRE_MFA: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - hub-data:/data
+    mem_limit: 512m
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options: {max-size: "20m", max-file: "5"}
+volumes:
+  hub-data: {}

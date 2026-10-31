@@ -16,6 +16,10 @@ components:
       type: apiKey
       in: cookie
       name: ts_session
+    nodeKey:
+      type: http
+      scheme: bearer
+      description: Node key (tsk_ + 64 hex); see docs/contract-v3.md
   schemas:
     Error:
       type: object
@@ -87,6 +91,36 @@ components:
 security:
   - session: []
 paths:
+  /v3/ingest/events:
+    post:
+      security: [{nodeKey: []}]
+      summary: Sensor event batch (1-100 events; per-event accept/duplicate/reject). Body and semantics in docs/contract-v3.md
+      responses: {'200': {description: '{"accepted","duplicates","rejected"[]}'}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '413': {$ref: '#/components/responses/Error'}, '429': {$ref: '#/components/responses/Error'}}
+  /v3/ingest/heartbeats:
+    post:
+      security: [{nodeKey: []}]
+      summary: Sensor heartbeat (liveness, sdk_version, dropped_events). See docs/contract-v3.md
+      responses: {'200': {description: OK}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
+  /v3/ingest/stopping:
+    post:
+      security: [{nodeKey: []}]
+      summary: Sensor graceful-stop notice. See docs/contract-v3.md
+      responses: {'200': {description: OK}, '401': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
+  /v3/node/identity:
+    get:
+      security: [{nodeKey: []}]
+      summary: The calling node's id, alias and desired revision (CLI link/status). Requires X-TrueSignal-CLI-Version of the same major (426 otherwise)
+      responses: {'200': {description: Node identity}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}}
+  /v3/node/compose:
+    get:
+      security: [{nodeKey: []}]
+      summary: Unredacted rendered compose for the calling node only (CLI apply); the node key itself is never included
+      responses: {'200': {description: '{"compose","revision"}'}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+  /v3/node/applied:
+    post:
+      security: [{nodeKey: []}]
+      summary: CLI reports the applied revision or an apply failure (raises node_apply_failed)
+      responses: {'200': {description: OK}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}}
   /v3/version:
     get:
       security: []

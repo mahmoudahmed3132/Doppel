@@ -455,6 +455,16 @@ func TestRealManifestsRender(t *testing.T) {
 	}
 	var d Document
 	json.Unmarshal(r.Compose, &d)
+	// §10 compose guard, compiler side: rendered files never build images.
+	var generic struct {
+		Services map[string]map[string]json.RawMessage `json:"services"`
+	}
+	json.Unmarshal(r.Compose, &generic)
+	for name, svc := range generic.Services {
+		if _, ok := svc["build"]; ok {
+			t.Errorf("%s: rendered compose contains build:", name)
+		}
+	}
 	want := map[string]struct {
 		user string
 		caps string

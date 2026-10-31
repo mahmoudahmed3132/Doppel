@@ -1,7 +1,7 @@
 # Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
 #
 # Build from the repository root:
-#   docker build -f sensors/tcp-tarpit/Dockerfile -t truesignal-sensor-tcp-tarpit .
+#   docker build -f sensors/tcp-tarpit/Dockerfile -t ts-sensor-tcp-tarpit .
 # Base images are pinned by digest; bump them deliberately.
 
 FROM golang:1.26.2-bookworm@sha256:47ce5636e9936b2c5cbf708925578ef386b4f8872aec74a67bd13a627d242b19 AS build
