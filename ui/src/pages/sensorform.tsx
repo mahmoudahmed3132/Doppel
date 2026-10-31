@@ -67,21 +67,23 @@ function ConfigInput({ item, value, masked, onChange, id }: { item: ConfigItem; 
     );
   }
   const numeric = item.type === "int" || item.type === "port";
-  return (
-    <input
-      id={id}
-      class={`input${item.type === "path" || item.type === "list" || numeric ? " mono" : ""}`}
-      type={item.secret ? "password" : numeric ? "number" : "text"}
-      autoComplete={item.secret ? "new-password" : "off"}
-      spellcheck={false}
-      min={numeric ? (item.type === "port" ? Math.max(1, v.min ?? 1) : v.min) : undefined}
-      max={numeric ? (item.type === "port" ? Math.min(65535, v.max ?? 65535) : v.max) : undefined}
-      maxLength={v.max_length}
-      placeholder={masked ? "unchanged — type to replace" : item.type === "list" ? "comma-separated" : item.default ? `default: ${item.default}` : ""}
-      value={value}
-      onInput={(e) => onChange(e.currentTarget.value)}
-    />
-  );
+  const common = {
+    id,
+    class: `input${item.type === "path" || item.type === "list" || numeric ? " mono" : ""}`,
+    spellcheck: false,
+    maxLength: v.max_length,
+    placeholder: masked ? "unchanged — type to replace" : item.type === "list" ? "comma-separated" : item.default ? `default: ${item.default}` : "",
+    value,
+    onInput: (e: { currentTarget: HTMLInputElement }) => onChange(e.currentTarget.value),
+  };
+  // One element per input type: Preact 11 types <input> attributes by a literal `type`.
+  if (item.secret) return <input {...common} type="password" autoComplete="new-password" />;
+  if (numeric) {
+    const min = item.type === "port" ? Math.max(1, v.min ?? 1) : v.min;
+    const max = item.type === "port" ? Math.min(65535, v.max ?? 65535) : v.max;
+    return <input {...common} type="number" autoComplete="off" min={min} max={max} />;
+  }
+  return <input {...common} type="text" autoComplete="off" />;
 }
 
 export function ConfigForm({ manifest, values, masked, onChange, errors }: {
