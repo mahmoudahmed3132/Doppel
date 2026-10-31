@@ -8,6 +8,7 @@ must state why it is needed.
 |---|---|---|---|---|
 | Go standard library | all | go1.26 | BSD-3-Clause | Baseline |
 | `modernc.org/sqlite` | hub | v1.61.0 | BSD-3-Clause | Pure-Go SQLite driver (§2: SQLite, `CGO_ENABLED=0`) |
+| `golang.org/x/crypto` (`argon2`) | hub | v0.58.0 | BSD-3-Clause | argon2id password hashing (§6.3); not in the standard library |
 | `modernc.org/libc` | hub (via sqlite) | v1.79.0 | BSD-3-Clause | Transitive: C runtime for the transpiled SQLite |
 | `modernc.org/mathutil` | hub (via sqlite) | v1.7.1 | BSD-3-Clause | Transitive |
 | `modernc.org/memory` | hub (via sqlite) | v1.12.1 | BSD-3-Clause | Transitive |

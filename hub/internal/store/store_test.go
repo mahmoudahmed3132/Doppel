@@ -253,3 +253,29 @@ func TestStatusHistory(t *testing.T) {
 		t.Fatalf("purged %d", n)
 	}
 }
+
+func TestAdminCompareAndSwap(t *testing.T) {
+	db, _ := openTest(t)
+	ctx := context.Background()
+	if err := db.CreateAdmin(ctx, "h", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreateAdmin(ctx, "h2", nil); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("second admin: %v", err)
+	}
+	for _, c := range []struct {
+		step int64
+		ok   bool
+	}{{5, true}, {5, false}, {4, false}, {6, true}} {
+		if ok, err := db.AdvanceMFAStep(ctx, c.step); err != nil || ok != c.ok {
+			t.Fatalf("step %d: %v %v", c.step, ok, err)
+		}
+	}
+	db.ReplaceRecoveryCodes(ctx, nil, []string{"a", "b"})
+	if ok, _ := db.ReplaceRecoveryCodes(ctx, []string{"a", "b"}, []string{"b"}); !ok {
+		t.Fatal("CAS with current value failed")
+	}
+	if ok, _ := db.ReplaceRecoveryCodes(ctx, []string{"a", "b"}, []string{"b"}); ok {
+		t.Fatal("CAS with stale value succeeded")
+	}
+}

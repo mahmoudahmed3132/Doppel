@@ -1,0 +1,280 @@
+# Copyright (c) 2026 <TrueSignal Deception>. All rights reserved.
+openapi: 3.1.0
+info:
+  title: TrueSignal Hub admin API
+  version: 3.0.0
+  description: |
+    Cookie-authenticated admin API. State-changing requests require an
+    Origin (or Referer) equal to the Hub origin. Bodies are JSON, at most
+    1 MiB, decoded strictly (unknown fields → 400 unknown_field).
+    Sections are added as features land; see docs/acceptance.md.
+servers:
+  - url: /
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: ts_session
+  schemas:
+    Error:
+      type: object
+      required: [ok, error, message]
+      properties:
+        ok: {const: false}
+        error: {type: string}
+        message: {type: string}
+    Session:
+      type: object
+      properties:
+        enrol_only: {type: boolean}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        idle_expires_at: {type: string, format: date-time}
+    MFAStatus:
+      type: object
+      properties:
+        available: {type: boolean, description: false until the PORTED TOTP module is installed}
+        enabled: {type: boolean}
+        enrolment_pending: {type: boolean}
+        required: {type: boolean}
+        recovery_codes_remaining: {type: integer}
+    Reauth:
+      type: object
+      additionalProperties: false
+      required: [password, code]
+      properties:
+        password: {type: string}
+        code: {type: string, description: current 6-digit TOTP code}
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Locked:
+      description: Lockout active (5 failures per IP or 10 account-wide within 15 min → 15 min)
+      headers:
+        Retry-After: {schema: {type: integer}}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+security:
+  - session: []
+paths:
+  /v3/version:
+    get:
+      security: []
+      summary: Product and contract version
+      responses:
+        '200':
+          description: Version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product: {const: truesignal-hub}
+                  version: {type: string}
+                  contract: {const: 3}
+  /api/v3/setup:
+    get:
+      security: []
+      summary: Setup status
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {const: true}
+                  setup_completed: {type: boolean}
+                  password_managed: {type: boolean}
+                  mfa_required: {type: boolean}
+    post:
+      security: []
+      summary: Complete first-run setup (once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [setup_token, password, public_endpoint]
+              properties:
+                setup_token: {type: string}
+                password: {type: string, minLength: 12}
+                public_endpoint: {type: string, format: uri}
+      responses:
+        '200': {description: Setup completed}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/session/login:
+    post:
+      security: []
+      summary: Log in (password, then TOTP or recovery code when MFA is enrolled)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password]
+              properties:
+                password: {type: string}
+                code: {type: string}
+      responses:
+        '200':
+          description: Session created; cookie ts_session set (HttpOnly, Secure, SameSite=Strict)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {const: true}
+                  session: {$ref: '#/components/schemas/Session'}
+        '401':
+          description: invalid_credentials, mfa_required or invalid_code
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v3/session/logout:
+    post:
+      summary: Log out (allowed for enrolment-only sessions)
+      responses:
+        '200': {description: Logged out}
+        '401': {$ref: '#/components/responses/Error'}
+  /api/v3/session:
+    get:
+      summary: Current session
+      responses:
+        '200': {description: Session info}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v3/mfa:
+    get:
+      summary: MFA status (allowed for enrolment-only sessions)
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: {const: true}
+                  mfa: {$ref: '#/components/schemas/MFAStatus'}
+  /api/v3/mfa/enrolment:
+    post:
+      summary: Begin enrolment (password required); returns secret and otpauth URI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password]
+              properties:
+                password: {type: string}
+      responses:
+        '200':
+          description: Secret issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret: {type: string}
+                  otpauth_uri: {type: string}
+        '401': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v3/mfa/enrolment/confirm:
+    post:
+      summary: Confirm enrolment; returns 10 recovery codes once and invalidates all sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: {type: string}
+      responses:
+        '200':
+          description: MFA enabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes: {type: array, items: {type: string}, minItems: 10, maxItems: 10}
+                  relogin_required: {const: true}
+        '401': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/mfa/disable:
+    post:
+      summary: Disable MFA (password + current code); refused in require-MFA mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Reauth'}
+      responses:
+        '200': {description: MFA disabled; all sessions invalidated}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/mfa/recovery-codes:
+    post:
+      summary: Regenerate recovery codes (password + current code); other sessions invalidated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Reauth'}
+      responses:
+        '200':
+          description: New codes (shown once)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes: {type: array, items: {type: string}}
+        '401': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}
+  /api/v3/system/password:
+    post:
+      summary: Change the admin password; all sessions invalidated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [current_password, new_password]
+              properties:
+                current_password: {type: string}
+                new_password: {type: string, minLength: 12}
+      responses:
+        '200': {description: Password changed}
+        '400': {$ref: '#/components/responses/Error'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Locked'}

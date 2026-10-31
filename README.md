@@ -7,7 +7,7 @@ containerised decoy sensors. Clean-room implementation of specification v1.
 |---|---|---|
 | `sdk/go` | Go Sensor SDK (contract v3) | implemented |
 | `sensors/template` | reference sensor + Dockerfile | implemented |
-| `hub/` | Hub server | storage, ingest API, pipeline, liveness, syslog formatter done; admin API/auth, compose, catalogue, SIEM transport, webhooks, audit pending |
+| `hub/` | Hub server | storage, ingest API, pipeline, liveness, syslog formatter, admin auth + MFA flows done; remaining admin API, compose, catalogue, SIEM transport, webhooks, audit pending |
 | `cli/` | node agent CLI `truesignal` | not started |
 | `ui/` | admin web UI | not started |
 | `docs/` | contract, manifest schema, API, operations | partial |

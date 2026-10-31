@@ -84,3 +84,47 @@ limited by it. Keys are 256-bit, so guessing is infeasible; the residual risk
 is load (one indexed lookup per request).
 **Meanwhile:** no extra limiter. Proposal: a per-source-IP limiter on
 authentication failures, applied together with the admin login limiter.
+
+### Q14 — §6.3 — Setup when `TS_DASHBOARD_PASSWORD` is set
+Setup sets both the password and the public endpoint; with the override the
+password is given. **Meanwhile:** with the override the Hub creates (or
+re-hashes) the admin at start, setup reports completed, and the public
+endpoint is configured later through settings. If the override changes
+between starts, the stored hash is replaced and all sessions are invalidated.
+
+### Q15 — §6.3 — What an enrolment-only session may reach
+"only the MFA status/enrol endpoints". **Meanwhile:** MFA status, begin
+enrolment, confirm enrolment — and logout (it only reduces privilege).
+Everything else answers `403 mfa_enrolment_required`.
+
+### Q16 — §6.3 — Session invalidation scope for MFA changes
+**Meanwhile:** enrol-confirm, disable and password change invalidate **all**
+sessions (the caller logs in again with the new factor state). Regenerating
+recovery codes invalidates all sessions **except** the caller's, so the new
+codes can be shown and stored.
+
+### Q17 — §6.3 — Lockout details
+**Meanwhile:** counters are in memory; failures count within a 15-minute
+window; reaching the threshold locks for 15 minutes. A successful login
+clears only that IP's counter — never the account-wide counter, so a
+distributed guessing campaign cannot be reset by the admin logging in.
+Failures counted: login password/code, setup token, and password/code
+re-confirmation on MFA and password-change endpoints. A correct password
+without the required code (`mfa_required`) is not a failure.
+
+### Q18 — §6.3 — "a current code" for disable / regenerate
+**Meanwhile:** only a TOTP code is accepted there, not a recovery code.
+An admin who lost the authenticator uses a recovery code to log in, or the
+`mfa-reset` break-glass.
+
+### Q19 — §6.3 — CSRF origin when no public endpoint is known yet
+**Meanwhile:** the expected origin is the configured public endpoint's
+origin; before setup (or with the password override and no endpoint) it is
+the origin the request arrived on (scheme from TLS or a trusted proxy's
+`X-Forwarded-Proto`, host from `Host` or a trusted proxy's
+`X-Forwarded-Host`). Requests without `Origin` and `Referer` are refused.
+
+### Q20 — §6.3 — Hub without the PORTED TOTP module
+**Meanwhile:** MFA endpoints answer `503 mfa_unavailable`; an admin with MFA
+enrolled cannot log in until the module is installed (break-glass:
+`mfa-reset`); `TS_REQUIRE_MFA=true` refuses to start. All fail closed.

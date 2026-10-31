@@ -20,6 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/audit"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/config"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/httpapi"
@@ -102,20 +104,49 @@ func serve(log *slog.Logger) error {
 	}
 	defer db.Close()
 
+	auditor := &audit.Recorder{Log: log}
 	if pending, err := db.TakeMFAResetMarker(ctx); err != nil {
 		return err
 	} else if pending {
-		// Delivered to the SIEM once the audit pipeline is wired; always logged.
-		log.Warn("audit", "action", "mfa.reset_cli", "outcome", "success", "actor_ip", "local")
+		auditor.Record(ctx, domain.AuditRecord{Time: time.Now().UTC(), Action: "mfa.reset_cli", Method: "CLI",
+			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules are not installed: beacons, honeytokens, source lists, enrichment and SIEM rendering are inactive")
+	log.Warn("PORTED modules are not installed: TOTP/MFA, beacons, honeytokens, source lists, enrichment and SIEM rendering are inactive")
+
+	authSvc, err := auth.New(auth.Options{
+		Store:              db,
+		Hasher:             auth.NewHasher(auth.DefaultArgon2, 4),
+		TOTP:               nil, // PORTED module; MFA endpoints answer 503 until it is installed
+		Log:                log,
+		Now:                time.Now,
+		SessionTTL:         cfg.SessionTTL,
+		SessionIdle:        cfg.SessionIdle,
+		RequireMFA:         cfg.RequireMFA,
+		PasswordOverride:   cfg.DashboardPassword,
+		SetupTokenOverride: cfg.SetupToken,
+	})
+	if err != nil {
+		return err
+	}
+	if tok, err := authSvc.Init(ctx); err != nil {
+		return err
+	} else if tok != "" {
+		// Printed exactly once by design (§6.3); required to complete setup.
+		log.Warn("first start: complete setup in the web UI with this one-time setup token", "setup_token", tok)
+	}
+	go purgeSessions(ctx, authSvc, log)
 
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now}
 	live := &liveness.Service{Store: db, Raiser: pipe, Log: log, Now: time.Now, StartedAt: startedAt}
 	go live.Run(ctx, 5*time.Second)
 
+	network := httpapi.Network{Trusted: cfg.TrustedProxies}
+	admin := &httpapi.Admin{Auth: authSvc, Settings: db, Audit: auditor, Network: network,
+		Development: cfg.Development, Log: log, Now: time.Now}
+
 	mux := http.NewServeMux()
+	mux.Handle("/api/v3/", admin.Handler())
 	(&httpapi.Ingest{
 		Auth:     nodekey.NewAuthenticator(db),
 		Limiter:  ratelimit.NewKeyed(50, 200),
@@ -129,7 +160,7 @@ func serve(log *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort("", strconv.Itoa(cfg.ListenPort)),
-		Handler:           mux,
+		Handler:           httpapi.SecurityHeaders(network, mux),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -151,4 +182,19 @@ func serve(log *slog.Logger) error {
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutCtx)
+}
+
+func purgeSessions(ctx context.Context, a *auth.Service, log *slog.Logger) {
+	t := time.NewTicker(10 * time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if _, err := a.PurgeExpired(ctx); err != nil && ctx.Err() == nil {
+				log.Warn("purging expired sessions failed", "error", err.Error())
+			}
+		}
+	}
 }
