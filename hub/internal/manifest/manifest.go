@@ -70,6 +70,10 @@ type Runtime struct {
 type ListenPort struct {
 	ConfigKey string `json:"config_key"`
 	Protocol  string `json:"protocol"` // tcp | udp
+	// ContainerPort (bridge only, single-port key): the sensor listens on
+	// this fixed port inside the container and the config value is the
+	// published host port. Lets an unprivileged sensor appear on port 80.
+	ContainerPort int `json:"container_port,omitempty"`
 }
 
 // HostPath derives bind mounts from a config key of type path or list of
@@ -418,6 +422,17 @@ func (m *Manifest) Validate(opts Options) error {
 		}
 		if lp.Protocol != "tcp" && lp.Protocol != "udp" {
 			add("listen_ports: protocol must be tcp or udp")
+		}
+		if lp.ContainerPort != 0 {
+			if lp.ContainerPort < 1 || lp.ContainerPort > 65535 {
+				add("listen_ports: container_port must be 1..65535")
+			}
+			if rt.NetworkMode != "bridge" {
+				add("listen_ports: container_port requires network_mode bridge")
+			}
+			if k != nil && k.Type != "port" {
+				add("listen_ports: container_port requires a single port key")
+			}
 		}
 	}
 	hostKeys := map[string]bool{}

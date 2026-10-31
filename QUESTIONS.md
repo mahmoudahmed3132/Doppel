@@ -286,3 +286,37 @@ credentials are never written.
 `truesignal-linux-<arch>.sigstore.json`; cosign identity
 `https://github.com/mahmoudahmed3132/TrueSignal-Rewrite/.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`.
 The release workflow (§10) must produce exactly these.
+
+### Q47 — §2 / §11 — Sensors that need a privilege run as UID 0
+Docker grants `cap_add` capabilities only to UID 0 (no ambient capabilities in
+Compose) and `no-new-privileges` disables file capabilities, so a UID-65532
+sensor can never use `NET_RAW`/`NET_BIND_SERVICE`/`DAC_OVERRIDE`.
+**Meanwhile:** tcp-tarpit, icmp-canary, network-scan-detector and file-canary
+(sensor and init) run as UID 0 with `cap_drop: ALL` + one capability,
+read-only root filesystem, no-new-privileges; each logs its uid and CapEff.
+The web decoy stays unprivileged by publishing a host port to a fixed
+container port (new manifest field `listen_ports[].container_port`).
+
+### Q48 — §11.5 — Web decoy behind Docker port publishing
+**Meanwhile:** bridge network + published port. Source IPs are preserved with
+Docker's default iptables DNAT; hosts using the userland proxy will show the
+Docker gateway as source. Host networking would preserve them but would need
+UID 0 + NET_BIND_SERVICE for port 80.
+
+### Q49 — §11.4 — File canary deployment prerequisites
+**Meanwhile:** the File Canary declares `TS_HONEYTOKEN`, so the Hub refuses to
+deploy it (`honeytoken_unavailable`) until the PORTED honeytoken module is
+installed, and the stub lure content must be replaced by the PORTED lure
+generator before production use. Lures are created owned by root, mode 0644;
+tell us if they should take the directory owner's uid/gid.
+
+### Q50 — §11.3 — Scan detector capture cost
+**Meanwhile:** no kernel BPF filter; every inbound frame header is read in
+user space and filtered there. Adequate for typical servers; a cBPF filter
+(TCP without ACK/RST + UDP) is the planned optimisation.
+
+### Q51 — §11.5 — Rate limiting login attempts
+**Meanwhile:** every login attempt is reported by default
+(`TS_LOGIN_COOLDOWN_SEC=0`) so a honeytoken attempt is never suppressed; the
+SDK's bounded queue limits memory under brute force. Page views and probes are
+rate-limited per source.

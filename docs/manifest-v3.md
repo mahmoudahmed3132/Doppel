@@ -21,7 +21,7 @@ signing module has verified its detached Sigstore bundle, decodes it strictly
 | `runtime.cap_add` | subset of `NET_RAW`, `NET_BIND_SERVICE`, `DAC_OVERRIDE` |
 | `runtime.user` | `uid[:gid]`; default `65532:65532` |
 | `runtime.memory_mb` | container memory limit; default 256 |
-| `runtime.listen_ports[]` | `config_key` (type `port` or list of `port`) + `protocol`; used for port-conflict checks and, with `bridge`, for publishing |
+| `runtime.listen_ports[]` | `config_key` (type `port` or list of `port`) + `protocol`; used for port-conflict checks and, with `bridge`, for publishing. Optional `container_port` (bridge, single-port key): the sensor listens on that fixed port inside the container and the config value is the published host port, so an unprivileged sensor can appear on port 80 |
 | `runtime.host_paths[]` | `config_key` (type `path` or list of `path`), `mount` `self`\|`parent`, `read_only`. Container path = host path. |
 | `init` | optional init container: pinned `image`, `command` (list, no `$`/`{{`), `cap_add`, `writable_host_paths` (config keys from `runtime.host_paths`), `user` |
 | `config[]` | `name` (`TS_…`), `type` (`string int bool enum list port path`), `item_type` for lists, `default`, `required`, `secret`, `hub_reserved`, `description`, `validation` (`pattern` full-match RE2, `min`, `max`, `enum`, `max_items`, `max_length`) |

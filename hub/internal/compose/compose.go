@@ -403,7 +403,11 @@ func (c *Compiler) renderSensor(ctx context.Context, node domain.Node, sn domain
 	if m.Runtime.NetworkMode == "bridge" {
 		for _, lp := range m.Runtime.ListenPorts {
 			for _, p := range portsOf(cfg[lp.ConfigKey]) {
-				main.Ports = append(main.Ports, Port{Target: p, Published: strconv.Itoa(p), Protocol: lp.Protocol})
+				target := p
+				if lp.ContainerPort != 0 {
+					target = lp.ContainerPort
+				}
+				main.Ports = append(main.Ports, Port{Target: target, Published: strconv.Itoa(p), Protocol: lp.Protocol})
 			}
 		}
 	}

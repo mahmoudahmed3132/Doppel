@@ -43,7 +43,8 @@
         "cap_add": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/cap"}},
         "memory_mb": {"type": "integer", "minimum": 0, "maximum": 4096},
         "listen_ports": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["config_key", "protocol"],
-          "properties": {"config_key": {"$ref": "#/$defs/configName"}, "protocol": {"enum": ["tcp", "udp"]}}}},
+          "properties": {"config_key": {"$ref": "#/$defs/configName"}, "protocol": {"enum": ["tcp", "udp"]},
+            "container_port": {"type": "integer", "minimum": 1, "maximum": 65535, "description": "bridge only: fixed port inside the container; the config value is the published host port"}}}},
         "host_paths": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["config_key", "mount"],
           "properties": {"config_key": {"$ref": "#/$defs/configName"}, "mount": {"enum": ["self", "parent"]}, "read_only": {"type": "boolean"}}}}
       }

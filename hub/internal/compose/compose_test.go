@@ -9,6 +9,9 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -322,6 +325,26 @@ func TestBridgePublishesPorts(t *testing.T) {
 	}
 }
 
+func TestContainerPortMapping(t *testing.T) {
+	m := tarpit()
+	m.Runtime.NetworkMode, m.Runtime.CapAdd = "bridge", nil
+	m.Runtime.ListenPorts = []manifest.ListenPort{{ConfigKey: "TS_PORT", Protocol: "tcp", ContainerPort: 8080}}
+	m.Config = []manifest.ConfigKey{{Name: "TS_PORT", Type: "port", Default: str("8080"), Description: "port"}}
+	d, _, err := render(t, compiler(m), true, sensor("ts-sensor-web", "tcp-tarpit", map[string]string{"TS_PORT": "80"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := d.Services["ts-sensor-web"].Ports
+	if len(p) != 1 || p[0].Target != 8080 || p[0].Published != "80" {
+		t.Fatalf("%+v", p)
+	}
+	m.Runtime.NetworkMode = "host"
+	_, _, err = render(t, compiler(m), true, sensor("ts-sensor-web", "tcp-tarpit", map[string]string{"TS_PORT": "80"}))
+	if err == nil {
+		t.Fatal("container_port accepted with host networking")
+	}
+}
+
 // Rule 10.
 func TestRevisionDeterministic(t *testing.T) {
 	a := sensor("ts-sensor-a", "tcp-tarpit", map[string]string{"TS_PORTS": "22", "TS_MODE": "echo"})
@@ -386,5 +409,80 @@ func TestManifestProblems(t *testing.T) {
 	d, _, err := render(t, compiler(), true)
 	if err != nil || len(d.Services) != 0 {
 		t.Fatal(err)
+	}
+}
+
+// TestRealManifestsRender renders every sensor manifest in the repository
+// with plausible configuration through the real compiler.
+func TestRealManifestsRender(t *testing.T) {
+	paths, _ := filepath.Glob("../../../sensors/*/manifest.json")
+	if len(paths) < 6 {
+		t.Fatalf("expected the template and five sensors, found %d manifests", len(paths))
+	}
+	src := source{}
+	var sensors []domain.Sensor
+	lureDir := "/srv/truesignal-lures"
+	for i, p := range paths {
+		b, _ := os.ReadFile(p)
+		m, err := manifest.Decode(b, manifest.Options{AllowUnpinned: true})
+		if err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		m.Image.Digest = digest
+		if m.Init != nil {
+			m.Init.Image.Digest = digest
+		}
+		src[m.Name+"@"+m.Version] = m
+		cfg := map[string]string{}
+		for _, k := range m.Config {
+			if !k.Required {
+				continue
+			}
+			switch {
+			case k.Type == "port" || k.ItemType == "port":
+				cfg[k.Name] = strconv.Itoa(30000 + i)
+			case k.ItemType == "path" || k.Type == "path":
+				cfg[k.Name] = lureDir + "/passwords.txt"
+			}
+		}
+		sensors = append(sensors, domain.Sensor{ID: "ts-sensor-" + m.Name, CatalogueName: m.Name, Version: m.Version, Config: cfg})
+	}
+	c := &Compiler{Manifests: src, Settings: settings{SettingEndpoint: "https://hub.example.com"}, Keys: keys{},
+		Honeytokens: &stub.Honeytokens{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	r, err := c.Render(context.Background(), node, sensors, fleet.RenderOptions{Redact: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d Document
+	json.Unmarshal(r.Compose, &d)
+	want := map[string]struct {
+		user string
+		caps string
+		net  string
+	}{
+		"ts-sensor-tcp-tarpit":            {"0:0", "NET_BIND_SERVICE", "host"},
+		"ts-sensor-icmp-canary":           {"0:0", "NET_RAW", "host"},
+		"ts-sensor-network-scan-detector": {"0:0", "NET_RAW", "host"},
+		"ts-sensor-file-canary":           {"0:0", "DAC_OVERRIDE", "bridge"},
+		"ts-sensor-file-canary-init":      {"0:0", "DAC_OVERRIDE", "none"},
+		"ts-sensor-web-router-decoy":      {DefaultUser, "", "bridge"},
+		"ts-sensor-template":              {DefaultUser, "", "host"},
+	}
+	for name, w := range want {
+		s := d.Services[name]
+		if s == nil {
+			t.Errorf("%s missing", name)
+			continue
+		}
+		if s.User != w.user || strings.Join(s.CapAdd, ",") != w.caps || s.NetworkMode != w.net || !s.ReadOnly || s.CapDrop[0] != "ALL" {
+			t.Errorf("%s: user %s caps %v net %s", name, s.User, s.CapAdd, s.NetworkMode)
+		}
+	}
+	if d.Services["ts-sensor-web-router-decoy"].Environment["TS_CAPTURE_KEY"] == "" ||
+		d.Services["ts-sensor-file-canary-init"].Environment["TS_HONEYTOKEN"] == "" {
+		t.Fatal("hub secrets not injected")
+	}
+	if len(d.Meta.HostPaths) != 1 || d.Meta.HostPaths[0] != lureDir+"/passwords.txt" {
+		t.Fatalf("host paths %v", d.Meta.HostPaths)
 	}
 }
