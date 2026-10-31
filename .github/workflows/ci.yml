@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.26.2"
+  GO_VERSION: "1.26.10"
   NODE_VERSION: "22"
 
 jobs:
@@ -144,6 +144,16 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+      - name: scan sensor images (trivy from the step above)
+        if: success() || failure()
+        run: |
+          rc=0
+          for d in sensors/*/; do
+            n=$(basename "$d")
+            echo "== ts-sensor-$n"
+            trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "ci/ts-sensor-$n:scan" || rc=1
+          done
+          exit $rc
 
   vuln-scan:
     name: dependency vulnerability scan

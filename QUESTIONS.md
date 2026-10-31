@@ -9,6 +9,9 @@ The repository was created with an Apache-2.0 `LICENSE`, but §0.8 requires an
 `LICENSE`. These contradict each other.
 **Meanwhile:** the existing `LICENSE` file is left untouched (owner's file);
 every source file carries the §0.8 header verbatim.
+**Answer (owner, 2026-10-31):** interim choice confirmed. Note: the Apache-2.0
+grant in `LICENSE` and the "All rights reserved" headers still conflict
+legally; whichever is intended should be settled before any public release.
 
 ### Q2 — §2 — Go module path
 The repository is `github.com/mahmoudahmed3132/TrueSignal-Rewrite`. Is that
@@ -360,6 +363,7 @@ Navigator layer endpoint). The mapping is one constant
 installed projection's DTO is rendered generically (tables/key-value, as
 text). Dedicated visualisations (matrix grid, map, path graph) need the DTO
 contracts. Please confirm the names or supply the contracts.
+**Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
 
 ### Q57 — §6.3, §7 — No QR code for TOTP enrolment
 Rendering a QR code needs either a third-party encoder or a hand-written one
@@ -368,17 +372,20 @@ Rendering a QR code needs either a third-party encoder or a hand-written one
 `otpauth://` URI with copy buttons; every mainstream authenticator accepts
 manual entry. Say if a QR code is required; a permissive encoder would be
 added to `THIRD_PARTY.md`.
+**Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
 
 ### Q58 — §7 item 6 — Beacon types
 The beacon module's supported `type` values are part of its PORTED contract.
 **Meanwhile:** the Beacons page takes the type as free text (≤ 32 chars) and
 relies on the Hub/module to validate it.
+**Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
 
 ### Q59 — §7 — Hub upgrade notice
 **Meanwhile:** "new Hub release" is a dismissible banner for the current page
 view only (the Hub image is upgraded by the operator, not from the UI); the
 CLI release notice is acknowledged per version via
 `POST /system/cli-notice/ack` and stays hidden until the next CLI release.
+**Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
 
 ### Q60 — §0, §10 — Container image names
 The names the earlier milestones used for sensor images
@@ -389,6 +396,7 @@ packages. **Meanwhile:** images are `ghcr.io/<owner>/ts-hub` and
 `ghcr.io/<owner>/ts-sensor-<name>` (manifests updated; a test pins the
 prefix). No prior image was ever pulled or inspected. Confirm or choose
 other names (one constant per workflow plus `sensors/*/manifest.json`).
+**Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
 
 ### Q61 — §10 — Extra publish guards
 Beyond the spec, publish workflows also refuse (a) a tag whose commit is not
@@ -397,9 +405,11 @@ image tag already exists although the version is not in the registry (a
 previous run died between push and registry commit). (b) keeps image tags
 immutable; recovery is a deliberate deletion of that package version. Say if
 either is unwanted.
+**Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
 
 ### Q62 — §10 — `:latest` and pre-releases
 **Meanwhile:** `:latest` only ever points at a plain `X.Y.Z` release;
 pre-release tags (`hub/v4.0.0-rc.1`) publish their version tag but are never
 `:latest` candidates. The update check (Q55) ignores GitHub pre-releases too.
+**Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
 

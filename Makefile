@@ -3,9 +3,12 @@
 GO_MODULES := $(shell sed -n 's/^\t\.\/\(.*\)$$/\1/p' go.work)
 export CGO_ENABLED := 0
 
-.PHONY: all vet test check-headers ui hub-bin tag-hub tag-cli tag-sensor tag-sensors
+.PHONY: all fmt vet test check-headers ui hub-bin tag-hub tag-cli tag-sensor tag-sensors
 
-all: check-headers vet test
+all: check-headers fmt vet test
+
+fmt:
+	@out=$$(gofmt -l $(GO_MODULES)); [ -z "$$out" ] || { echo "gofmt needed:"; echo "$$out"; exit 1; }
 
 vet:
 	@for m in $(GO_MODULES); do echo "== vet $$m"; (cd $$m && go vet ./...) || exit 1; done

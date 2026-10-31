@@ -42,7 +42,7 @@ func TestRouting(t *testing.T) {
 		{"/api/v2/x", "not_found", 404, ""},
 		{"/v3/node/unknown", "not_found", 404, ""},
 		{"/../../etc/passwd", "app", 200, "no-cache"}, // cleaned; fs.FS cannot escape dist
-		{"/../assets/main-AB12.js", "", 400, ""}, // ServeFileFS refuses ".." outright
+		{"/../assets/main-AB12.js", "", 400, ""},      // ServeFileFS refuses ".." outright
 	}
 	for _, c := range cases {
 		r := get(t, u, "GET", c.path)

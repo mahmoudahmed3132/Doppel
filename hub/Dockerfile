@@ -6,7 +6,7 @@
 # Cross-compiles on the build platform (no emulation) for TARGETARCH.
 # Base images are pinned by digest; bump them deliberately.
 
-FROM --platform=$BUILDPLATFORM golang:1.26.2-bookworm@sha256:47ce5636e9936b2c5cbf708925578ef386b4f8872aec74a67bd13a627d242b19 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.10-bookworm@sha256:23ce71337b726608afb1bc00986e630a05034a87a87ea1fc2cd1ae5cf33387eb AS build
 ARG TARGETOS=linux
 ARG TARGETARCH
 ARG VERSION

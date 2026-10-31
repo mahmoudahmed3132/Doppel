@@ -6,7 +6,7 @@ must state why it is needed.
 
 | Module / package | Component | Version | Licence | Justification |
 |---|---|---|---|---|
-| Go standard library | all | go1.26 | BSD-3-Clause | Baseline |
+| Go standard library | all | go1.26.10 | BSD-3-Clause | Baseline |
 | `modernc.org/sqlite` | hub | v1.61.0 | BSD-3-Clause | Pure-Go SQLite driver (§2: SQLite, `CGO_ENABLED=0`) |
 | `golang.org/x/crypto` (`argon2`) | hub | v0.58.0 | BSD-3-Clause | argon2id password hashing (§6.3); not in the standard library |
 | `modernc.org/libc` | hub (via sqlite) | v1.79.0 | BSD-3-Clause | Transitive: C runtime for the transpiled SQLite |
@@ -23,7 +23,7 @@ must state why it is needed.
 
 | Package | Shipped? | Version | Licence | Justification |
 |---|---|---|---|---|
-| `preact` | yes (bundled into the Hub binary) | 10.27.2 | MIT | 4 kB component/rendering library; escapes text by default (no HTML injection path) |
+| `preact` | yes (bundled into the Hub binary) | 10.28.4 | MIT | 4 kB component/rendering library; escapes text by default (no HTML injection path) |
 | `esbuild` (+ its `@esbuild/<platform>` binary) | no, build time only | 0.25.12 | MIT | Bundles and minifies the UI into one script + one stylesheet (CSP-compatible output) |
 | `typescript` | no, build time only | 5.9.3 | Apache-2.0 | Type-checking (`tsc --noEmit`) in CI |
 
@@ -50,7 +50,7 @@ running Trivy v0.70.0 (Apache-2.0). `crane` v0.22.1
 (`github.com/google/go-containerregistry`, Apache-2.0) via `go install`
 (checksum-verified by sum.golang.org). `python3-yaml` (MIT) and
 `python3-jsonschema` (MIT) from the Ubuntu archive.
-Base images (pinned by digest): `golang:1.26.2-bookworm` (BSD-3-Clause Go;
+Base images (pinned by digest): `golang:1.26.10-bookworm` (BSD-3-Clause Go;
 Debian packages under their own licences, build stage only) and
 `gcr.io/distroless/static-debian12:nonroot` (Apache-2.0; shipped runtime base).
 
