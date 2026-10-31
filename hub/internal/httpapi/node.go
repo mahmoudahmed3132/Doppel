@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
@@ -24,12 +25,21 @@ type NodeStore interface {
 	SetNodeRevisions(ctx context.Context, id, desired, applied string) error
 }
 
+// HubEventRaiser raises Hub events through the event pipeline.
+type HubEventRaiser interface {
+	RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger string, sev domain.Severity, source, target string, details map[string]any) (*domain.Event, error)
+}
+
 // NodeAPI serves the node agent CLI (node-key authenticated).
 type NodeAPI struct {
 	Ingest   *Ingest // shares node-key auth and rate limiting
 	Fleet    *fleet.Service
 	Store    NodeStore
+	Raiser   HubEventRaiser // raises node_apply_failed
 	HubMajor int
+
+	mu         sync.Mutex
+	lastFailed map[string]string // node id -> revision already alerted
 }
 
 // Register mounts the routes.
@@ -98,6 +108,32 @@ func nonNilStrings(s []string) []string {
 
 var revisionRE = regexp.MustCompile(`^rev_[0-9a-f]{8}$`)
 
+// alertApplyFailed raises node_apply_failed once per node and revision.
+func (n *NodeAPI) alertApplyFailed(ctx context.Context, nodeID, revision, result, msg string) error {
+	if n.Raiser == nil {
+		return nil
+	}
+	n.mu.Lock()
+	if n.lastFailed == nil {
+		n.lastFailed = map[string]string{}
+	}
+	if n.lastFailed[nodeID] == revision {
+		n.mu.Unlock()
+		return nil
+	}
+	n.lastFailed[nodeID] = revision
+	n.mu.Unlock()
+	desired := ""
+	if node, err := n.Store.Node(ctx, nodeID); err == nil {
+		desired = node.DesiredRevision
+	}
+	_, err := n.Raiser.RaiseHubEvent(ctx, nodeID, "", domain.TriggerNodeApplyFailed, domain.SeverityHigh,
+		domain.HubSource, nodeID, map[string]any{
+			"revision": revision, "desired_revision": desired, "result": result, "message": msg,
+		})
+	return err
+}
+
 func (n *NodeAPI) applied(w http.ResponseWriter, r *http.Request, nodeID string) {
 	var req struct {
 		Revision string `json:"revision"`
@@ -118,14 +154,20 @@ func (n *NodeAPI) applied(w http.ResponseWriter, r *http.Request, nodeID string)
 			Fail(w, http.StatusInternalServerError, CodeInternal, "could not record the revision")
 			return
 		}
+		n.mu.Lock()
+		delete(n.lastFailed, nodeID) // a later failure alerts again
+		n.mu.Unlock()
 	case "rolled_back", "failed":
 		// The decoys of this node may not be running as configured.
-		msg := req.Message
+		msg := strings.ToValidUTF8(req.Message, "?")
 		if len(msg) > 512 {
-			msg = msg[:512]
+			msg = strings.ToValidUTF8(msg[:512], "")
 		}
 		n.Ingest.Log.Warn("node failed to apply its desired revision", "node_id", nodeID, "revision", req.Revision,
-			"result", req.Result, "message", strings.ToValidUTF8(msg, "?"))
+			"result", req.Result, "message", msg)
+		if err := n.alertApplyFailed(r.Context(), nodeID, req.Revision, req.Result, msg); err != nil {
+			n.Ingest.Log.Error("raising node_apply_failed failed", "node_id", nodeID, "error", err.Error())
+		}
 	default:
 		Fail(w, http.StatusBadRequest, CodeInvalid, "result must be applied, unchanged, rolled_back or failed")
 		return

@@ -266,6 +266,10 @@ warning; the applied revision is not advanced, so the node shows `in_sync:
 false`. Proposal: raise a Hub event (e.g. `node_apply_failed`, severity high) so
 the SOC sees decoys that are not running as configured — needs your approval
 since it adds a trigger.
+**Answer (owner, 2026-10-31):** approved. Implemented as `node_apply_failed`
+(Hub-raised, reserved, severity high, empty `sensor_id`, target = node id,
+details `revision, desired_revision, result, message`), raised once per node and
+revision; a successful apply re-arms it.
 
 ### Q44 — §4.4 — CLI requests without a version header
 **Meanwhile:** node endpoints answer `426` when the header is missing or not

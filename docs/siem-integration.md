@@ -46,8 +46,12 @@ PEN defaults to 32473 (`TS_SYSLOG_PEN`). Audit action names: [`audit-actions.md`
 ## What is sent
 
 * Every stored event, **including** whitelisted and known-scanner events
-  (flagged `whitelisted` / `known_scanner`); Hub-raised liveness and
-  `honeytoken_used` events.
+  (flagged `whitelisted` / `known_scanner`); Hub-raised events:
+  `honeytoken_used`, `sensor_stopped`, `sensor_heartbeat_lost`,
+  `sensor_recovered`, and `node_apply_failed` (a node could not apply its
+  configuration and rolled back or failed — its decoys may not be running as
+  configured; `sensor` is empty, `target` is the node id; once per node and
+  revision).
 * Every audit record (state-changing admin requests, logins, setup attempts,
   `mfa.reset_cli`).
 * Honeytoken inventory (username and planting location, never the secret):

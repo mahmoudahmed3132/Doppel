@@ -238,7 +238,7 @@ func serve(log *slog.Logger) error {
 		Now:      time.Now,
 	}
 	ingestAPI.Register(mux)
-	(&httpapi.NodeAPI{Ingest: ingestAPI, Fleet: fleetSvc, Store: db, HubMajor: 3}).Register(mux)
+	(&httpapi.NodeAPI{Ingest: ingestAPI, Fleet: fleetSvc, Store: db, Raiser: pipe, HubMajor: 3}).Register(mux)
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort("", strconv.Itoa(cfg.ListenPort)),

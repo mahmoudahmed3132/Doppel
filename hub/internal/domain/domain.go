@@ -45,12 +45,15 @@ const (
 	TriggerSensorHeartbeatLost = "sensor_heartbeat_lost"
 	TriggerSensorRecovered     = "sensor_recovered"
 	TriggerBeaconTriggered     = "beacon_triggered"
+	// TriggerNodeApplyFailed: a node could not apply its desired revision
+	// (rolled back or failed), so its decoys may not run as configured.
+	TriggerNodeApplyFailed = "node_apply_failed"
 )
 
 // IsReservedTrigger reports whether a sensor is forbidden to emit t.
 func IsReservedTrigger(t string) bool {
 	switch t {
-	case TriggerHoneytokenUsed, TriggerSensorStopped, TriggerSensorHeartbeatLost, TriggerSensorRecovered:
+	case TriggerHoneytokenUsed, TriggerSensorStopped, TriggerSensorHeartbeatLost, TriggerSensorRecovered, TriggerNodeApplyFailed:
 		return true
 	}
 	return false

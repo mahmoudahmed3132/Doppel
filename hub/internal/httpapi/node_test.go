@@ -59,7 +59,7 @@ func TestNodeAPI(t *testing.T) {
 	ing := &Ingest{Auth: keys, Limiter: ratelimit.NewKeyed(100, 100), Store: db, Pipeline: pipe,
 		Liveness: &liveness.Service{Store: db, Raiser: pipe, Log: log, Now: time.Now}, Version: Version{"truesignal-hub", "3.0.0", 3}, Log: log, Now: time.Now}
 	mux := http.NewServeMux()
-	(&NodeAPI{Ingest: ing, Fleet: fs, Store: db, HubMajor: 3}).Register(mux)
+	(&NodeAPI{Ingest: ing, Fleet: fs, Store: db, Raiser: pipe, HubMajor: 3}).Register(mux)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -122,6 +122,34 @@ func TestNodeAPI(t *testing.T) {
 	}
 	if node, _ := db.Node(ctx, n1.ID); node.AppliedRevision != rev {
 		t.Fatal("failed apply overwrote the applied revision")
+	}
+
+	// node_apply_failed: raised once per node and revision, re-armed by success.
+	failed := func() []domain.Event {
+		ev, _ := db.Events(ctx, store.EventFilter{Trigger: domain.TriggerNodeApplyFailed})
+		return ev
+	}
+	ev := failed()
+	if len(ev) != 1 || ev[0].Severity != domain.SeverityHigh || ev[0].NodeID != n1.ID || ev[0].Target != n1.ID || ev[0].Source != domain.HubSource {
+		t.Fatalf("%+v", ev)
+	}
+	var d map[string]any
+	json.Unmarshal(ev[0].Details, &d)
+	if d["result"] != "failed" || d["message"] != "service exited" || d["revision"] != "rev_00000000" {
+		t.Fatalf("details %v", d)
+	}
+	call("POST", "/v3/node/applied", key1, "3.0.0", `{"revision":"rev_00000000","result":"rolled_back","message":"again"}`)
+	if len(failed()) != 1 {
+		t.Fatal("same revision alerted twice")
+	}
+	call("POST", "/v3/node/applied", key1, "3.0.0", `{"revision":"`+rev+`","result":"applied"}`)
+	call("POST", "/v3/node/applied", key1, "3.0.0", `{"revision":"rev_00000000","result":"failed","message":"x"}`)
+	if len(failed()) != 2 {
+		t.Fatal("failure after a success not alerted")
+	}
+	// Sensors cannot forge it.
+	if !domain.IsReservedTrigger(domain.TriggerNodeApplyFailed) {
+		t.Fatal("node_apply_failed must be reserved")
 	}
 	_ = domain.StatusPending
 }
