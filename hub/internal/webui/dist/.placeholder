@@ -1,0 +1,2 @@
+Placeholder so the embed pattern matches before the UI is built.
+Run `make ui` (or `npm --prefix ui ci && npm --prefix ui run build`).

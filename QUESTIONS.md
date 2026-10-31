@@ -348,3 +348,35 @@ session as usual.
 repository); tags `hub/vX.Y.Z` and `cli/vX.Y.Z`, drafts and pre-releases
 ignored; interval from `update_check_hours` (0 = off). This is the only
 outbound call besides registry, SIEM and webhooks.
+
+### Q56 — §7 item 6, §12 — Projection names used by the UI pages
+The PORTED projection contract was not provided, so page → projection name is
+an assumption: Attack path → `attack_path`, Scans → `sources`, Geo map →
+`geo_map`, Report → `report`, ATT&CK matrix → `attack_matrix` (plus the
+Navigator layer endpoint). The mapping is one constant
+(`ui/src/pages/modules.tsx`, `PROJECTIONS`).
+**Meanwhile:** a page whose projection is not registered (per
+`/system/status` `modules.projections`) shows "module not installed"; an
+installed projection's DTO is rendered generically (tables/key-value, as
+text). Dedicated visualisations (matrix grid, map, path graph) need the DTO
+contracts. Please confirm the names or supply the contracts.
+
+### Q57 — §6.3, §7 — No QR code for TOTP enrolment
+Rendering a QR code needs either a third-party encoder or a hand-written one
+(several hundred lines of Reed–Solomon/masking code to own and test).
+**Meanwhile:** enrolment shows the base32 secret (grouped) and the
+`otpauth://` URI with copy buttons; every mainstream authenticator accepts
+manual entry. Say if a QR code is required; a permissive encoder would be
+added to `THIRD_PARTY.md`.
+
+### Q58 — §7 item 6 — Beacon types
+The beacon module's supported `type` values are part of its PORTED contract.
+**Meanwhile:** the Beacons page takes the type as free text (≤ 32 chars) and
+relies on the Hub/module to validate it.
+
+### Q59 — §7 — Hub upgrade notice
+**Meanwhile:** "new Hub release" is a dismissible banner for the current page
+view only (the Hub image is upgraded by the operator, not from the UI); the
+CLI release notice is acknowledged per version via
+`POST /system/cli-notice/ack` and stays hidden until the next CLI release.
+

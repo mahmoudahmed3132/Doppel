@@ -42,6 +42,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/updatecheck"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webhook"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webui"
 )
 
 // Version is the Hub version; overridden at build time with -ldflags -X.
@@ -273,6 +274,11 @@ func serve(log *slog.Logger) error {
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/v3/", admin.Handler())
+	ui := webui.Handler()
+	if !ui.Built() {
+		log.Warn("admin UI not embedded in this build; serving a placeholder page")
+	}
+	mux.Handle("/", ui)
 	ingestAPI := &httpapi.Ingest{
 		Auth:     keys,
 		Limiter:  ratelimit.NewKeyed(50, 200),

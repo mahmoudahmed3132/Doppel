@@ -19,3 +19,11 @@ some cases automated; **todo** = component not yet implemented.
 | 12 | Sensor test mode / fire drill | pass | each sensor has `TestTestModeAgainstMockHub` (`sensors/{tcp-tarpit,icmp-canary,network-scan-detector,file-canary,web-router-decoy}`); SDK `TestServiceLifecycle` (SIGUSR1 drill); real Hub `hub/internal/httpapi` `TestSDKEndToEnd`; live runs: raw ICMP echo → event, AF_PACKET connect scan → event, real inotify in `file-canary` tests. All manifests validated (`hub/internal/manifest` `TestAllSensorManifests`) and rendered (`hub/internal/compose` `TestRealManifestsRender`) |
 | 13 | CI publish guards | todo | — |
 | 14 | Independence check | n/a | run by the specification team |
+
+## Admin UI (§7)
+
+Not a §14 item. `ui/` passes `tsc --noEmit` and the safety lint in `make ui`;
+`hub/internal/webui` tests SPA routing, cache headers and that the embedded
+`index.html` is CSP-clean. `ui/e2e/smoke.cjs` (Playwright, run manually against
+a development Hub) passes all steps with zero CSP violations or page errors.
+

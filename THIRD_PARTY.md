@@ -19,6 +19,18 @@ must state why it is needed.
 | `golang.org/x/term` | cli | v0.47.0 | BSD-3-Clause | No-echo password prompt for `discover`; TTY detection for colour |
 | `golang.org/x/sys` | cli (via term) | v0.49.0 | BSD-3-Clause | Transitive |
 
+### Admin UI (`ui/`, npm, exact versions pinned in `package-lock.json`)
+
+| Package | Shipped? | Version | Licence | Justification |
+|---|---|---|---|---|
+| `preact` | yes (bundled into the Hub binary) | 10.27.2 | MIT | 4 kB component/rendering library; escapes text by default (no HTML injection path) |
+| `esbuild` (+ its `@esbuild/<platform>` binary) | no, build time only | 0.25.12 | MIT | Bundles and minifies the UI into one script + one stylesheet (CSP-compatible output) |
+| `typescript` | no, build time only | 5.9.3 | Apache-2.0 | Type-checking (`tsc --noEmit`) in CI |
+
+No runtime CDN, font or analytics dependency: everything is embedded and served
+by the Hub (§7). Charts are hand-written SVG. `npm ci --ignore-scripts` is used
+in CI and release builds.
+
 `sdk/go` has zero third-party dependencies by requirement (§5.9).
 
 Only modules linked into a build are listed (`go list -deps`). Modules that
