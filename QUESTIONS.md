@@ -448,3 +448,19 @@ only) to push the `registry` branch and create releases there
 repository; `install.sh` keeps verifying the source repository's identity.
 Setup and migration: `docs/operations.md` §9.1,
 `scripts/release/migrate-releases-repo.sh`.
+
+### Q65 — §10 — CodeQL without GitHub code scanning
+Since the repository became private, uploading CodeQL results fails: code
+scanning needs GitHub Code Security, which is not enabled.
+**Answer (owner, 2026-11-01):** option 2, no licence. Run CodeQL without
+uploading and gate in the job.
+**Implemented:** `codeql.yml` analyses with `upload: never`;
+`scripts/codeql-gate.py` fails on every result not listed in
+`.github/codeql/accepted-findings.json`. Each entry names the rule, the file
+and CodeQL's fingerprint of the flagged line, plus a reason, so a change to
+that line or any new finding fails again until re-reviewed. The SARIF is kept
+as a workflow artifact for 30 days. Dismissals made earlier in code scanning do
+not carry over; any such finding that reappears is re-traced before it is
+listed. If Code Security is enabled later, restore the upload and move the
+accepted entries back to dismissals.
+
