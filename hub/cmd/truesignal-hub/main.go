@@ -35,10 +35,11 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ratelimit"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/secrets"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/siem"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/signing"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/sourcelist"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/updatecheck"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webhook"
@@ -149,7 +150,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules are not installed: manifest verifier (catalogue empty), TOTP/MFA, beacons, honeytokens, source lists, ATT&CK/asset/GeoIP enrichment, ECS rendering and Elastic/LogScale transports are inactive")
+	log.Warn("PORTED modules not yet installed: TOTP/MFA, beacons, honeytokens, ATT&CK/asset/GeoIP enrichment, ECS rendering and Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
@@ -180,8 +181,9 @@ func serve(log *slog.Logger) error {
 	}
 	notifier.Start(ctx)
 
-	settingsSvc := &hubsettings.Service{Store: db, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log} // Parser and Assets are PORTED: until installed, source lists are
-	// stored but not applied and the asset inventory is read-only.
+	// Source lists use the PORTED matcher (step 1); the asset inventory is
+	// PORTED and not yet installed, so it is read-only.
+	settingsSvc := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log}
 
 	if err := settingsSvc.Load(ctx); err != nil {
 		return err
@@ -202,12 +204,27 @@ func serve(log *slog.Logger) error {
 		Development: cfg.Development, Log: log, Now: time.Now}
 
 	keys := nodekey.NewAuthenticator(db) // shared: admin key rotation invalidates ingest auth
+	// Manifests are verified (Sigstore keyless, PORTED step 1) against this
+	// repository's publish-sensor.yml identity before parsing. A trusted root
+	// that cannot be read stops the Hub: fail closed, never degrade (§13).
+	trustedRoot, err := signing.TrustedRoot(cfg.SigstoreRoot)
+	if err != nil {
+		return fmt.Errorf("sigstore trusted root (%s): %w", config.EnvSigstoreTrustedRoot, err)
+	}
+	signerRepo := cfg.SignerRepo
+	if signerRepo == "" {
+		signerRepo = signing.DefaultSignerRepo
+	}
+	verifier, err := signing.New(trustedRoot, signerRepo)
+	if err != nil {
+		return fmt.Errorf("manifest verifier (%s): %w", config.EnvSignerRepo, err)
+	}
+	log.Info("sensor manifests must be signed by the publish workflow", "identity", verifier.Identity("<sensor>", "<version>"),
+		"custom_trusted_root", cfg.SigstoreRoot != "")
 	cat := &catalogue.Catalogue{
-		Store:    db,
-		Settings: db,
-		// PORTED Sigstore verifier not installed: every manifest is
-		// unavailable (fail closed) unless the dev unsigned flag is set.
-		Verifier:      stub.RejectAllVerifier{},
+		Store:         db,
+		Settings:      db,
+		Verifier:      verifier,
 		Fetcher:       catalogue.NewHTTPFetcher(),
 		DefaultURL:    cfg.RegistryURL,
 		AllowHTTP:     cfg.Development,

@@ -6,7 +6,7 @@ arm64 builds; sensors are deployed only on amd64 unless `TS_ALLOW_NON_AMD64=true
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mahmoudahmed3132/TrueSignal-Rewrite/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/main/install.sh \
   | sudo TS_NODE_KEY='tsk_…' sh -s -- --hub https://hub.example.com
 ```
 

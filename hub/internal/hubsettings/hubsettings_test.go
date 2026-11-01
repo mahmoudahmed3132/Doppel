@@ -14,6 +14,7 @@ import (
 
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/sourcelist"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
 )
 
@@ -25,7 +26,7 @@ func newSvc(t *testing.T, parser bool) (*Service, *store.DB) {
 	t.Cleanup(func() { db.Close() })
 	s := &Service{Store: db, DefaultRegistry: "https://registry.example/", Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	if parser {
-		s.Parser = stub.ExactSourceList{}
+		s.Parser = sourcelist.Parser{}
 	}
 	s.Load(context.Background())
 	return s, db
@@ -63,7 +64,7 @@ func TestDefaultsAndUpdate(t *testing.T) {
 		t.Fatal("whitelist not applied immediately")
 	}
 	// A fresh service (restart) loads the same matcher.
-	s2 := &Service{Store: s.Store, Parser: stub.ExactSourceList{}, Log: s.Log}
+	s2 := &Service{Store: s.Store, Parser: sourcelist.Parser{}, Log: s.Log}
 	s2.Load(ctx)
 	if s2.Whitelist() == nil || !s2.Whitelist().Match("scanner.corp") {
 		t.Fatal("whitelist not loaded at start")
@@ -173,5 +174,35 @@ func TestAssetInventoryWithModule(t *testing.T) {
 	s2.Load(ctx)
 	if a := s2.AssetIndex(ctx).Lookup("10.0.0.7"); a == nil || a.Name != "jump-host" {
 		t.Fatalf("after reload %+v", a)
+	}
+}
+
+// With the real matcher: saving validates strictly (an invalid CIDR is
+// refused and the current list kept); a stored list from before validation
+// is loaded leniently instead of being dropped.
+func TestSourceListsWithRealMatcher(t *testing.T) {
+	s, db := newSvc(t, true)
+	ctx := context.Background()
+	if _, err := s.Update(ctx, Patch{Whitelist: &[]string{"10.0.0.0/8", "scanner.example"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !s.Whitelist().Match("10.9.8.7:443") || !s.Whitelist().Match("scanner.example") || s.Whitelist().Match("11.0.0.1") {
+		t.Fatal("whitelist semantics")
+	}
+	if _, err := s.Update(ctx, Patch{Whitelist: &[]string{"10.0.0.0/33"}}); err == nil {
+		t.Fatal("invalid CIDR saved")
+	}
+	if !s.Whitelist().Match("10.1.1.1") {
+		t.Fatal("refused update replaced the current list")
+	}
+	// A list stored before CIDR validation ("legacy/name") still loads.
+	v := `["legacy/name","192.168.0.0/16"]`
+	if err := db.PutSettings(ctx, map[string]*string{KeyWhitelist: &v}); err != nil {
+		t.Fatal(err)
+	}
+	s2 := &Service{Store: db, Parser: sourcelist.Parser{}, Log: s.Log}
+	s2.Load(ctx)
+	if wl := s2.Whitelist(); wl == nil || !wl.Match("legacy/name") || !wl.Match("192.168.4.4") {
+		t.Fatal("stored legacy list dropped or mis-parsed")
 	}
 }

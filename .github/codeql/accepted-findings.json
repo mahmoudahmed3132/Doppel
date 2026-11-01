@@ -1,0 +1,50 @@
+[
+  {
+    "rule": "go/reflected-xss",
+    "file": "hub/internal/httpapi/middleware.go",
+    "fingerprint": "79438575f8147405:1",
+    "reason": "Sink is the audit statusWriter.Write shared by all admin handlers. Every writer is writeJSON (SetEscapeHTML, application/json) or an attachment download (Content-Disposition: attachment; octet-stream/JSON/CSV); every response carries nosniff and CSP script-src 'self'. No text/html response contains request data. Re-traced 2026-11-01 (previously dismissed in code scanning)."
+  },
+  {
+    "rule": "go/log-injection",
+    "file": "hub/internal/httpapi/ingest.go",
+    "fingerprint": "9ae70dd42b0a1be7:1",
+    "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/truesignal-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries. Re-traced 2026-11-01 (previously dismissed in code scanning)."
+  },
+  {
+    "rule": "go/log-injection",
+    "file": "hub/internal/httpapi/ingest.go",
+    "fingerprint": "f92001b5073e7390:1",
+    "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/truesignal-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries. Re-traced 2026-11-01 (previously dismissed in code scanning)."
+  },
+  {
+    "rule": "go/log-injection",
+    "file": "hub/internal/httpapi/node.go",
+    "fingerprint": "62ae6a1aa631379f:1",
+    "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/truesignal-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries. Re-traced 2026-11-01 (previously dismissed in code scanning)."
+  },
+  {
+    "rule": "go/log-injection",
+    "file": "hub/internal/httpapi/node.go",
+    "fingerprint": "34f505c9d6280dfa:1",
+    "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/truesignal-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries. Re-traced 2026-11-01 (previously dismissed in code scanning)."
+  },
+  {
+    "rule": "go/log-injection",
+    "file": "hub/internal/audit/audit.go",
+    "fingerprint": "7e324caaab43495d:1",
+    "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/truesignal-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries. Re-traced 2026-11-01 (previously dismissed in code scanning)."
+  },
+  {
+    "rule": "go/log-injection",
+    "file": "hub/internal/httpapi/system.go",
+    "fingerprint": "7057378e23619e87:1",
+    "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/truesignal-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries. Re-traced 2026-11-01 (previously dismissed in code scanning)."
+  },
+  {
+    "rule": "go/log-injection",
+    "file": "hub/internal/webhook/webhook.go",
+    "fingerprint": "1f0b13ff9fa6c3e5:1",
+    "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/truesignal-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries. Re-traced 2026-11-01 (previously dismissed in code scanning)."
+  }
+]

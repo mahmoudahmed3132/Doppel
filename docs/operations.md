@@ -8,7 +8,10 @@ registry. Image: `ghcr.io/mahmoudahmed3132/ts-hub`; sensors:
 
 Every Hub image, CLI binary and sensor manifest is signed keyless by the
 workflow that built it, at the release tag. Verify the identity, not just
-"a valid signature":
+"a valid signature". The source repository is private: releases, the
+installer and the sensor registry are served from the public repository
+`mahmoudahmed3132/truesignal-releases`, but the signing identity is still the source repository's
+workflow (it is public in every certificate and in the Rekor log):
 
 ```sh
 # Hub image (digest from the release notes)
@@ -85,7 +88,7 @@ Install with the verified installer (checks `SHA256SUMS`, the `--sha256` pin
 and, with cosign present, the signature):
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/v<version>/install.sh
+curl -fsSLO https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/cli/v<version>/install.sh
 sudo sh install.sh --version <version> --sha256 <hash from SHA256SUMS>
 sudo TS_NODE_KEY=<key> truesignal link https://hub.example.com
 sudo truesignal apply
@@ -105,7 +108,26 @@ it). Nothing is deleted; versions are immutable. Deployed instances keep
 running the deprecated version until you upgrade/downgrade them from the
 node page.
 
-## 7. MFA break-glass
+## 7. Sigstore trusted root and signer identity
+
+Hubs verify sensor manifests offline against the Sigstore public-good trusted
+root embedded in the binary (`hub/internal/signing/trusted_root.json`, sha256
+recorded next to its `//go:embed` in `signing.go`). Signatures must come from
+`https://github.com/<TS_MANIFEST_SIGNER_REPO>/.github/workflows/publish-sensor.yml@refs/tags/sensor/<name>/v<version>`
+(default repository `mahmoudahmed3132/TrueSignal-Rewrite`).
+
+* **Refresh the embedded root** (with a Hub release, or when Sigstore rotates
+  keys): fetch `trusted_root.json` through the TUF client of the
+  `sigstore/root-signing` repository (for example `sigstore-go`'s
+  `pkg/tuf` client), never by a plain download; replace the
+  file, update the sha256 comment, run `go test ./internal/signing` (it
+  verifies the real published bundles), release the Hub.
+* **Override at runtime** without a release: `TS_SIGSTORE_TRUSTED_ROOT=/path/trusted_root.json`.
+  An unreadable or invalid file stops the Hub (fail closed).
+* **Private registry or fork:** set `TS_MANIFEST_SIGNER_REPO=owner/repo` to the
+  repository whose `publish-sensor.yml` signs your registry.
+
+## 8. MFA break-glass
 
 If every factor is lost:
 
@@ -120,7 +142,7 @@ emitted as an audit record (`mfa.reset_cli`) to the SIEM at next start.
 Re-enrol immediately. Access to the Docker host is therefore equivalent to
 admin access; restrict it accordingly.
 
-## 8. Releasing (maintainers)
+## 9. Releasing (maintainers)
 
 * Bump the version in code (`hub/cmd/truesignal-hub/main.go`,
   `cli/cmd/truesignal/main.go`, or `sensors/<name>/manifest.json` version and
@@ -131,12 +153,70 @@ admin access; restrict it accordingly.
   tagged commit not on the default branch, and any already published
   version (Hub image tag exists; CLI release has assets; sensor version in
   the registry or its image tag exists).
+* Releases, `install.sh` and the `registry` branch are published to the
+  public repository `<owner>/truesignal-releases` (§9.1); the source
+  repository is private. Tags, signing and `:latest` stay here.
 * Repository settings the workflows rely on (not expressible in code):
   - a **tag ruleset** on `hub/v*`, `cli/v*`, `sensor/**` blocking update and
     deletion (immutable tags) and restricting creation to maintainers;
-  - a **branch ruleset** on `registry` allowing pushes only from GitHub
-    Actions (the publish/rollback workflows);
+  - the `registry` branch and its ruleset now live in the releases
+    repository (§9.1); the old `registry` branch here, its ruleset and the
+    `REGISTRY_DEPLOY_KEY` secret and deploy key can be removed once the
+    migration has been verified;
   - GHCR packages `ts-hub` and `ts-sensor-*` linked to this repository with
     Actions write access; public visibility if nodes pull anonymously;
   - Actions → "Read and write permissions" are **not** needed: each job
     requests the minimum via `permissions:`.
+
+### 9.1 Public releases repository (`mahmoudahmed3132/truesignal-releases`)
+
+The source repository is private, so anonymous clients (Hubs, `install.sh`,
+the update check) read only from this public repository. It holds no source:
+`main` carries `README.md` and `install.sh`; the `registry` branch carries the
+signed manifests and `index.json`; releases carry the CLI assets and the Hub
+release notes. Everything is built and signed here, in the private repository.
+
+| Consumer | Reads |
+|---|---|
+| Hub catalogue (default `TS_REGISTRY_URL`) | `https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/registry/` |
+| Hub update check (default `TS_UPDATE_CHECK_URL`) | `https://api.github.com/repos/mahmoudahmed3132/truesignal-releases/releases?per_page=100` |
+| `install.sh` | releases API and `https://github.com/mahmoudahmed3132/truesignal-releases/releases/download/cli/v<version>/` |
+| Signature checks (Hub, `install.sh`, cosign) | identity `https://github.com/mahmoudahmed3132/TrueSignal-Rewrite/.github/workflows/<workflow>@refs/tags/...` (unchanged) |
+
+`raw.githubusercontent.com` may serve a branch up to about five minutes stale
+after a push. That is harmless: every manifest is versioned and signed, and
+Hubs refresh periodically.
+
+**One-time setup (owner):**
+
+1. Create `mahmoudahmed3132/truesignal-releases` as a **public** repository with an initial commit on
+   `main` (a README stating that it holds release artefacts only, and that
+   the source is private).
+2. Create a **GitHub App** (owner account → Settings → Developer settings →
+   GitHub Apps) with no webhook and one repository permission, **Contents:
+   Read and write**. Install it on `mahmoudahmed3132/truesignal-releases` **only**. Generate a private key.
+3. In this repository: Actions **variable** `RELEASES_APP_CLIENT_ID` (the
+   App's client ID) and Actions **secret** `RELEASES_APP_PRIVATE_KEY` (the
+   PEM). Workflows mint an installation token per job, scoped to
+   `truesignal-releases` with `contents: write`, valid for one hour.
+4. Migrate the existing artefacts from a clone of this repository:
+   `gh auth login && gh auth setup-git`, then
+   `scripts/release/migrate-releases-repo.sh`. It copies the `registry`
+   branch unchanged, recreates every `cli/v*` and `hub/v*` release with
+   byte-identical assets, puts `install.sh` on `main`, and reads everything
+   back anonymously. It is idempotent and stops on any difference.
+5. Rulesets on `mahmoudahmed3132/truesignal-releases`, after the migration:
+   - branches `main` and `registry`: block deletion and force pushes;
+     restrict updates, with the App as the only bypass actor;
+   - tags `hub/v*`, `cli/v*`: block update and deletion; restrict creation,
+     with the App as the only bypass actor.
+6. Remove the old `registry` branch ruleset, the `REGISTRY_DEPLOY_KEY` secret
+   and the deploy key here. Keep the old releases here until existing Hubs
+   have been upgraded (they still point at this repository's URLs and fail
+   closed with `catalogue refresh failed` until they are upgraded or have
+   `TS_REGISTRY_URL` set to the new URL).
+
+**Why a GitHub App, not a token:** the installation token is minted per job,
+expires within an hour, is limited to one repository and one permission, and
+is not tied to a person's account. A fine-grained PAT would be long-lived and
+belong to a user.

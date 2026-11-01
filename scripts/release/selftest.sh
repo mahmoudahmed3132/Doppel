@@ -37,6 +37,7 @@ git tag cli/v0.0.1; expect_fail "tag/version mismatch" scripts/release/check-tag
 git tag hub/v1.0; expect_fail "non-SemVer tag" scripts/release/check-tag.sh hub/v1.0 main
 expect_fail "unknown sensor" scripts/release/check-tag.sh sensor/nope/v1.0.0 main
 expect_fail "malformed tag" scripts/release/check-tag.sh release-1 main
+expect_fail "pre-release sensor tag" scripts/release/check-tag.sh sensor/tcp-tarpit/v1.0.0-rc.1 main
 git switch -q -c side && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m side
 git tag -f "hub/v$hubv" >/dev/null
 expect_fail "tag off the default branch" scripts/release/check-tag.sh "hub/v$hubv" main
@@ -63,6 +64,42 @@ expect_fail "republishing a version" add tcp-tarpit 1.0.0
 scripts/release/registry-commit.sh "rollback" "$T/ts-registry" deprecate -dir . -name tcp-tarpit >/dev/null 2>&1
 l=$(git --git-dir="$T/origin.git" show registry:index.json | jq -r '.sensors["tcp-tarpit"] | .latest + " " + (.versions["1.1.0"].deprecated|tostring)')
 [ "$l" = "1.0.0 true" ] && pass "rollback deprecates latest" || fail "rollback: $l"
+
+# Publishing to the separate public releases repository (REGISTRY_REMOTE, a URL).
+git init -q --bare "$T/releases.git"
+REGISTRY_REMOTE="$T/releases.git" add icmp-canary 1.0.0 >"$T/rr.log" 2>&1 && pass "publish to a REGISTRY_REMOTE URL" || { cat "$T/rr.log"; fail "publish to REGISTRY_REMOTE"; }
+r=$(git --git-dir="$T/releases.git" show registry:index.json | jq -r '.sensors | keys | join(" ")')
+[ "$r" = "icmp-canary" ] && pass "releases repository has only its own registry history" || fail "releases registry: $r"
+expect_fail "unreachable registry remote (no new orphan history)" env REGISTRY_REMOTE="$T/missing.git" \
+	scripts/release/registry-commit.sh "x" "$T/ts-registry" deprecate -dir . -name tcp-tarpit
+
+# --- public release (publish-release.sh against a local "releases" repo) ----
+git init -q --bare "$T/pub.git"
+git clone -q "$T/pub.git" "$T/pubw" 2>/dev/null
+git -C "$T/pubw" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+git -C "$T/pubw" push -q origin HEAD:refs/heads/main 2>/dev/null
+mkdir -p "$T/ghbin"; : > "$T/gh.log"
+cat > "$T/ghbin/gh" <<STUB
+#!/bin/sh
+echo "\$*" >> "$T/gh.log"
+case "\$1 \$2" in
+"release view") t=\$3; f="$T/rel-\$(echo "\$t" | tr / _)"
+	[ -f "\$f" ] || { echo "release not found" >&2; exit 1; }
+	case "\$*" in *assets*) cat "\$f" ;; *) echo "{}" ;; esac ;;
+"release create") t=\$3; n=0; for a in "\$@"; do [ -f "\$a" ] && case "\$a" in *.md) ;; *) n=\$((n+1)) ;; esac; done
+	echo "\$n" > "$T/rel-\$(echo "\$t" | tr / _)" ;;
+esac
+STUB
+chmod +x "$T/ghbin/gh"
+echo notes > "$T/notes.md"; echo bin > "$T/asset1"
+pr() { PATH="$T/ghbin:$PATH" RELEASES_REPO=o/pub RELEASES_TOKEN=x TS_SELFTEST_RELEASES_GIT_URL="$T/pub.git" scripts/release/publish-release.sh "$@"; }
+pr --install-sh install.sh cli/v9.0.0 "CLI v9.0.0" "$T/notes.md" "$T/asset1" >/dev/null 2>&1 && pass "CLI release published to the releases repository" || fail "CLI release"
+git --git-dir="$T/pub.git" show main:install.sh | cmp -s - install.sh && pass "install.sh synchronised onto releases main" || fail "install.sh not on releases main"
+grep "release create cli/v9.0.0" "$T/gh.log" | grep -q -- "--target $(git --git-dir="$T/pub.git" rev-parse main)" && pass "release tag targets the commit carrying install.sh" || fail "release target"
+grep "release create cli/v9.0.0" "$T/gh.log" | grep -q -- --prerelease && fail "stable release marked pre-release" || pass "stable release not marked pre-release"
+expect_fail "re-releasing a published version" pr cli/v9.0.0 "CLI v9.0.0" "$T/notes.md" "$T/asset1"
+pr hub/v9.1.0-rc.1 "Hub v9.1.0-rc.1" "$T/notes.md" >/dev/null 2>&1 && grep "release create hub/v9.1.0-rc.1" "$T/gh.log" | grep -q -- --prerelease &&
+	pass "SemVer pre-release published as a GitHub pre-release" || fail "pre-release flag"
 
 # --- :latest selection --------------------------------------------------------
 mkdir -p "$T/bin" "$T/reg"

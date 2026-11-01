@@ -21,9 +21,6 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/semver"
 )
 
-// DefaultURL lists the product's releases.
-const DefaultURL = "https://api.github.com/repos/mahmoudahmed3132/TrueSignal-Rewrite/releases?per_page=100"
-
 const maxBody = 2 << 20
 
 // State is the last check's outcome.

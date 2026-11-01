@@ -3,8 +3,10 @@
 # Sensor publish (§10). Tag sensor/<name>/vX.Y.Z -> image built, scanned,
 # pushed and signed; manifest pinned to the pushed digest, validated with the
 # Hub's production rules, signed (detached Sigstore bundle) and committed to
-# the registry branch with a regenerated index.json. Concurrent sensor
-# publishes retry the registry push on conflict.
+# the registry branch of the public releases repository
+# (<owner>/truesignal-releases; this repository is private) with a
+# regenerated index.json. Concurrent sensor publishes retry the registry push
+# on conflict.
 # Signing identity (consumed by the PORTED verifier):
 #   https://github.com/<repo>/.github/workflows/publish-sensor.yml@refs/tags/sensor/<name>/v<version>
 name: publish-sensor
@@ -23,6 +25,7 @@ concurrency:
 env:
   GO_VERSION: "1.26.10"
   ISSUER: https://token.actions.githubusercontent.com
+  RELEASES_REPO: ${{ github.repository_owner }}/truesignal-releases
 
 jobs:
   guard:
@@ -62,10 +65,16 @@ jobs:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
           (cd hub && go build -o "$RUNNER_TEMP/ts-registry" ./cmd/ts-registry)
-          if git rev-parse -q --verify refs/remotes/origin/registry >/dev/null; then
-            git worktree add --quiet --detach "$RUNNER_TEMP/reg" refs/remotes/origin/registry
+          # The registry branch lives in the public releases repository (read anonymously).
+          url="https://github.com/$RELEASES_REPO.git"
+          set +e; git ls-remote --exit-code --heads "$url" refs/heads/registry >/dev/null; rc=$?; set -e
+          if [ "$rc" -eq 0 ]; then
+            git fetch --quiet --no-tags "$url" +refs/heads/registry:refs/remotes/releases/registry
+            git worktree add --quiet --detach "$RUNNER_TEMP/reg" refs/remotes/releases/registry
             set +e; "$RUNNER_TEMP/ts-registry" published -dir "$RUNNER_TEMP/reg" -name "$NAME" -version "$VERSION"; rc=$?; set -e
             [ "$rc" -eq 3 ] || { echo "::error::$NAME@$VERSION is already in the registry (or the check failed: $rc)"; exit 1; }
+          elif [ "$rc" -ne 2 ]; then
+            echo "::error::cannot read the registry branch of $RELEASES_REPO (git exit $rc)"; exit 1
           fi
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
@@ -86,7 +95,7 @@ jobs:
     needs: guard
     runs-on: ubuntu-24.04
     permissions:
-      contents: write   # push the registry branch
+      contents: read    # the registry is pushed to the releases repository with the App token
       packages: write
       id-token: write
     env:
@@ -97,10 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Push the registry branch as a deploy key, not GITHUB_TOKEN, so the
-          # registry ruleset can restrict updates to this one bypassable actor.
-          ssh-key: ${{ secrets.REGISTRY_DEPLOY_KEY }}
-          persist-credentials: true   # needed to push the registry branch
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -158,7 +164,19 @@ jobs:
           cosign sign-blob --yes --bundle "$out/manifest.json.sigstore.json" "$out/manifest.json"
           cosign verify-blob --bundle "$out/manifest.json.sigstore.json" \
             --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$out/manifest.json"
-      - name: commit to the registry branch (retry on conflict)
+      - id: releases-token
+        name: token for the public releases repository (GitHub App, contents:write on that repository only)
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASES_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASES_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: truesignal-releases
+          permission-contents: write
+      - name: commit to the registry branch of the releases repository (retry on conflict)
+        env:
+          RELEASES_TOKEN: ${{ steps.releases-token.outputs.token }}
         run: |
-          scripts/release/registry-commit.sh "registry: $NAME $VERSION" \
+          . scripts/release/releases-auth.sh
+          REGISTRY_REMOTE="$RELEASES_URL" scripts/release/registry-commit.sh "registry: $NAME $VERSION" \
             "$GITHUB_WORKSPACE/scripts/release/registry-add.sh" "$RUNNER_TEMP/ts-registry" "$NAME" "$VERSION" "$RUNNER_TEMP/out"

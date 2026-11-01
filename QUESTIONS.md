@@ -207,6 +207,8 @@ Neither the default URL nor the index format is specified.
 (the publish workflow's `registry` branch), overridable by `TS_REGISTRY_URL`
 and the `registry_url` setting; index format in `docs/registry.md`. Bundles are
 `<manifest path>.sigstore.json`.
+**Superseded by Q64 (2026-11-01):** the default is now
+`https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/registry/`.
 
 ### Q33 — §6.7 — Which version is "latest"
 The index carries `latest`, but the Hub may not have verified that version.
@@ -290,6 +292,9 @@ credentials are never written.
 `truesignal-linux-<arch>.sigstore.json`; cosign identity
 `https://github.com/mahmoudahmed3132/TrueSignal-Rewrite/.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`.
 The release workflow (§10) must produce exactly these.
+**Update (Q64, 2026-11-01):** assets and identity unchanged; the release is
+now created in `mahmoudahmed3132/truesignal-releases`, which `install.sh`
+downloads from.
 
 ### Q47 — §2 / §11 — Sensors that need a privilege run as UID 0
 Docker grants `cap_add` capabilities only to UID 0 (no ambient capabilities in
@@ -352,6 +357,8 @@ session as usual.
 repository); tags `hub/vX.Y.Z` and `cli/vX.Y.Z`, drafts and pre-releases
 ignored; interval from `update_check_hours` (0 = off). This is the only
 outbound call besides registry, SIEM and webhooks.
+**Update (Q64, 2026-11-01):** the default is the releases API of
+`mahmoudahmed3132/truesignal-releases`.
 
 ### Q56 — §7 item 6, §12 — Projection names used by the UI pages
 The PORTED projection contract was not provided, so page → projection name is
@@ -413,4 +420,47 @@ either is unwanted.
 pre-release tags (`hub/v4.0.0-rc.1`) publish their version tag but are never
 `:latest` candidates. The update check (Q55) ignores GitHub pre-releases too.
 **Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
+
+### Q63 — §10, §12 — Sensor pre-release versions
+The PORTED verifier accepts only plain `X.Y.Z` sensor versions (step-1 README,
+note 3). **Meanwhile:** kept as is, and `scripts/release/check-tag.sh` now
+refuses `sensor/<name>/vX.Y.Z-<pre>` tags, so a pre-release sensor manifest
+that every Hub would reject is never published. Q62 (pre-releases) still
+applies to the Hub only. Extend both together if sensor pre-releases are
+wanted.
+
+### Q64 — §8 / §10 / §6.11 — Public artefacts after the repository went private
+With the source repository private, the default registry URL, `install.sh`
+and the update check returned 404 to anonymous clients.
+**Answer (owner, 2026-11-01):** publish the public artefacts from a separate
+public repository `mahmoudahmed3132/truesignal-releases`; (1) a GitHub App,
+not a fine-grained token, as the cross-repository credential; (2) serve the
+registry from its `registry` branch through `raw.githubusercontent.com` (up to
+about five minutes of staleness after a publish is accepted: the catalogue is
+signed and versioned), not GitHub Pages; (3) the private repository's name
+stays visible in signing certificates and the public Rekor log, accepted.
+**Implemented:** building, signing, tags and `:latest` stay in the private
+repository, so every signing identity is unchanged. The publish workflows mint
+a per-job App installation token (contents:write on the releases repository
+only) to push the `registry` branch and create releases there
+(`scripts/release/publish-release.sh`, `registry-commit.sh` with
+`REGISTRY_REMOTE`). Hub defaults and `install.sh` point at the releases
+repository; `install.sh` keeps verifying the source repository's identity.
+Setup and migration: `docs/operations.md` §9.1,
+`scripts/release/migrate-releases-repo.sh`.
+
+### Q65 — §10 — CodeQL without GitHub code scanning
+Since the repository became private, uploading CodeQL results fails: code
+scanning needs GitHub Code Security, which is not enabled.
+**Answer (owner, 2026-11-01):** option 2, no licence. Run CodeQL without
+uploading and gate in the job.
+**Implemented:** `codeql.yml` analyses with `upload: never`;
+`scripts/codeql-gate.py` fails on every result not listed in
+`.github/codeql/accepted-findings.json`. Each entry names the rule, the file
+and CodeQL's fingerprint of the flagged line, plus a reason, so a change to
+that line or any new finding fails again until re-reviewed. The SARIF is kept
+as a workflow artifact for 30 days. Dismissals made earlier in code scanning do
+not carry over; any such finding that reappears is re-traced before it is
+listed. If Code Security is enabled later, restore the upload and move the
+accepted entries back to dismissals.
 

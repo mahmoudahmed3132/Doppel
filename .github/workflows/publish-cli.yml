@@ -2,7 +2,8 @@
 #
 # CLI publish (§10, Q46). Tag cli/vX.Y.Z -> static linux/amd64 and arm64
 # binaries, SHA256SUMS, one Sigstore bundle per binary (keyless, this
-# workflow's identity at the tag), GitHub release. install.sh verifies exactly
+# workflow's identity at the tag), GitHub release in the public releases
+# repository (<owner>/truesignal-releases). install.sh verifies exactly
 # this identity, so the file name of this workflow is part of the contract.
 name: publish-cli
 
@@ -19,6 +20,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.26.10"
+  RELEASES_REPO: ${{ github.repository_owner }}/truesignal-releases
 
 jobs:
   guard:
@@ -39,7 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if out=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets | length' 2>&1); then
+          if out=$(gh release view "$GITHUB_REF_NAME" --repo "$RELEASES_REPO" --json assets --jq '.assets | length' 2>&1); then
             if [ "$out" -gt 0 ]; then
               echo "::error::$GITHUB_REF_NAME already has $out release assets; published versions are never rebuilt"
               exit 1
@@ -53,7 +55,7 @@ jobs:
     needs: guard
     runs-on: ubuntu-24.04
     permissions:
-      contents: write   # create the release
+      contents: read    # the release is created in the releases repository with the App token
       id-token: write   # Sigstore keyless signing
     env:
       VERSION: ${{ needs.guard.outputs.version }}
@@ -92,16 +94,25 @@ jobs:
         run: |
           sh install.sh --version "$VERSION" --base-url "file://$PWD/dist" --prefix "$RUNNER_TEMP/bin"
           "$RUNNER_TEMP/bin/truesignal" version | grep -F "$VERSION"
-      - name: create the release
+      - id: releases-token
+        name: token for the public releases repository (GitHub App, contents:write on that repository only)
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASES_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASES_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: truesignal-releases
+          permission-contents: write
+      - name: create the release in the public releases repository
         env:
-          GH_TOKEN: ${{ github.token }}
+          RELEASES_TOKEN: ${{ steps.releases-token.outputs.token }}
         run: |
           scripts/release/release-notes.sh "$GITHUB_REF_NAME" > notes.md
           cat >> notes.md <<NOTES
 
           ### Install and verify
           \`\`\`sh
-          curl -fsSLO https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/install.sh
+          curl -fsSLO https://raw.githubusercontent.com/$RELEASES_REPO/$GITHUB_REF_NAME/install.sh
           sudo sh install.sh --version $VERSION --sha256 <hash from SHA256SUMS>
           # manual check:
           sha256sum -c SHA256SUMS --ignore-missing
@@ -110,8 +121,6 @@ jobs:
             --certificate-oidc-issuer $ISSUER truesignal-linux-amd64
           \`\`\`
           NOTES
-          pre=""; case "$VERSION" in *-*) pre="--prerelease" ;; esac  # SemVer pre-release -> GitHub pre-release
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $pre \
-            --title "CLI v$VERSION" --notes-file notes.md \
+          scripts/release/publish-release.sh --install-sh install.sh "$GITHUB_REF_NAME" "CLI v$VERSION" notes.md \
             dist/truesignal-linux-amd64 dist/truesignal-linux-arm64 dist/SHA256SUMS \
             dist/truesignal-linux-amd64.sigstore.json dist/truesignal-linux-arm64.sigstore.json

@@ -3,7 +3,7 @@
 #
 # TrueSignal node agent installer (spec §8).
 #
-#   curl -fsSL https://raw.githubusercontent.com/mahmoudahmed3132/TrueSignal-Rewrite/main/install.sh \
+#   curl -fsSL https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/main/install.sh \
 #     | TS_NODE_KEY=tsk_… sh -s -- --hub https://hub.example.com
 #
 # Options:
@@ -19,7 +19,10 @@
 
 set -eu
 
-REPO="mahmoudahmed3132/TrueSignal-Rewrite"
+# Releases are downloaded from the public releases repository; they are built
+# and signed in the (private) source repository, which the signature names.
+RELEASES_REPO="mahmoudahmed3132/truesignal-releases"
+SIGNER_REPO="mahmoudahmed3132/TrueSignal-Rewrite"
 WORKFLOW="publish-cli.yml"
 OIDC_ISSUER="https://token.actions.githubusercontent.com"
 
@@ -53,12 +56,12 @@ sha256() {
 }
 
 latest_version() {
-	api="https://api.github.com/repos/$REPO/releases?per_page=100"
+	api="https://api.github.com/repos/$RELEASES_REPO/releases?per_page=100"
 	fetch "$api" "$TMP/releases.json"
 	# Tags look like "cli/v3.1.0"; pick the highest stable one.
 	v=$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"cli\/v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' "$TMP/releases.json" |
 		sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)
-	[ -n "$v" ] || die "no cli/vX.Y.Z release found in $REPO"
+	[ -n "$v" ] || die "no cli/vX.Y.Z release found in $RELEASES_REPO"
 	printf '%s' "$v"
 }
 
@@ -108,7 +111,7 @@ main() {
 	trap 'rm -rf "$TMP"' EXIT INT TERM
 
 	[ -n "$VERSION" ] || VERSION=$(latest_version)
-	[ -n "$BASE" ] || BASE="https://github.com/$REPO/releases/download/cli/v$VERSION"
+	[ -n "$BASE" ] || BASE="https://github.com/$RELEASES_REPO/releases/download/cli/v$VERSION"
 	ASSET="truesignal-linux-$ARCH"
 	say "installing truesignal $VERSION ($ARCH) from $BASE"
 
@@ -127,7 +130,7 @@ main() {
 	if command -v cosign >/dev/null 2>&1; then
 		fetch "$BASE/$ASSET.sigstore.json" "$TMP/$ASSET.sigstore.json" || die "Sigstore bundle missing"
 		cosign verify-blob --bundle "$TMP/$ASSET.sigstore.json" \
-			--certificate-identity "https://github.com/$REPO/.github/workflows/$WORKFLOW@refs/tags/cli/v$VERSION" \
+			--certificate-identity "https://github.com/$SIGNER_REPO/.github/workflows/$WORKFLOW@refs/tags/cli/v$VERSION" \
 			--certificate-oidc-issuer "$OIDC_ISSUER" "$TMP/$ASSET" >/dev/null 2>&1 ||
 			die "Sigstore signature verification FAILED"
 		say "Sigstore signature verified"

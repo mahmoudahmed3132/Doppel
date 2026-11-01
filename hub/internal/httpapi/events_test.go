@@ -24,6 +24,7 @@ import (
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/hubsettings"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/sourcelist"
 	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
 )
 
@@ -60,7 +61,7 @@ func newSysHub(t *testing.T) *sysHub {
 		TOTP: stub.TOTP{}, Log: log, Now: time.Now, SessionTTL: time.Hour, SessionIdle: time.Hour})
 	tok, _ := svc.Init(ctx)
 	h := &sysHub{db: db, audit: &auditLog{}, siem: &deliverer{}}
-	settings := &hubsettings.Service{Store: db, Parser: stub.ExactSourceList{}, Log: log}
+	settings := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, Log: log}
 	settings.Load(ctx)
 	admin := &Admin{Auth: svc, Settings: db, Audit: h.audit, Log: log, Now: time.Now, Development: true}
 	h.admin = admin

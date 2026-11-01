@@ -1,7 +1,7 @@
 # Sensor registry (§6.7)
 
 A static HTTPS location. Default:
-`https://raw.githubusercontent.com/mahmoudahmed3132/TrueSignal-Rewrite/registry/`
+`https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/registry/`
 (the `registry` branch written by the sensor publish workflow, §10).
 Override with `TS_REGISTRY_URL` (operator default) or the `registry_url`
 setting (admin). Plain `http://` is accepted only with `TS_ENV=development`.

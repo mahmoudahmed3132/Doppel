@@ -1,6 +1,9 @@
 # Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
-# CodeQL for Go and JavaScript/TypeScript (§10).
+# CodeQL for Go and JavaScript/TypeScript (§10). The repository is private
+# and GitHub code scanning is not enabled (Q65), so results are not uploaded:
+# scripts/codeql-gate.py fails the job on every finding not accepted in
+# .github/codeql/accepted-findings.json, and the SARIF is kept as an artifact.
 name: codeql
 
 on:
@@ -22,8 +25,8 @@ jobs:
     name: codeql ${{ matrix.language }}
     runs-on: ubuntu-24.04
     permissions:
+      actions: read     # private repository: the action reads its workflow run
       contents: read
-      security-events: write
     strategy:
       fail-fast: false
       matrix:
@@ -55,3 +58,14 @@ jobs:
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: /language:${{ matrix.language }}
+          upload: never
+          post-processed-sarif-path: ${{ runner.temp }}/sarif   # carries the line fingerprints the gate matches
+      - name: gate (fail on any finding not accepted after review)
+        run: python3 scripts/codeql-gate.py "$RUNNER_TEMP/sarif" .github/codeql/accepted-findings.json
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: codeql-${{ matrix.language }}-sarif
+          path: ${{ runner.temp }}/sarif
+          if-no-files-found: ignore
+          retention-days: 30

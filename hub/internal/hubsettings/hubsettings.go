@@ -133,11 +133,11 @@ func (s *Service) listSetting(ctx context.Context, key string) []string {
 
 // Load builds matchers and the asset index from stored settings.
 func (s *Service) Load(ctx context.Context) error {
-	wl, err := s.parse(s.listSetting(ctx, KeyWhitelist))
+	wl, err := s.parseStored(s.listSetting(ctx, KeyWhitelist))
 	if err != nil {
 		s.Log.Error("stored whitelist is invalid; not applied", "error", err.Error())
 	}
-	sc, err := s.parse(s.listSetting(ctx, KeyScanners))
+	sc, err := s.parseStored(s.listSetting(ctx, KeyScanners))
 	if err != nil {
 		s.Log.Error("stored known-scanner list is invalid; not applied", "error", err.Error())
 	}
@@ -153,6 +153,20 @@ func (s *Service) Load(ctx context.Context) error {
 	s.whitelist, s.scanners, s.assetIndex = wl, sc, ix
 	s.mu.Unlock()
 	return nil
+}
+
+// storedParser is implemented by matchers that can parse a stored list
+// leniently (the PORTED source-list module does): a list saved before a
+// validation rule existed keeps working instead of being dropped.
+type storedParser interface {
+	ParseStored(entries []string) ported.SourceMatcher
+}
+
+func (s *Service) parseStored(entries []string) (ported.SourceMatcher, error) {
+	if sp, ok := s.Parser.(storedParser); ok && len(entries) > 0 {
+		return sp.ParseStored(entries), nil
+	}
+	return s.parse(entries)
 }
 
 func (s *Service) parse(entries []string) (ported.SourceMatcher, error) {
