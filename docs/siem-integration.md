@@ -8,8 +8,8 @@ Spec §6.9. One destination at a time, configured in Settings → SIEM output
 | `tcp` | `host:port` | one record per line (`\n`) | now |
 | `tls` | `host:port` | as `tcp`, TLS ≥ 1.2, verified against system roots + `TS_SIEM_CA_BUNDLE` | now |
 | `udp` | `host:port` | one record per datagram (records > 65 000 bytes are dropped) | now |
-| `elastic` | `https://<cluster>/<data stream>` | ECS via bulk `create`, `Authorization: ApiKey` | when the PORTED transport is imported (the ECS renderer is installed) |
-| `logscale` | HEC URL | ECS in HEC `event`, `sourcetype: truesignal`, `Authorization: Bearer` | as above |
+| `elastic` | `https://<cluster>/<data stream>` | ECS via bulk `create`, `Authorization: ApiKey` | installed (`hub/internal/siemhttp`) |
+| `logscale` | HEC URL | ECS in HEC `event`, `sourcetype: truesignal`, `Authorization: Bearer` | installed (`hub/internal/siemhttp`) |
 
 Stream formats: `rfc5424` (default) or `ecs` (ECS JSON per line; the ECS
 renderer is installed, `hub/internal/ecs`).
