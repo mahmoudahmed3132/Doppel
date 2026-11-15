@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/assets"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/attack"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 	"log/slog"
 	"net"
 	"net/http"
@@ -154,7 +156,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules not yet installed: beacons, honeytokens, ATT&CK enrichment, ECS rendering and Elastic/LogScale transports are inactive")
+	log.Warn("PORTED modules not yet installed: beacons, honeytokens, ECS rendering and Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
@@ -202,7 +204,7 @@ func serve(log *slog.Logger) error {
 	geoSvc := geoip.New(geoPath, cfg.GeoIPAutoUpdate, log)
 	defer geoSvc.Close()
 	go geoSvc.StartUpdater(ctx)
-	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc, Geo: geoip.Locator{S: geoSvc}}
+	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc, Geo: geoip.Locator{S: geoSvc}, Attack: attack.Mapper{}}
 
 	broker := livefeed.NewBroker()
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
@@ -277,7 +279,9 @@ func serve(log *slog.Logger) error {
 	(&httpapi.Insights{Store: db, Enricher: enricher, Updates: updates, Settings: settingsSvc, Auth: authSvc, Live: broker,
 		Armed: notifier.Armed, SIEMStats: siemSvc.Stats, Version: Version, Schema: store.SchemaVersion(),
 		StartedAt: startedAt, Development: cfg.Development, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin,
-		// Projections and the ATT&CK mapper are PORTED.
+		// Merged modules: ATT&CK mapper and projections (MERGE-INVENTORY.md).
+		Attack:      attack.Mapper{},
+		Projections: projections(),
 	}).Register(admin)
 	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
@@ -361,4 +365,13 @@ func purgeSessions(ctx context.Context, a *auth.Service, log *slog.Logger) {
 			}
 		}
 	}
+}
+
+// projections lists the installed analytics projections by name (Q56).
+func projections() map[string]ported.Projection {
+	out := map[string]ported.Projection{}
+	for _, p := range []ported.Projection{attack.MatrixProjection{}} {
+		out[p.Name()] = p
+	}
+	return out
 }
