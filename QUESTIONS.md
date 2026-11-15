@@ -538,3 +538,15 @@ to Go 1.27 in one deliberate branch, once a Go 1.27 patch release is at least
 14 days old: `go.work`, every `go.mod` (`go` and `toolchain`), CI and CodeQL
 `setup-go`, the Dockerfiles' golang images and HANDOFF/README. Run all gates
 before merging.
+
+### Q73 — clean specs, common-decoy — Per-protocol enable flags and conditional privilege
+`common-decoy.md` wants one enable flag and one port per protocol, and UID 0 with `NET_BIND_SERVICE` only when a configured port is below 1024. A manifest is static, and rule 7 treated every declared port as claimed even when its protocol was off.
+**Meanwhile:** manifest v3 gains the optional `listen_ports[].enabled_key` (a declared bool key; false means no conflict check and no publishing). The privilege cannot depend on config: a decoy whose default ports are below 1024 declares UID 0 plus `NET_BIND_SERVICE` (as `tcp-tarpit` does, Q47); one that is configured to high ports only still gets that capability. `cli/internal/discover` ignores `enabled_key` (discovery may propose a port for a protocol the operator later disables; harmless, the Hub does not claim it). A Hub older than this change rejects manifests carrying `enabled_key` (strict decoding), so release the Hub before publishing a decoy.
+
+### Q74 — roadmap E1 — Secrets at rest: plaintext rollback snapshot, required KEK, scope
+Closing THREATMODEL R1 changes three defaults.
+1. **Required KEK.** Production refuses to start without `TS_KEK_FILE`; development needs `TS_DEV_ALLOW_PLAINTEXT_SECRETS=true`. Existing deployments must create a KEK before upgrading.
+2. **Plaintext snapshot.** **Answer (owner, 2026-11-15):** delete automatically after the first sealed start; implemented as a purge of snapshots older than `sealed_at`, repeated at every start. Original text: the pre-migration snapshot (`<db>.pre-v3-*.bak`) is plaintext, mode 0600, because it is the rollback copy for a Hub without encryption (schema v3 blocks the old Hub from reading the new file). **Meanwhile:** documented, delete after verification. Alternative if preferred: seal the snapshot's secrets with the new DEK (rollback then needs the new Hub's tooling) or delete it automatically after the first successful start.
+3. **Scope.** Sealed: the four secret settings, admin TOTP seeds, honeytoken secrets. Not sealed: `beacons.token` (equality lookup, no authority), sensor config (no manifest declares secret keys yet; when one does, seal `sensors.config` with a row-bound AAD in the same change).
+**Meanwhile:** the above.
+**Answer (owner, 2026-11-15; applied with the E1 branch):** moved to Go 1.27.3 (released 2026-10-19, so older than 14 days; the Dockerfiles already built with it) with sigstore-go 1.4.0, in `go.work`, every `go.mod`, the CI, publish and CodeQL workflows and the README. Dependabot PR #25 failed only for lack of this move.

@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -38,8 +39,12 @@ func (db *DB) CreateAdmin(ctx context.Context, passwordHash string, settings map
 			return err
 		}
 		for k, v := range settings {
+			sv, err := db.sealSetting(k, v)
+			if err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)
-				ON CONFLICT (key) DO UPDATE SET value = excluded.value`, k, v); err != nil {
+				ON CONFLICT (key) DO UPDATE SET value = excluded.value`, k, sv); err != nil {
 				return err
 			}
 		}
@@ -62,6 +67,12 @@ func (db *DB) Admin(ctx context.Context) (*Admin, error) {
 		return nil, domain.ErrNotFound
 	}
 	if err != nil {
+		return nil, err
+	}
+	if a.MFASecret, err = db.openValue(aadMFA, a.MFASecret); err != nil {
+		return nil, err
+	}
+	if a.MFAPendingSecret, err = db.openValue(aadMFA, a.MFAPendingSecret); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal([]byte(codes), &a.RecoveryCodes); err != nil {
@@ -95,7 +106,11 @@ func (db *DB) SetPasswordHash(ctx context.Context, hash string) error {
 
 // SetPendingMFASecret stores the secret of an enrolment in progress.
 func (db *DB) SetPendingMFASecret(ctx context.Context, secret string) error {
-	return affectedOne(db.sql.ExecContext(ctx, `UPDATE admin SET mfa_pending_secret = ?, updated_at = ? WHERE id = 1`, secret, ms(db.now())))
+	sv, err := db.sealValue(aadMFA, secret)
+	if err != nil {
+		return err
+	}
+	return affectedOne(db.sql.ExecContext(ctx, `UPDATE admin SET mfa_pending_secret = ?, updated_at = ? WHERE id = 1`, sv, ms(db.now())))
 }
 
 // EnableMFA activates the pending secret, provided it still equals
@@ -107,10 +122,29 @@ func (db *DB) EnableMFA(ctx context.Context, pendingSecret string, step int64, h
 		return err
 	}
 	return db.withTx(ctx, func(tx *sql.Tx) error {
-		err := affectedOne(tx.ExecContext(ctx, `UPDATE admin SET mfa_secret = mfa_pending_secret, mfa_pending_secret = '',
+		// Sealed values are randomised, so the stored pending secret is read,
+		// opened and compared here instead of in SQL. The transaction is
+		// immediate (one writer), and the UPDATE still pins the exact stored
+		// bytes, so the check and the update cannot be separated.
+		var stored string
+		var enabled int
+		if err := tx.QueryRowContext(ctx, `SELECT mfa_pending_secret, mfa_enabled FROM admin WHERE id = 1`).Scan(&stored, &enabled); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return domain.ErrNotFound
+			}
+			return err
+		}
+		plain, err := db.openValue(aadMFA, stored)
+		if err != nil {
+			return err
+		}
+		if enabled != 0 || plain == "" || subtle.ConstantTimeCompare([]byte(plain), []byte(pendingSecret)) != 1 {
+			return domain.ErrNotFound
+		}
+		err = affectedOne(tx.ExecContext(ctx, `UPDATE admin SET mfa_secret = mfa_pending_secret, mfa_pending_secret = '',
 			mfa_enabled = 1, mfa_last_step = ?, recovery_codes = ?, updated_at = ?
-			WHERE id = 1 AND mfa_enabled = 0 AND mfa_pending_secret = ? AND mfa_pending_secret != ''`,
-			step, string(codes), ms(db.now()), pendingSecret))
+			WHERE id = 1 AND mfa_enabled = 0 AND mfa_pending_secret = ?`,
+			step, string(codes), ms(db.now()), stored))
 		if err != nil {
 			return err
 		}

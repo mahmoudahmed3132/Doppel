@@ -74,6 +74,11 @@ type ListenPort struct {
 	// this fixed port inside the container and the config value is the
 	// published host port. Lets an unprivileged sensor appear on port 80.
 	ContainerPort int `json:"container_port,omitempty"`
+	// EnabledKey (optional) names a declared bool config key. While its
+	// effective value is "false" the port is neither conflict-checked nor
+	// published, so a protocol a multi-protocol decoy has switched off does
+	// not hold its default port.
+	EnabledKey string `json:"enabled_key,omitempty"`
 }
 
 // HostPath derives bind mounts from a config key of type path or list of
@@ -422,6 +427,11 @@ func (m *Manifest) Validate(opts Options) error {
 		}
 		if lp.Protocol != "tcp" && lp.Protocol != "udp" {
 			add("listen_ports: protocol must be tcp or udp")
+		}
+		if lp.EnabledKey != "" {
+			if ek := m.Key(lp.EnabledKey); ek == nil || ek.Type != "bool" {
+				add("listen_ports: enabled_key %s must be a declared bool key", trunc(lp.EnabledKey))
+			}
 		}
 		if lp.ContainerPort != 0 {
 			if lp.ContainerPort < 1 || lp.ContainerPort > 65535 {

@@ -312,6 +312,9 @@ func (c *Compiler) renderSensor(ctx context.Context, node domain.Node, sn domain
 
 	// Rule 7: port conflicts across sensors of the node, any protocol.
 	for _, lp := range m.Runtime.ListenPorts {
+		if !portEnabled(lp, cfg) {
+			continue
+		}
 		for _, p := range portsOf(cfg[lp.ConfigKey]) {
 			if prev, taken := ports[p]; taken && prev.sensorID != sn.ID {
 				return nil, nil, &fleet.RenderError{Status: 409, Code: "port_conflict", SensorID: sn.ID,
@@ -402,6 +405,9 @@ func (c *Compiler) renderSensor(ctx context.Context, node domain.Node, sn domain
 	}
 	if m.Runtime.NetworkMode == "bridge" {
 		for _, lp := range m.Runtime.ListenPorts {
+			if !portEnabled(lp, cfg) {
+				continue
+			}
 			for _, p := range portsOf(cfg[lp.ConfigKey]) {
 				target := p
 				if lp.ContainerPort != 0 {
@@ -499,6 +505,12 @@ func CaptureKey(master []byte, nodeID string) []byte {
 	mac := hmac.New(sha256.New, master)
 	mac.Write([]byte(nodeID))
 	return mac.Sum(nil)
+}
+
+// portEnabled reports whether a listen port is active: always, unless an
+// enabled_key is set and its effective value is "false".
+func portEnabled(lp manifest.ListenPort, cfg map[string]string) bool {
+	return lp.EnabledKey == "" || cfg[lp.EnabledKey] != "false"
 }
 
 func portsOf(v string) []int {

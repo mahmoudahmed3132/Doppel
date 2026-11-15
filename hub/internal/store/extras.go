@@ -83,13 +83,17 @@ func (db *DB) IncrementBeaconUse(ctx context.Context, id string, at time.Time) e
 
 const honeytokenCols = `id, username, secret, planted_node_id, planted_sensor_id, status, created_at, use_count, last_used_at`
 
-func scanHoneytoken(row interface{ Scan(...any) error }) (*ported.Honeytoken, error) {
+func (db *DB) scanHoneytoken(row interface{ Scan(...any) error }) (*ported.Honeytoken, error) {
 	var (
 		h       ported.Honeytoken
 		created int64
 		last    sql.NullInt64
 	)
 	if err := row.Scan(&h.ID, &h.Username, &h.Secret, &h.PlantedNodeID, &h.PlantedSensorID, &h.Status, &created, &h.UseCount, &last); err != nil {
+		return nil, err
+	}
+	var err error
+	if h.Secret, err = db.openValue(aadHoneytoken(h.ID), h.Secret); err != nil {
 		return nil, err
 	}
 	h.CreatedAt, h.LastUsedAt = fromMS(created), fromNullMS(last)
@@ -102,8 +106,12 @@ func (db *DB) InsertHoneytoken(ctx context.Context, h ported.Honeytoken) error {
 	if status == "" {
 		status = "active"
 	}
-	_, err := db.sql.ExecContext(ctx, `INSERT INTO honeytokens (`+honeytokenCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL)`,
-		h.ID, h.Username, h.Secret, h.PlantedNodeID, h.PlantedSensorID, status, ms(h.CreatedAt))
+	sealed, err := db.sealValue(aadHoneytoken(h.ID), h.Secret)
+	if err != nil {
+		return err
+	}
+	_, err = db.sql.ExecContext(ctx, `INSERT INTO honeytokens (`+honeytokenCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL)`,
+		h.ID, h.Username, sealed, h.PlantedNodeID, h.PlantedSensorID, status, ms(h.CreatedAt))
 	if isUniqueViolation(err) {
 		return domain.ErrConflict
 	}
@@ -112,7 +120,7 @@ func (db *DB) InsertHoneytoken(ctx context.Context, h ported.Honeytoken) error {
 
 // HoneytokenForSensor returns the token planted by a sensor, or nil, nil.
 func (db *DB) HoneytokenForSensor(ctx context.Context, nodeID, sensorID string) (*ported.Honeytoken, error) {
-	h, err := scanHoneytoken(db.sql.QueryRowContext(ctx, `SELECT `+honeytokenCols+` FROM honeytokens
+	h, err := db.scanHoneytoken(db.sql.QueryRowContext(ctx, `SELECT `+honeytokenCols+` FROM honeytokens
 		WHERE planted_node_id = ? AND planted_sensor_id = ?`, nodeID, sensorID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -130,7 +138,7 @@ func (db *DB) ListHoneytokens(ctx context.Context) ([]ported.Honeytoken, error) 
 	defer rows.Close()
 	out := []ported.Honeytoken{}
 	for rows.Next() {
-		h, err := scanHoneytoken(rows)
+		h, err := db.scanHoneytoken(rows)
 		if err != nil {
 			return nil, err
 		}

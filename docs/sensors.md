@@ -84,3 +84,9 @@ the honeytoken secret with the event's node id.
   at most every 5 minutes per listener. The Hub resolves the token to its
   beacon; the zone must be the only deployed receiver zone for the Beacons
   page to create beacons.
+
+## Helpers for service decoys (clean specs)
+
+- `sdk/go/ber`: strict BER reader and small writer (definite lengths only; length checked against the bytes present before slicing; fixed maxima for message size, tag number, length field and nesting depth; minimal-encoding integers and OIDs). Used by LDAP and SNMP. `FuzzReader` covers the reader.
+- `sdk/go/decoy.ServePacket(ctx, pc, maxSize, handle)`: UDP counterpart of `Accept`. Datagrams are copied, truncated at `maxSize`, and handled on the read goroutine (handlers must not block). Replies must not exceed the request (anti-amplification).
+- Manifest `runtime.listen_ports[].enabled_key`: a decoy declares one `bool` enable flag and one `port` key per protocol; while the flag is `false` the port is not conflict-checked (rule 7) or published. UID and capabilities in a manifest are static, so a decoy whose defaults are below 1024 runs UID 0 with `NET_BIND_SERVICE` only (Q47, Q73).

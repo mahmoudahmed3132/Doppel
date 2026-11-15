@@ -1,8 +1,8 @@
 module github.com/mahmoudahmed3132/Doppel/sensors/token-receiver
 
-go 1.26.0
+go 1.27.0
 
-toolchain go1.26.10
+toolchain go1.27.3
 
 require github.com/mahmoudahmed3132/Doppel/sdk/go v0.0.0
 

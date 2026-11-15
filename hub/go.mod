@@ -1,10 +1,8 @@
 module github.com/mahmoudahmed3132/Doppel/hub
 
-go 1.26.0
+go 1.27.0
 
-toolchain go1.26.10
-
-require modernc.org/sqlite v1.61.1
+toolchain go1.27.3
 
 require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
@@ -94,7 +92,7 @@ require (
 	github.com/oschwald/maxminddb-golang/v2 v2.9.0
 	github.com/sigstore/sigstore-go v1.4.0
 	golang.org/x/crypto v0.58.0
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.61.1
 )
 
 replace github.com/mahmoudahmed3132/Doppel/sdk/go => ../sdk/go
