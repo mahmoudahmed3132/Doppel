@@ -1,16 +1,42 @@
 # Prompt for the merge session (Claude Fable)
 
-Run this in a Claude Code session on **Claude Fable 5.2** (`claude-fable-5-2`) at
-effort `high`. Attach these repositories:
+Run this in a local Claude Code session (CLI or desktop app) on **Claude Fable
+5.2** (`claude-fable-5-2`) at effort `high`. The new repository is built in a
+local folder and uploaded to GitHub later by the owner.
 
-- `mahmoudahmed3132/TrueSignal-Rewrite` (read);
-- `mahmoudahmed3132/TrueSignal` (read);
-- `andreicscs/HoneyWire` (read; used only for the similarity check, never
-  copied);
-- the new, empty private repository (push).
+**Before starting, on your machine:**
 
-Fill in `<NEW_REPO>` and the sensor republish version before sending. Everything
-below the line is the prompt.
+```bash
+mkdir -p ~/truesignal-merge/sources && cd ~/truesignal-merge
+```
+
+```bash
+git clone https://github.com/mahmoudahmed3132/TrueSignal-Rewrite.git sources/TrueSignal-Rewrite
+```
+
+```bash
+git clone https://github.com/mahmoudahmed3132/TrueSignal.git sources/TrueSignal
+```
+
+```bash
+git clone https://github.com/andreicscs/HoneyWire.git sources/HoneyWire
+```
+
+Use full clones, not shallow ones: the authorship test needs all of the
+history. Then start Claude Code in `~/truesignal-merge` (not inside a source
+clone) and send the prompt.
+
+**Local tools the gates need:**
+- Go 1.26.10, Node 22, Python 3 with `pyyaml` and `jsonschema`;
+- Docker with the compose plugin, `jq`;
+- Trivy v0.70.0;
+- the CodeQL CLI.
+
+A gate whose tool is missing is reported as not run, never as passed.
+
+Fill in `<NEW_REPO>` (the final GitHub name, which the signing identities depend
+on) and the sensor republish version before sending. Everything below the line
+is the prompt.
 
 ---
 
@@ -49,11 +75,26 @@ up as a clean spec.
 - **Sensor republish version:** `1.0.1`. This is the version the five
   published sensors are re-signed under from the new repository.
 
+## Layout (local, no GitHub)
+
+- `sources/TrueSignal-Rewrite`, `sources/TrueSignal`, `sources/HoneyWire`:
+  read-only clones. Never commit, push or change anything in them.
+- `<NEW_REPO>/`: the new repository, which you create. It lives outside
+  `sources/`.
+  - Nothing from `sources/` enters it except through the imports this prompt
+    allows.
+  - No submodules, symlinks or `file://` remotes pointing into `sources/`.
+  - Do not add a GitHub remote; the owner uploads it later.
+
 ## How to work
 
 1. **Start from the base, with its history.**
-   - Push `TrueSignal-Rewrite` `main` to `<NEW_REPO>` as the first commit range.
-   - Work on a branch, and open one PR per coherent step.
+   - Run `git clone sources/TrueSignal-Rewrite <NEW_REPO>`, then remove its
+     `origin` remote.
+   - Each coherent step goes on its own local branch, with commit messages
+     that explain it.
+   - Merge a step into `main` only after the owner has reviewed that branch.
+     The owner reviews locally, with `git log` and `git diff main...<branch>`.
    - Do not rewrite history.
 2. **Inventory first, code second.**
    - Survey `TrueSignal`.
@@ -121,7 +162,7 @@ up as a clean spec.
    - The base is the authority on architecture, security controls and naming.
      Where the two disagree, keep the base's behaviour, and record the
      difference in the inventory.
-5. **Per import, in the same PR:**
+5. **Per import, on the same branch:**
    - the licence header;
    - tests, including one that exercises the real module through its seam;
    - `THIRD_PARTY.md` rows for new dependencies (permissive only, with the
@@ -142,13 +183,18 @@ up as a clean spec.
      Hub `3.0.0-rc.2` or stable.
 
    Do not push tags or create releases; the owner does that.
-7. **Keep every gate green on every PR:**
+7. **Keep every gate green on every branch**, run locally (GitHub CI runs
+   them again after the upload):
    - `make`;
    - `make ui`;
    - `python3 scripts/validate-docs.py`;
    - `scripts/compose-guard.sh`;
    - `scripts/release/selftest.sh`;
-   - in CI: the Trivy scans, the CodeQL gate and the real-Docker end-to-end test.
+   - `trivy fs` on each module, and `trivy image` on the Hub and sensor images,
+     with the flags in `.github/workflows/ci.yml`;
+   - CodeQL through the CLI with the `security-extended` suite, then
+     `scripts/codeql-gate.py` on the resulting SARIF;
+   - `scripts/e2e/real-docker.sh`.
 
    Never disable, skip or weaken a test or gate to get green. A new CodeQL
    finding is fixed, or accepted in `.github/codeql/accepted-findings.json`
@@ -158,18 +204,18 @@ up as a clean spec.
 
 - Never use or recreate image names under `ghcr.io/mahmoudahmed3132/truesignal-*`.
   The images are `ts-hub` and `ts-sensor-<name>`.
-- No secrets in the repository, in commits or in PR text.
+- No secrets in the repository or in commits.
 - Pin GitHub Actions by commit SHA. Take no dependency version younger than
   14 days without a stated reason.
-- Do not approve or merge PRs; the owner merges.
+- Do not merge a branch into `main` before the owner has reviewed it.
 - If something is ambiguous, write it in `QUESTIONS.md` with the conservative
   default and carry on. Stop and ask only when you are blocked, or when a
   decision changes provenance or licensing.
 
 ## Deliverables
 
-1. `<NEW_REPO>` on `main` (after the owner merges), passing every gate, with
-   the approved imports.
+1. The local `<NEW_REPO>` on `main`, passing every gate that could run
+   locally, with the approved imports.
 2. `MERGE-INVENTORY.md`, with every row resolved.
 3. `docs/clean-specs/` for every feature not imported, ready to hand to a
    clean session.
@@ -178,3 +224,23 @@ up as a clean spec.
    - the test evidence;
    - open questions;
    - the owner's release and republish checklist.
+5. `docs/merge/UPLOAD.md` for the owner: the steps to publish the repository to
+   GitHub (below), and anything that could only be checked after the upload.
+
+## Upload (done by the owner; record these steps in `docs/merge/UPLOAD.md`)
+
+1. Create an empty **private** repository `mahmoudahmed3132/<NEW_REPO>`, with
+   no README or licence.
+2. In the local repository: `git remote add origin
+   https://github.com/mahmoudahmed3132/<NEW_REPO>.git`, then push `main`, and
+   push other branches only if wanted.
+3. **Before the first tag:**
+   - the tag ruleset;
+   - the `truesignal-releases` App installation;
+   - the `RELEASES_APP_CLIENT_ID` variable and the `RELEASES_APP_PRIVATE_KEY`
+     secret;
+   - Dependabot.
+
+   Details are in `docs/operations.md` §9 and §9.1.
+4. Confirm that CI is green on GitHub, then follow the republish plan.
+
