@@ -529,3 +529,12 @@ changes until the switch exists. Implementing it changes the SIEM contract,
 the settings API and OpenAPI, and the detection rules. **Meanwhile:** legacy
 names only; implement the switch in its own branch before announcing new
 SIEM names.
+
+### Q72 — Go 1.27 toolchain
+sigstore-go 1.4.0 and later need Go 1.27, through `github.com/digitorus/pkcs7`.
+Go 1.27.4 was released 2026-11-02.
+**Meanwhile:** the repository stays on Go 1.26.10 with sigstore-go 1.3.0. Move
+to Go 1.27 in one deliberate branch, once a Go 1.27 patch release is at least
+14 days old: `go.work`, every `go.mod` (`go` and `toolchain`), CI and CodeQL
+`setup-go`, the Dockerfiles' golang images and HANDOFF/README. Run all gates
+before merging.
