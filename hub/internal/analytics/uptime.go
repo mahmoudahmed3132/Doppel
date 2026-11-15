@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 // UptimeRow is one sensor's daily online percentage (UTC days, oldest

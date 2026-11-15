@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 // SessionCookie is the name of the admin session cookie.

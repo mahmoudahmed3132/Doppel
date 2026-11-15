@@ -20,11 +20,11 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/apply"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/config"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/discover"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/docker"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/hub"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/apply"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/config"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/discover"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/docker"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/hub"
 )
 
 // App holds the command environment (injectable for tests).

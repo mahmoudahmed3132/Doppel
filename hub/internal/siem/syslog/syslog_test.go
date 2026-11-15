@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 var ts = time.Date(2026, 10, 31, 9, 15, 0, 123456789, time.UTC)

@@ -18,9 +18,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/catalogue"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/catalogue"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 )
 
 // Settings keys.

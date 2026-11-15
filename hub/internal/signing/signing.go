@@ -21,7 +21,7 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 	"github.com/sigstore/sigstore-go/pkg/bundle"
 	"github.com/sigstore/sigstore-go/pkg/root"
 	"github.com/sigstore/sigstore-go/pkg/verify"

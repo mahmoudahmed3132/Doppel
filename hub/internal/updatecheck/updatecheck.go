@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/semver"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
 )
 
 const maxBody = 2 << 20

@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/signing"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/manifest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/signing"
 )
 
 // published registry content: the registry branch as the publish-sensor.yml

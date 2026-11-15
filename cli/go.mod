@@ -1,4 +1,4 @@
-module github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli
+module github.com/mahmoudahmed3132/Doppel/cli
 
 go 1.26.0
 

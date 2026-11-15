@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/config"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/config"
 )
 
 const key = "tsk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

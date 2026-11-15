@@ -18,6 +18,7 @@ legally; whichever is intended should be settled before any public release.
 The repository is `github.com/mahmoudahmed3132/TrueSignal-Rewrite`. Is that
 the final import path, or will it move (rename/org transfer)?
 **Meanwhile:** module paths use `github.com/mahmoudahmed3132/TrueSignal-Rewrite/<component>`.
+**Answer (owner, 2026-11-15, Q66):** the repository is now `mahmoudahmed3132/Doppel`; module paths are `github.com/mahmoudahmed3132/Doppel/<component>`.
 
 ### Q3 — §4.1 vs §5.3 — `dropped_events` in heartbeats
 §4.1 rejects unknown top-level fields; §4.3 lists the heartbeat body as

@@ -25,10 +25,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/manifest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 )
 
 // Defaults applied to every container.

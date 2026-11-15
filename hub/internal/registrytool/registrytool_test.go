@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/catalogue"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/catalogue"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/manifest"
 )
 
 const digest = "sha256:" + "ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12"

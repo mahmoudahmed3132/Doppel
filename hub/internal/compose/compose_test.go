@@ -15,10 +15,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/manifest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported/stub"
 )
 
 const digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

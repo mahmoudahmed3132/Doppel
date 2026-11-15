@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 // FakeCompiler models the rules fleet relies on: TS_BAD is undeclared

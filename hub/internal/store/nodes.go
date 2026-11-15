@@ -9,7 +9,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 const nodeCols = `id, alias, tags, key_hash, created_at, last_seen_at, desired_revision, applied_revision, upgrade_requested`

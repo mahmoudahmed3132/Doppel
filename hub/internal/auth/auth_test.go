@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 const pw = "correct horse battery"

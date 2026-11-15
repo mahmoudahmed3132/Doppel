@@ -18,14 +18,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/enrich"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/hubsettings"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/sourcelist"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/enrich"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/hubsettings"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/sourcelist"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 type deliverer struct {

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/fleet"
 )
 
 // CLIVersionHeader carries the node agent version (§4.4).

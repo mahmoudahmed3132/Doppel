@@ -19,12 +19,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/compose"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/secrets"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/compose"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/secrets"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 // sig binds a signature to the exact bytes and identity (stand-in for

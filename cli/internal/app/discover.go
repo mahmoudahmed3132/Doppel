@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/config"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/discover"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/hub"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/config"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/discover"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/hub"
 )
 
 // adminLogin opens an admin session. Credentials come from

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 const eventCols = `seq, event_id, node_id, sensor_id, trigger, severity, occurred_at, received_at, source, target,

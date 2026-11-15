@@ -20,11 +20,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ids"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/semver"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ids"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 // Limits on admin input.

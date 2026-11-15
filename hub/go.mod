@@ -1,4 +1,4 @@
-module github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub
+module github.com/mahmoudahmed3132/Doppel/hub
 
 go 1.26.0
 
@@ -95,9 +95,9 @@ require (
 )
 
 require (
-	github.com/mahmoudahmed3132/TrueSignal-Rewrite/sdk/go v0.0.0
+	github.com/mahmoudahmed3132/Doppel/sdk/go v0.0.0
 	github.com/sigstore/sigstore-go v1.3.0
 	golang.org/x/crypto v0.58.0
 )
 
-replace github.com/mahmoudahmed3132/TrueSignal-Rewrite/sdk/go => ../sdk/go
+replace github.com/mahmoudahmed3132/Doppel/sdk/go => ../sdk/go

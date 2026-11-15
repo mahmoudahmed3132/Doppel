@@ -15,7 +15,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/registrytool"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/registrytool"
 )
 
 func main() {

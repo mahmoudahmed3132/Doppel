@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/catalogue"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/semver"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/catalogue"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
 )
 
 // Catalogue serves the sensor catalogue API.

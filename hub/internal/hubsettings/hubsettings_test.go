@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/sourcelist"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/sourcelist"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 func newSvc(t *testing.T, parser bool) (*Service, *store.DB) {

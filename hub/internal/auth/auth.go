@@ -18,10 +18,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ids"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ids"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 // Policy constants.

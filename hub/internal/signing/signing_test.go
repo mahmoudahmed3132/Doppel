@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 	"github.com/sigstore/sigstore-go/pkg/bundle"
 	"github.com/sigstore/sigstore-go/pkg/testing/ca"
 	"github.com/sigstore/sigstore-go/pkg/verify"

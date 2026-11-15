@@ -13,7 +13,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 // ManifestVerifier verifies the detached Sigstore bundle of a sensor

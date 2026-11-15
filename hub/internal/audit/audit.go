@@ -8,7 +8,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 // SIEM accepts records for SIEM delivery. It must not block.

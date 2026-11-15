@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/sdk/go/sensor"
+	"github.com/mahmoudahmed3132/Doppel/sdk/go/sensor"
 )
 
 // lures is the content generator; replaced by the PORTED module on import.

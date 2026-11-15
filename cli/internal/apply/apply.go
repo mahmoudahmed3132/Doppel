@@ -19,9 +19,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/config"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/docker"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/hub"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/config"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/docker"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/hub"
 )
 
 // Results reported to the Hub.
