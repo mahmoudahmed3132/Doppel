@@ -149,7 +149,7 @@ func seal(key, aad, pt []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	nonce := make([]byte, g.NonceSize(), g.NonceSize()+len(pt)+g.Overhead())
+	nonce := make([]byte, g.NonceSize()) // Seal appends to it; no size arithmetic on input length
 	if _, err := rand.Read(nonce); err != nil {
 		return "", err
 	}
