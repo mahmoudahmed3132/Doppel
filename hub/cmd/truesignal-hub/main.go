@@ -14,6 +14,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/assets"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/attack"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/beacon"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ecs"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/honeytoken"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 	"log/slog"
@@ -127,9 +128,9 @@ func serve(log *slog.Logger) error {
 	defer db.Close()
 
 	// SIEM output first, so every later audit record reaches it.
-	siemSvc := &siem.Service{PEN: cfg.SyslogPEN, CABundle: cfg.SIEMCABundle, Log: log}
-	// Renderer and HTTP transports are PORTED; until installed only
-	// tcp/udp/tls with RFC 5424 are available.
+	// ECS renderer: merged module (import H9). HTTP transports are PORTED;
+	// until installed only tcp/udp/tls outputs are available.
+	siemSvc := &siem.Service{PEN: cfg.SyslogPEN, CABundle: cfg.SIEMCABundle, Log: log, Renderer: ecs.Renderer{}}
 	siemCfg, err := siem.LoadConfig(ctx, db)
 	if err == nil {
 		siemCfg, err = siemCfg.Normalize(siemSvc.Capabilities())
@@ -158,7 +159,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules not yet installed: ECS rendering and Elastic/LogScale transports are inactive")
+	log.Warn("PORTED modules not yet installed: Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
