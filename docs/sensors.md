@@ -22,6 +22,7 @@ uid and effective capability mask at start (`running with privileges`).
 | `file-canary` (sensor) | 0 | `DAC_OVERRIDE` | bridge | watch lure directories owned by other users; mounts are **read-only** |
 | `file-canary` (init) | 0 | `DAC_OVERRIDE` | none | create lures in directories owned by other users |
 | `web-router-decoy` | 65532 | none | bridge | listens on 8080 in the container; the Hub publishes host port `TS_PORT` (e.g. 80) to it |
+| `token-receiver` | 0 | `NET_BIND_SERVICE` | host | DNS on 53 (UDP+TCP) and web bugs on 80, internet-facing |
 | `template` | 65532 | none | host | reference |
 
 ## Triggers
@@ -37,6 +38,8 @@ uid and effective capability mask at start (`running with privileges`).
 | web-router-decoy | `web_page_view` | low | `path, method, user_agent, dst_port, skin` (once per source per window) |
 | web-router-decoy | `web_path_probe` | medium | `path, method, user_agent, dst_port` |
 | web-router-decoy | `web_login_attempt` | critical | `username`, `password_hmac` (default) or `password`, `auth` (form, basic), `skin`, `form_<field>` (≤ 20), `path, method, user_agent, dst_port` |
+| `token-receiver` | `beacon_triggered` | critical (Hub: medium if unknown) | `token`, `channel` (dns/http), `query_name`, `query_type`, `transport`, `resolver`, `client_subnet`, `method`, `host`, `path`, `user_agent`, `referer`, `proxy`, `repeats_since_last` |
+| `token-receiver` | `receiver_saturated` | medium | `listener`, `refused_per_source`, `refused_total_cap`, `distinct_sources`, `top_source_refusals` |
 
 ## Honeytoken matching contract (for the PORTED matcher)
 
@@ -71,3 +74,13 @@ the honeytoken secret with the event's node id.
   sensor cannot see the process that touched a lure; correlate with EDR.
 * **web-router-decoy** — logins always fail after a 0.3–0.9 s delay; bodies
   ≤ 16 KiB, headers ≤ 16 KiB, short timeouts; nothing is served from disk.
+* **token-receiver** (merge import S4) — authoritative-only DNS for
+  `TS_BEACON_DOMAIN` (SOA/NS at the apex, A from `TS_ANSWER_IPV4` inside the
+  zone, NODATA for other types, REFUSED outside it; never recursion or
+  forwarding) and a fixed 1x1 GIF on HTTP. A name or path counts only when it
+  carries a token with a valid tag under `TS_BEACON_KEY`; one event per token
+  and channel per `TS_ALERT_COOLDOWN_SEC`. TCP clients are capped (DNS 128,
+  4 per source; HTTP 256, 8 per source); refusals raise `receiver_saturated`
+  at most every 5 minutes per listener. The Hub resolves the token to its
+  beacon; the zone must be the only deployed receiver zone for the Beacons
+  page to create beacons.

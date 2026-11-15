@@ -50,3 +50,11 @@ func TestRenderCarriesNothingIdentifying(t *testing.T) {
 		t.Fatal("kubeconfig server")
 	}
 }
+
+// The Token Receiver (sensors/token-receiver) verifies tokens with the same
+// vector: random bytes 0x00..0x09 under key "truesignal-test-key".
+func TestTokenVectorSharedWithReceiver(t *testing.T) {
+	if got := makeToken("truesignal-test-key", []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}); got != "aaaqeayeaudaocaj4jyx76cl" {
+		t.Fatalf("token %s", got)
+	}
+}

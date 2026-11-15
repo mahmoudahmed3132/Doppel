@@ -1,0 +1,37 @@
+{
+  "schema_version": 3,
+  "name": "token-receiver",
+  "display_name": "Token receiver (beacons)",
+  "version": "1.0.0",
+  "description": "Callback endpoint for beacons (DNS names, web bugs, kubeconfig files) created on the Hub's Beacons page: an authoritative-only DNS server for one delegated zone and a fixed 1x1-GIF HTTP endpoint. A used beacon raises beacon_triggered.",
+  "category": "network",
+  "author": "TrueSignal",
+  "documentation": "Deploy on its own internet-facing node; the Hub stays internal and the node only needs outbound HTTPS to it. Delegate a subdomain (for example t.example.com) to this host with an NS record and glue, and expose udp+tcp on TS_DNS_PORT and tcp on TS_HTTP_PORT. DNS answers SOA/NS at the apex and A (TS_ANSWER_IPV4) for names in the zone, NODATA otherwise, and REFUSED outside the zone: no recursion, no forwarding. Tokens carry an HMAC tag under the Hub-derived TS_BEACON_KEY, so invented names raise nothing. Replies are rate-limited per source (50/s) and small, so spoofed queries cannot use it as an amplifier. X-Forwarded-For is believed only from TS_TRUSTED_PROXIES. Runs as UID 0 with every capability dropped except NET_BIND_SERVICE (ports 53 and 80 in host networking). Read-only filesystem, no-new-privileges.",
+  "image": {"repository": "ghcr.io/mahmoudahmed3132/ts-sensor-token-receiver", "tag": "1.0.0", "digest": "", "platforms": ["linux/amd64"]},
+  "runtime": {
+    "user": "0:0",
+    "network_mode": "host",
+    "cap_add": ["NET_BIND_SERVICE"],
+    "memory_mb": 128,
+    "listen_ports": [
+      {"config_key": "TS_DNS_PORT", "protocol": "udp"},
+      {"config_key": "TS_DNS_PORT", "protocol": "tcp"},
+      {"config_key": "TS_HTTP_PORT", "protocol": "tcp"}
+    ]
+  },
+  "config": [
+    {"name": "TS_BEACON_DOMAIN", "type": "string", "required": true, "description": "Delegated zone the receiver is authoritative for (for example t.example.com). New beacons on the Hub point into it.", "validation": {"pattern": "([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}", "max_length": 200}},
+    {"name": "TS_BEACON_NS", "type": "string", "description": "Comma-separated NS names for the zone (default ns1.<zone>)", "validation": {"max_length": 512}},
+    {"name": "TS_ANSWER_IPV4", "type": "string", "description": "IPv4 address A queries in the zone resolve to (this node's public address), so web bugs reach the HTTP endpoint", "validation": {"max_length": 15}},
+    {"name": "TS_DNS_PORT", "type": "port", "default": "53", "description": "DNS port (UDP and TCP)"},
+    {"name": "TS_HTTP_PORT", "type": "port", "default": "80", "description": "HTTP port for web bugs"},
+    {"name": "TS_TRUSTED_PROXIES", "type": "string", "description": "Comma-separated IPs or CIDRs of a TLS front end whose X-Forwarded-For is believed", "validation": {"max_length": 1024}},
+    {"name": "TS_ALERT_COOLDOWN_SEC", "type": "int", "default": "60", "description": "One event per token and channel per this many seconds; repeats are counted", "validation": {"min": 0, "max": 86400}},
+    {"name": "TS_BEACON_KEY", "type": "string", "hub_reserved": true, "description": "Beacon tag key derived by the Hub"}
+  ],
+  "triggers": [
+    {"name": "beacon_triggered", "default_severity": "critical", "description": "A beacon token was resolved or fetched; the Hub resolves it to the beacon it created (unknown tokens are medium)"},
+    {"name": "receiver_saturated", "default_severity": "medium", "description": "Connections were refused at the per-source or total cap (at most once per 5 minutes per listener)"}
+  ],
+  "compatibility": {"hub_major": 3}
+}

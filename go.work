@@ -11,5 +11,6 @@ use (
 	./sensors/network-scan-detector
 	./sensors/tcp-tarpit
 	./sensors/template
+	./sensors/token-receiver
 	./sensors/web-router-decoy
 )
