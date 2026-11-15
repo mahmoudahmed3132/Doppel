@@ -47,9 +47,9 @@ the honeytoken secret with the event's node id.
 
 ## PORTED seams in sensors
 
-| Sensor | Seam | Stub in this repo |
+| Sensor | Seam | Module / stub |
 |---|---|---|
-| file-canary | `LureGenerator{Content(path, honeytoken) (bytes, category), Category(path)}` (`sensors/file-canary/lure.go`) | plain-text credential note — **not realistic**, replace before production |
+| file-canary | `LureGenerator{Content(path, honeytoken) (bytes, category), Category(path)}` (`sensors/file-canary/lure.go`) | **installed** (`lures_generated.go`, merge import S1): `.env`, PHP config, `.pgpass`, SQL dump / `.bak`, VPN/WireGuard key file, generic note, chosen by file name; every lure embeds the honeytoken, all other secrets are random, all hosts loopback. The plain `stubLures` stays as the test stub |
 | web-router-decoy | `Skins{Skin(name)}` / `Skin{Name, LoginPaths, Render(kind, request)}` (`sensors/web-router-decoy/skin.go`) | one plain `generic` page — functional, not convincing |
 
 ## Notes per sensor

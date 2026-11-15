@@ -322,6 +322,7 @@ deploy it (`honeytoken_unavailable`) until the PORTED honeytoken module is
 installed, and the stub lure content must be replaced by the PORTED lure
 generator before production use. Lures are created owned by root, mode 0644;
 tell us if they should take the directory owner's uid/gid.
+**Update (merge imports H8, S1, 2026-11-15):** the honeytoken module and the lure generator are installed, so the File Canary deploys and plants realistic lures. Lure ownership (root, 0644) is unchanged.
 
 ### Q50 — §11.3 — Scan detector capture cost
 **Meanwhile:** no kernel BPF filter; every inbound frame header is read in

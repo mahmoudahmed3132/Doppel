@@ -17,7 +17,7 @@ import (
 )
 
 // lures is the content generator; replaced by the PORTED module on import.
-var lures LureGenerator = stubLures{}
+var lures LureGenerator = generatedLures{}
 
 var spec = sensor.Spec{
 	Drill: sensor.Drill{
