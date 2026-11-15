@@ -464,3 +464,45 @@ not carry over; any such finding that reappears is re-traced before it is
 listed. If Code Security is enabled later, restore the upload and move the
 accepted entries back to dismissals.
 
+
+### Q66 — merge §6 — Rebrand of wire and operational identifiers to Doppel
+The mapping and compatibility plan are in `MERGE-INVENTORY.md` §4.
+**Meanwhile:** only user-facing text becomes "Doppel". Every wire and
+operational identifier (CLI binary and paths, image names, `TS_*`, `tsk_`,
+`io.truesignal.*` labels, SDK package names, syslog and ECS names, the
+releases repository and the copyright holder) stays unchanged until the
+owner approves the mapping.
+**Answer (owner, 2026-11-15):** go with the recommendations in `MERGE-INVENTORY.md` §4. Change: Go module paths; the CLI binary, paths and asset names (with a one-release `truesignal` symlink and config fallback); SDK package names (with a one-release `truesignal_sdk` shim); syslog and ECS names behind `siem_legacy_names` (default on). Keep: `TS_*`, `tsk_`, `io.truesignal.*` labels, the `ts-hub` / `ts-sensor-*` image names and `truesignal-releases`. The copyright holder stays `TrueSignal Deception` until the owner names the legal entity.
+
+### Q67 — merge §3 — Relicensing Claude-new files from an AGPL-3.0 work
+`TrueSignal` as a whole is AGPL-3.0: it derives from HoneyWire (`NOTICE`,
+`7679bcf`). The files classed claude-new were written in that repository,
+against its interfaces.
+**Meanwhile:** nothing from `TrueSignal` is merged into `main` until the owner
+confirms, after counsel's advice, that those files can be relicensed under
+the proprietary `LICENSE`. Import branches can be prepared and reviewed in
+the meantime.
+**Answer (owner, 2026-11-15):** approved. The owner relicenses the claude-new files under the proprietary `LICENSE`, as their copyright holder. Counsel's confirmation is still recommended before any external distribution.
+
+### Q68 — merge §3 — Decoys "ported in concept" from Trapster Community (AGPL-3.0+)
+The Identity, Database, Remote Access and Network Service decoys are
+self-declared reimplementations of Trapster Community's concepts.
+**Meanwhile:** they are not imported. Each becomes a clean spec, written from
+public protocol specifications and Doppel's contracts, for a session with no
+access to `TrueSignal`, HoneyWire or Trapster.
+**Answer (owner, 2026-11-15):** approved; the four decoys are clean specs.
+
+### Q69 — merge §3 / Q56 — Dedicated analytics pages
+The `TrueSignal` pages for these are Vue code and cannot be imported into the
+Preact UI.
+**Meanwhile:** the generic projection rendering of Q56 stays. If the owner
+wants dedicated pages (ATT&CK matrix, geo map, attack path, printable report,
+asset editor), they become a clean spec for the UI.
+**Answer (owner, 2026-11-15):** the owner wants every feature; the dedicated pages become a clean spec (`docs/clean-specs/analytics-ui.md`).
+
+### Q70 — merge H1 — GeoIP database auto-update
+Auto-update adds an outbound call (Q55 lists the allowed ones).
+**Meanwhile:** `TS_GEOIP_AUTO_UPDATE` defaults to off. When it is on, it
+fetches only the DB-IP Lite URL documented in `docs/operations.md`, over
+HTTPS with no redirects to other hosts.
+**Answer (owner, 2026-11-15):** the default (off) is approved.
