@@ -6,6 +6,7 @@
 //	truesignal-hub mfa-reset remove MFA from the admin account (Hub stopped)
 //	truesignal-hub kek-generate        print a new key-encryption key (64 hex characters)
 //	truesignal-hub kek-rotate OLD NEW  re-wrap the data key under a new KEK file (Hub stopped)
+//	truesignal-hub secrets-reset --destroy-secrets   KEK lost: drop every sealed secret (Hub stopped)
 //	truesignal-hub version   print the version
 package main
 
@@ -79,12 +80,14 @@ func main() {
 		err = mfaReset(log)
 	case "kek-generate":
 		err = kekGenerate()
+	case "secrets-reset":
+		err = secretsReset(log, os.Args[2:])
 	case "kek-rotate":
 		err = kekRotate(log, os.Args[2:])
 	case "version":
 		fmt.Printf("truesignal-hub %s (contract %d, schema v%d)\n", Version, contractVersion, store.SchemaVersion())
 	default:
-		fmt.Fprintf(os.Stderr, "usage: truesignal-hub [serve|mfa-reset|kek-generate|kek-rotate|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: truesignal-hub [serve|mfa-reset|kek-generate|kek-rotate|secrets-reset|version]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -101,14 +104,28 @@ func openStore(ctx context.Context, cfg *config.Config, log *slog.Logger) (*stor
 	if err := cfg.SecretsPolicy(); err != nil {
 		return nil, err
 	}
+	// Check the KEK before the database is touched: a bad key file must not
+	// fail after the schema migration has already made the file unreadable to
+	// the previous Hub.
+	var provider seal.KeyProvider
+	if cfg.KEKFile != "" {
+		provider = seal.FileProvider{Path: cfg.KEKFile}
+		if _, err := provider.KEK(ctx); err != nil {
+			return nil, fmt.Errorf("secrets at rest: %w (the Hub user, uid 65532 in the container, must be able to read %s: chown 65532:65532 and chmod 400)", err, cfg.KEKFile)
+		}
+	}
 	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
 	if err != nil {
 		return nil, err
 	}
-	if cfg.KEKFile != "" {
-		if err := db.EnableEncryption(ctx, seal.FileProvider{Path: cfg.KEKFile}, log); err != nil {
+	if provider != nil {
+		if err := db.EnableEncryption(ctx, provider, log); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("secrets at rest: %w", err)
+		}
+		if snaps := db.PlaintextSnapshots(); len(snaps) > 0 {
+			log.Warn("plaintext pre-migration snapshots are in the data directory and travel with every backup of it; delete them once the upgrade is verified",
+				"files", snaps)
 		}
 		return db, nil
 	}
@@ -160,6 +177,33 @@ func kekRotate(log *slog.Logger, args []string) error {
 		return err
 	}
 	log.Warn("key-encryption key rotated; point TS_KEK_FILE at the new file before starting the Hub", "kek_fingerprint", seal.Fingerprint(newKEK))
+	return nil
+}
+
+// secretsReset is the break-glass when the KEK is lost and cannot be
+// recovered: the sealed secrets are unreadable, so they are deleted. It needs
+// only host access to the database, like mfa-reset.
+func secretsReset(log *slog.Logger, args []string) error {
+	if len(args) != 1 || args[0] != "--destroy-secrets" {
+		return errors.New("usage: truesignal-hub secrets-reset --destroy-secrets  (deletes the SIEM token, webhook URL, master keys, admin MFA and honeytoken secrets; use only when the KEK is lost)")
+	}
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(cfg.DBPath); err != nil {
+		return fmt.Errorf("database %s: %w", cfg.DBPath, err)
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := db.ResetSecrets(ctx); err != nil {
+		return err
+	}
+	log.Warn("sealed secrets deleted; re-enter the SIEM token and webhook, re-enrol MFA, expect planted honeytokens and beacons to be re-minted; start the Hub with a new TS_KEK_FILE; an audit record (secrets.reset_cli) will be emitted on next start")
 	return nil
 }
 
@@ -235,6 +279,14 @@ func serve(log *slog.Logger) error {
 	}()
 
 	auditor := &audit.Recorder{Log: log, SIEM: siemSvc}
+	queued, err := db.TakeCLIAudits(ctx)
+	if err != nil {
+		return err
+	}
+	for _, q := range queued {
+		auditor.Record(ctx, domain.AuditRecord{Time: q.At, Action: q.Action, Method: "CLI",
+			Route: q.Route, Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
+	}
 	if pending, err := db.TakeMFAResetMarker(ctx); err != nil {
 		return err
 	} else if pending {

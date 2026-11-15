@@ -3,6 +3,15 @@
 Applies to `identity-decoy.md`, `database-decoy.md`, `remote-access-decoy.md`
 and `network-service-decoy.md`.
 
+## Foundations already in the repository (use them, do not write your own)
+
+These land on `main` with the branch that carries `docs/plan/ROADMAP.md` Phase 0. Branch `clean/<spec>` from a `main` that has them.
+
+- `sdk/go/ber`: strict BER reader and writer (LDAP, SNMP). Fuzzed. Never hand-roll BER.
+- `sdk/go/decoy.ServePacket`: UDP read loop with bounded buffer and clean shutdown (SNMP, DNS).
+- Manifest `runtime.listen_ports[].enabled_key`: point it at the per-protocol enable flag (a `bool` key) so a disabled protocol does not claim its default port (Q73). The CLI's discovery (`cli/internal/discover`) does not read `enabled_key`; set `discovery.defaults` for the port keys you want proposed.
+- Manifest user and capabilities are static (Q73): a decoy with default ports below 1024 declares UID 0 plus `NET_BIND_SERVICE`, as `tcp-tarpit` does.
+
 ## Platform
 
 - A Go module under `sensors/<name>`, added to `go.work`, built by a

@@ -147,32 +147,38 @@ identity-checked. The source repository's name is public in every
 certificate and in the Rekor log (accepted, Q64). GitHub and Sigstore themselves are trusted.
 
 ### B7: Hub host
-**R1 (secrets at rest), mitigated by `hub/internal/seal`.** The Hub master
+**R1 (secrets at rest), mitigated by `hub/internal/seal` (in progress: see the snapshot residual).** The Hub master
 keys (`capture_master_key`, `beacon_master_key`), the SIEM token, the webhook
 URL, the admin TOTP seed and pending seed, and honeytoken secrets are sealed
 with AES-256-GCM under a data key (DEK). The DEK is stored wrapped by a
 key-encryption key (KEK) read from `TS_KEK_FILE` (a file or Docker secret,
 outside the database and its backups). Each value's authenticated data binds
 it to its table, column and row, so ciphertext moved elsewhere does not open;
-after migration the Hub is strict and refuses a plaintext secret found in a
-sealed database. Production refuses to start without a KEK; an encrypted
+once sealing is recorded (`crypto_meta.sealed_at`) the Hub is strict from the
+first read and refuses to start if a plaintext secret appears in the database
+(locations are logged, never values). Sealing and the scrub are resumable. Production refuses to start without a KEK; an encrypted
 database refuses to start without its KEK (no silent fallback). Older Hubs
 refuse the database (schema v3), so they cannot misread sealed values.
-**Protects:** a copy of the database file, a volume snapshot or a backup taken
-without the KEK; plaintext remnants are removed from free pages and the WAL at
-migration (VACUUM). **Does not protect against:** root on the running Hub host
+**Protects:** a copy of the database file taken without the KEK, **provided no
+plaintext pre-migration snapshot is in the same data directory** (see
+residual (a)); plaintext remnants are removed from free pages and the WAL at
+migration (VACUUM, temporary copy placed next to the database; secure_delete is
+on for later deletes). **Does not protect against:** root on the running Hub host
 (the DEK is in process memory and the KEK file is readable by the Hub user),
 nor `truesignal-hub mfa-reset`, which needs only Docker-host access.
-**Residual:** (a) the pre-migration snapshot `<db>.pre-v3-<time>.bak` is
-plaintext by design (it is the rollback copy for a Hub without encryption):
-delete it once the upgrade is verified (Q74); (b) `beacons.token` is not sealed
+**Residual:** (a) the pre-migration snapshots `<db>.pre-v*-<time>.bak` are
+plaintext by design (rollback copies for a Hub without encryption) and sit in
+the data directory, so they travel with every backup of it; the Hub logs a
+warning listing them at every start; delete them once the upgrade is verified
+(Q74); (b) `beacons.token` is not sealed
 (equality lookup; an identifier printed into artefacts, no authority by
 itself); (c) sensor configuration is not sealed: no manifest declares a
 `secret` key yet, and Hub-reserved keys are derived at render time, never
-stored; (d) KEK loss means the sealed secrets are unrecoverable (re-create the
-SIEM token, webhook and MFA; factory reset regenerates the master keys, which
-orphans planted honeytokens and beacons): back the KEK up separately from the
-database.
+stored; (d) KEK loss means the sealed secrets are unrecoverable. Recovery is the
+host-side `truesignal-hub secrets-reset --destroy-secrets` (Hub stopped; audited
+on the next start as `secrets.reset_cli`): it deletes the sealed secrets, so the
+SIEM token, webhook and MFA must be re-entered and planted honeytokens and
+beacons are orphaned. Back the KEK up separately from the database.
 
 ## Imported modules (merge from Doppel)
 

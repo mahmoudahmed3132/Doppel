@@ -541,7 +541,7 @@ before merging.
 
 ### Q73 — clean specs, common-decoy — Per-protocol enable flags and conditional privilege
 `common-decoy.md` wants one enable flag and one port per protocol, and UID 0 with `NET_BIND_SERVICE` only when a configured port is below 1024. A manifest is static, and rule 7 treated every declared port as claimed even when its protocol was off.
-**Meanwhile:** manifest v3 gains the optional `listen_ports[].enabled_key` (a declared bool key; false means no conflict check and no publishing). The privilege cannot depend on config: a decoy whose default ports are below 1024 declares UID 0 plus `NET_BIND_SERVICE` (as `tcp-tarpit` does, Q47); one that is configured to high ports only still gets that capability. A Hub older than this change rejects manifests carrying `enabled_key` (strict decoding), so release the Hub before publishing a decoy.
+**Meanwhile:** manifest v3 gains the optional `listen_ports[].enabled_key` (a declared bool key; false means no conflict check and no publishing). The privilege cannot depend on config: a decoy whose default ports are below 1024 declares UID 0 plus `NET_BIND_SERVICE` (as `tcp-tarpit` does, Q47); one that is configured to high ports only still gets that capability. `cli/internal/discover` ignores `enabled_key` (discovery may propose a port for a protocol the operator later disables; harmless, the Hub does not claim it). A Hub older than this change rejects manifests carrying `enabled_key` (strict decoding), so release the Hub before publishing a decoy.
 
 ### Q74 — roadmap E1 — Secrets at rest: plaintext rollback snapshot, required KEK, scope
 Closing THREATMODEL R1 changes three defaults.

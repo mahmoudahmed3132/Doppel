@@ -24,6 +24,7 @@ type DB struct {
 	sql    *sql.DB
 	now    func() time.Time
 	sealer *seal.Sealer // nil until EnableEncryption
+	path   string
 }
 
 // Options configures Open.
@@ -52,7 +53,7 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 	}
 
 	q := url.Values{}
-	for _, p := range []string{"foreign_keys(1)", "journal_mode(WAL)", "busy_timeout(10000)", "synchronous(NORMAL)"} {
+	for _, p := range []string{"foreign_keys(1)", "journal_mode(WAL)", "busy_timeout(10000)", "synchronous(NORMAL)", "secure_delete(1)"} {
 		q.Add("_pragma", p)
 	}
 	q.Set("_txlock", "immediate")
@@ -69,7 +70,7 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 		sqldb.Close()
 		return nil, fmt.Errorf("opening %s: %w", path, err)
 	}
-	db := &DB{sql: sqldb, now: opts.Now}
+	db := &DB{sql: sqldb, now: opts.Now, path: path}
 	if err := db.migrate(ctx, path, migs, opts.Logger); err != nil {
 		sqldb.Close()
 		return nil, err

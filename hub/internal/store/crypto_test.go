@@ -260,3 +260,96 @@ func TestPreEncryptionSnapshotIsPlaintext(t *testing.T) {
 		t.Error("expected the rollback snapshot to hold the pre-encryption data")
 	}
 }
+
+func TestPlantedPlaintextRefusedAtStart(t *testing.T) {
+	ctx := context.Background()
+	db, path := openTest(t)
+	seedPlaintext(t, db)
+	if err := db.EnableEncryption(ctx, kek1, nil); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	// Someone with file access plants a plaintext SIEM token between starts.
+	raw0, _ := Open(ctx, path, Options{})
+	raw0.sql.Exec(`UPDATE settings SET value = 'attacker-token' WHERE key = 'siem_token'`)
+	raw0.Close()
+	db2, _ := Open(ctx, path, Options{})
+	defer db2.Close()
+	err := db2.EnableEncryption(ctx, kek1, nil)
+	if !errors.Is(err, ErrPlaintextFound) || strings.Contains(err.Error(), "attacker-token") || !strings.Contains(err.Error(), "settings/siem_token") {
+		t.Fatalf("planted plaintext adopted or leaked: %v", err)
+	}
+}
+
+func TestInterruptedScrubResumes(t *testing.T) {
+	ctx := context.Background()
+	db, path := openTest(t)
+	seedPlaintext(t, db)
+	db.EnableEncryption(ctx, kek1, nil)
+	// Simulate a crash after sealing but before the scrub finished.
+	db.sql.Exec(`UPDATE crypto_meta SET scrubbed_at = NULL`)
+	db.Close()
+	db2, _ := Open(ctx, path, Options{})
+	defer db2.Close()
+	if err := db2.EnableEncryption(ctx, kek1, nil); err != nil {
+		t.Fatal(err)
+	}
+	var s any
+	db2.sql.QueryRow(`SELECT scrubbed_at FROM crypto_meta`).Scan(&s)
+	if s == nil {
+		t.Error("scrub did not resume")
+	}
+}
+
+func TestCLIAuditQueueAndSecretsReset(t *testing.T) {
+	ctx := context.Background()
+	db, path := openTest(t)
+	seedPlaintext(t, db)
+	db.EnableEncryption(ctx, kek1, nil)
+	db.RotateKEK(ctx, kek1.Key, kek2.Key)
+	got, err := db.TakeCLIAudits(ctx)
+	if err != nil || len(got) != 2 || got[0].Action != "secrets.sealed" || got[1].Action != "secrets.kek_rotate_cli" {
+		t.Fatalf("queue: %+v %v", got, err)
+	}
+	if again, _ := db.TakeCLIAudits(ctx); len(again) != 0 {
+		t.Error("queue not cleared")
+	}
+	// KEK lost: reset works without any key, then a new KEK starts clean.
+	db.Close()
+	lost, _ := Open(ctx, path, Options{})
+	if err := lost.ResetSecrets(ctx); err != nil {
+		t.Fatal(err)
+	}
+	lost.Close()
+	fresh, _ := Open(ctx, path, Options{})
+	defer fresh.Close()
+	if err := fresh.EnableEncryption(ctx, kek1, nil); err != nil {
+		t.Fatalf("new kek after reset: %v", err)
+	}
+	if _, ok, _ := fresh.Setting(ctx, "siem_token"); ok {
+		t.Error("sealed setting survived reset")
+	}
+	if v, ok, _ := fresh.Setting(ctx, "public_endpoint"); !ok || v == "" {
+		t.Error("non-secret setting lost")
+	}
+	a, _ := fresh.Admin(ctx)
+	if a.MFAEnabled || a.MFASecret != "" {
+		t.Errorf("mfa survived reset: %+v", a)
+	}
+	if hs, _ := fresh.ListHoneytokens(ctx); len(hs) != 0 {
+		t.Error("honeytokens survived reset")
+	}
+	q, _ := fresh.TakeCLIAudits(ctx)
+	if len(q) == 0 || q[0].Action != "secrets.reset_cli" {
+		t.Errorf("reset not queued for audit: %+v", q)
+	}
+}
+
+func TestPlaintextSnapshotsListed(t *testing.T) {
+	db, path := openTest(t)
+	os.WriteFile(path+".pre-v3-20261115T000000Z.bak", []byte("x"), 0o600)
+	os.WriteFile(path+".pre-v2-20261101T000000Z.bak", []byte("x"), 0o600)
+	if got := db.PlaintextSnapshots(); len(got) != 2 {
+		t.Errorf("snapshots: %v", got)
+	}
+}

@@ -144,7 +144,16 @@ CREATE TABLE crypto_meta (
 	wrapped_dek     TEXT    NOT NULL,
 	kek_fingerprint TEXT    NOT NULL,
 	created_at      INTEGER NOT NULL,
-	rotated_at      INTEGER
+	rotated_at      INTEGER,
+	sealed_at       INTEGER,  -- every plaintext secret has been sealed (strict from then on)
+	scrubbed_at     INTEGER   -- plaintext remnants removed (WAL truncated, VACUUM done)
+);
+-- Actions taken by host-side commands, audited on the next Hub start.
+CREATE TABLE cli_audit (
+	id     INTEGER PRIMARY KEY AUTOINCREMENT,
+	action TEXT    NOT NULL,
+	route  TEXT    NOT NULL,
+	at     INTEGER NOT NULL
 );
 `},
 }

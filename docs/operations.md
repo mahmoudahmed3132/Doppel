@@ -66,8 +66,14 @@ The Hub seals its secrets (master keys, SIEM token, webhook URL, TOTP seed,
 honeytoken secrets) under a key-encryption key (KEK) that production requires:
 
 ```sh
-mkdir -p secrets && docker run --rm ghcr.io/mahmoudahmed3132/ts-hub:3.0.0@sha256:<digest> kek-generate > secrets/hub_kek && chmod 600 secrets/hub_kek
+mkdir -p secrets && docker run --rm ghcr.io/mahmoudahmed3132/ts-hub:3.0.0@sha256:<digest> kek-generate > secrets/hub_kek
+sudo chown 65532:65532 secrets/hub_kek && sudo chmod 400 secrets/hub_kek
 ```
+
+A file-based Compose secret is bind-mounted with the host file's owner and
+mode, and the Hub runs as UID 65532: a root-owned `0600` file is unreadable
+inside the container. The Hub reads the key before it touches the database, so
+a wrong owner fails fast with a message and nothing is migrated.
 
 `deploy/compose.yaml` mounts it as the Docker secret `hub_kek` (`TS_KEK_FILE`).
 On first start with a KEK the Hub seals existing plaintext in place and
@@ -77,8 +83,17 @@ VACUUMs. Rules:
   the sealed secrets are unrecoverable. Never store it in `hub-data`.
 - Rotate: stop the Hub, `truesignal-hub kek-rotate OLD_FILE NEW_FILE`, point
   `TS_KEK_FILE` at the new file, start. Only the data key is re-wrapped.
-- The upgrade writes `<db>.pre-v3-<time>.bak` first. It is **plaintext** (the
-  rollback copy for the previous Hub). Delete it once the upgrade is verified.
+- The upgrade writes `<db>.pre-v3-<time>.bak` first (and older upgrades left
+  `pre-v2` snapshots). They are **plaintext** rollback copies inside the data
+  directory, so every backup of that directory contains the secrets until you
+  delete them once the upgrade is verified. The Hub warns about them at every start.
+- **KEK lost:** `truesignal-hub secrets-reset --destroy-secrets` (Hub stopped)
+  deletes the sealed secrets and the wrapped data key; then start with a new KEK,
+  re-enter the SIEM token and webhook, re-enrol MFA. Planted honeytokens and
+  beacons are orphaned. Audited on the next start (`secrets.reset_cli`).
+- Host commands that change secrets (`kek-rotate`, `secrets-reset`, first
+  sealing) are queued and audited on the next start (`secrets.kek_rotate_cli`,
+  `secrets.reset_cli`, `secrets.sealed`), like `mfa-reset`.
 - Development without a KEK needs `TS_ENV=development` and
   `TS_DEV_ALLOW_PLAINTEXT_SECRETS=true`.
 - An encrypted database cannot be opened without its KEK, and a Hub older than
