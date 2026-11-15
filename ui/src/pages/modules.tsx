@@ -123,7 +123,14 @@ export function Beacons() {
             setName(""); setMemo(""); list.reload();
           }
         }}>
-          <Field label="Type" hint="As supported by the installed beacon module">{(id) => <input id={id} class="input mono" maxLength={32} value={type} onInput={(e) => setType(e.currentTarget.value)} required />}</Field>
+          <Field label="Type" hint="DNS name, web bug (1x1 image) or kubeconfig file; the zone is the deployed Token Receiver's">{(id) => (
+            <select id={id} class="input" value={type} onChange={(e) => setType(e.currentTarget.value)} required>
+              <option value="" disabled>Choose…</option>
+              <option value="dns">DNS name</option>
+              <option value="web-bug">Web bug</option>
+              <option value="kubeconfig">Kubeconfig</option>
+            </select>
+          )}</Field>
           <Field label="Name">{(id) => <input id={id} class="input" maxLength={100} value={name} onInput={(e) => setName(e.currentTarget.value)} required />}</Field>
           <Field label="Memo" hint="Where you will place it">{(id) => <input id={id} class="input" maxLength={500} value={memo} onInput={(e) => setMemo(e.currentTarget.value)} />}</Field>
           <div class="form-row-end"><Button type="submit" variant="primary" busy={act.busy}>Create</Button></div>

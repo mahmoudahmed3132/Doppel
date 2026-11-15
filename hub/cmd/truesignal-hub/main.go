@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/assets"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/attack"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/beacon"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/honeytoken"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 	"log/slog"
@@ -157,7 +158,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules not yet installed: beacons, ECS rendering and Elastic/LogScale transports are inactive")
+	log.Warn("PORTED modules not yet installed: ECS rendering and Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
@@ -221,9 +222,20 @@ func serve(log *slog.Logger) error {
 				return compose.CaptureKey(mk, nodeID)
 			}}}
 
+	// Beacons (merge import H7): tokens tagged under the receiver key the
+	// compose compiler injects; zone from the deployed Token Receiver.
+	beacons := &beacon.Service{Store: db, Now: time.Now, Domains: beacon.ZonesFromFleet(db),
+		ReceiverKey: func(ctx context.Context) (string, error) {
+			mk, err := hubKeys.BeaconMasterKey(ctx)
+			if err != nil {
+				return "", err
+			}
+			return compose.BeaconReceiverKey(mk), nil
+		}}
+
 	broker := livefeed.NewBroker()
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
-		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker, Honeytokens: honeytokens}
+		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker, Honeytokens: honeytokens, Beacons: beacons}
 	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
 		Run(ctx, siem.HeartbeatInterval)
 	live := &liveness.Service{Store: db, Raiser: pipe, Publisher: broker, Log: log, Now: time.Now, StartedAt: startedAt}
@@ -298,7 +310,7 @@ func serve(log *slog.Logger) error {
 		Attack:      attack.Mapper{},
 		Projections: projections(),
 	}).Register(admin)
-	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
+	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, Beacons: beacons, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
 			if err := db.FactoryReset(ctx, purge); err != nil {
 				return err

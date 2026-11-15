@@ -470,9 +470,7 @@ func (c *Compiler) secret(ctx context.Context, node domain.Node, sn domain.Senso
 		if err != nil {
 			return "", err
 		}
-		mac := hmac.New(sha256.New, mk)
-		mac.Write([]byte(BeaconKeyLabel))
-		return hex.EncodeToString(mac.Sum(nil)), nil
+		return BeaconReceiverKey(mk), nil
 	case manifest.EnvHoneytoken:
 		if c.Honeytokens == nil {
 			return "", reject(sn.ID, "honeytoken_unavailable", "the honeytoken module is not installed")
@@ -485,6 +483,14 @@ func (c *Compiler) secret(ctx context.Context, node domain.Node, sn domain.Senso
 		return string(b), err
 	}
 	return "", fmt.Errorf("unknown hub secret %s", name)
+}
+
+// BeaconReceiverKey is TS_BEACON_KEY, shared by every Token Receiver:
+// hex HMAC-SHA256(beacon master key, BeaconKeyLabel).
+func BeaconReceiverKey(master []byte) string {
+	mac := hmac.New(sha256.New, master)
+	mac.Write([]byte(BeaconKeyLabel))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // CaptureKey derives the per-node capture hash key:

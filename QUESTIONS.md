@@ -391,6 +391,7 @@ The beacon module's supported `type` values are part of its PORTED contract.
 **Meanwhile:** the Beacons page takes the type as free text (≤ 32 chars) and
 relies on the Hub/module to validate it.
 **Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
+**Update (merge import H7, 2026-11-15):** with the beacon module installed the types are `dns`, `web-bug` and `kubeconfig` (kebab-case, as the API requires); the page offers them as a choice. A beacon points at the zone of the deployed Token Receiver (`TS_BEACON_DOMAIN`); creation is refused unless exactly one zone is deployed.
 
 ### Q59 — §7 — Hub upgrade notice
 **Meanwhile:** "new Hub release" is a dismissible banner for the current page
