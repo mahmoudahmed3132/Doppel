@@ -5,50 +5,65 @@
 **State described:** `TrueSignal-Rewrite` `main` at `650c285`, 2026-11-15.
 **Read with:** `docs/merge/FABLE-PROMPT.md`, the task prompt.
 
-## 0. Read this first: what the merge puts at risk
+## 0. Read this first: the merge rule and its limits
 
-`TrueSignal-Rewrite` is a **clean-room** implementation. Its specification
-(*TrueSignal-CleanRoom-Spec-v1*, §0) prohibited any access to:
+**The owner's rule:** the new repository contains only code that **Claude
+wrote new**, from both repositories:
 
-- `mahmoudahmed3132/TrueSignal`;
-- `andreicscs/HoneyWire` and any project named HoneyWire;
-- the `ghcr.io/mahmoudahmed3132/truesignal-*` images.
+- **`TrueSignal-Rewrite`:** almost all of it, written by Claude in session
+  `session_01TGdGKDp6wnhogyaRQY1eEm` under a clean-room specification.
+  Exceptions:
+  - the owner's mechanical commits (`LICENSE`, headers, the deploy-key
+    workflow change);
+  - **PORTED step 1** (`hub/internal/signing`, `hub/internal/sourcelist`),
+    which came from the owner's earlier project at commit `2884102`
+    (`PROVENANCE.md`, 2026-11-01). Its authorship must be traced like any
+    other `TrueSignal` code. If it is not Claude-new, it leaves the new
+    repository and is replaced from a clean spec.
+- **`TrueSignal`:** only the code that Claude sessions created from scratch.
+  Everything else stays out:
+  - code written by people;
+  - code from or ported from `andreicscs/HoneyWire`;
+  - code that already existed and that Claude only edited.
 
-`PROVENANCE.md` and `HANDOVER.md` attest that this was honoured, and §14.14
-(an independence check run by the specification team) is the objective
-control. The clean room exists because earlier code may derive from HoneyWire.
+Why this matters: the rewrite was built clean-room because earlier code may
+derive from HoneyWire. Its specification (§0) prohibited any access to
+`mahmoudahmed3132/TrueSignal`, `andreicscs/HoneyWire`, any project named
+HoneyWire, and the `ghcr.io/mahmoudahmed3132/truesignal-*` images. §14.14 is
+the independence check.
 
-Merging the old `TrueSignal` code **ends the clean room for whatever is
-merged**. That is the owner's call to make, but it has consequences:
+**"Written by Claude" does not by itself mean "not derived."** A Claude session
+in `TrueSignal` worked inside a codebase that may contain HoneyWire-derived
+code. It could have been asked to port, translate or refactor that code, and
+its new code calls into it. So the test for each file or hunk is **both**:
 
-1. **Code derived from HoneyWire must not enter the new repository** unless
-   the owner has HoneyWire's licence, or other rights, to it. Merging such code
-   reintroduces exactly what the rewrite was built to remove, and turns the
-   §14.14 result for the merged repository into a finding.
-2. **Code the owner wrote independently** in `TrueSignal` is the owner's to
-   use. The rewrite already has a channel for it: **PORTED modules** (spec §12;
-   `docs/ported-seams.md`). Each is delivered as an owner-attested inbox, and
-   integrating one is mechanical. Step 1 (the Sigstore verifier and the
-   source-list matcher) arrived exactly that way (`PROVENANCE.md`, 2026-11-01).
-3. **The agent that reads `TrueSignal` is contaminated** for any feature it
-   reads there that turns out to derive from HoneyWire. It must not write a
-   clean replacement for that feature itself. It writes a prose specification,
-   and a separate session that has never seen either codebase implements it
-   (two-room clean room).
+1. **Authored by Claude:** introduced by a commit carrying Claude attribution:
+   - a `Co-Authored-By: Claude …` or `Claude-Session:` trailer;
+   - a `claude/*` branch;
+   - or a PR opened by a Claude integration.
 
-The prompt therefore sets up a **gated merge**:
+   Commits without attribution are presumed human-written.
+2. **New:** not a port, translation, move, rename or refactor of code that
+   existed before it, whether in `TrueSignal` or in HoneyWire. Check with:
+   - git rename and copy detection (`git log --follow -M -C`);
+   - the commit message and PR description (look for "port", "migrate",
+     "rewrite X in Go", "based on");
+   - similarity against the earlier tree and against HoneyWire.
 
-- the new repository starts from `TrueSignal-Rewrite`, history included, so
-  provenance carries over;
-- every file or feature taken from `TrueSignal` passes a provenance gate and
-  is recorded;
-- anything that fails the gate is specified in prose for a clean
-  reimplementation, or dropped.
+   Hunks Claude added inside pre-existing files count only if they are
+   self-contained and pass the same test. Otherwise they are excluded.
 
-If the owner wants an **ungated** merge instead, accepting HoneyWire-derived
-code, that is a legal decision. Make it in writing before work starts and
-record it in `PROVENANCE.md` and `QUESTIONS.md` of the new repository. The
-prompt has a switch for it (§ "Owner decisions").
+Anything that fails either test is **excluded**. If the feature is still
+wanted, it becomes a prose spec (`docs/clean-specs/`) for a separate clean
+session that never sees either codebase. The agent that does the merge must
+not write those replacements itself, because it has read the excluded code.
+
+**What remains uncertain, and the owner should know it:** Claude-new code in
+`TrueSignal` was written by a session that could see the earlier code and
+build on its interfaces. It is far weaker evidence of derivation than a port,
+but it is not a clean room. The inventory records, for each import, the
+interfaces it depends on in excluded code. An import tied to excluded
+interfaces has to be adapted to the rewrite's seams, or specified instead.
 
 ## 1. What TrueSignal-Rewrite is
 
@@ -178,10 +193,10 @@ The full list is in `THREATMODEL.md`. The main ones:
 1. **The new private repository** starts from `TrueSignal-Rewrite` history,
    and every quality gate in §1 passes in CI.
 2. **`MERGE-INVENTORY.md`** has one row for each feature or module in
-   `TrueSignal` that is not in `TrueSignal-Rewrite`, with:
-   - its provenance class: owner-original, HoneyWire-derived, third-party or
-     unknown;
-   - the evidence;
+   `TrueSignal` that is not in `TrueSignal-Rewrite`, plus PORTED step 1, with:
+   - its authorship class: claude-new, claude-edit, human, HoneyWire-derived,
+     third-party or unknown;
+   - the evidence (commits, trailers, rename and similarity checks);
    - the decision: imported, specified for clean reimplementation, or dropped.
 3. **Imported code** arrives through the PORTED seams or new seams, with
    headers, tests, `THIRD_PARTY.md` rows, and one `PROVENANCE.md` row per
@@ -191,5 +206,5 @@ The full list is in `THREATMODEL.md`. The main ones:
    spec contains no code, identifiers or layout copied from the source.
 5. **Signing identities and defaults** point at the new repository, with the
    republish plan in §3 written down for the owner.
-6. **Nothing from `andreicscs/HoneyWire`** is copied into the new repository,
-   unless the owner made the written ungated decision.
+6. **No human-written, HoneyWire-derived or merely Claude-edited code** from
+   `TrueSignal` is in the new repository.
