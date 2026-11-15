@@ -1,0 +1,121 @@
+{
+  "rule_id": "truesignal-hub-defense-change",
+  "name": "TrueSignal Hub change that can blind detection",
+  "description": "A successful admin change on the Hub that can suppress or erase detection: SIEM/webhook/whitelist/known-scanner config, disarming, silencing a sensor, deleting nodes, sensors, beacons or events, archiving all events, replacing the asset inventory, password change, recovery-code regeneration or factory reset. Change tracking for review; high for evidence destruction (clear events, factory reset).",
+  "author": [
+    "TrueSignal"
+  ],
+  "license": "AGPL-3.0",
+  "version": 1,
+  "enabled": true,
+  "index": [
+    "logs-truesignal-*"
+  ],
+  "severity": "low",
+  "risk_score": 21,
+  "interval": "5m",
+  "from": "now-6m",
+  "max_signals": 100,
+  "tags": [
+    "TrueSignal",
+    "Deception",
+    "Audit",
+    "Hub"
+  ],
+  "references": [
+    "https://github.com/mahmoudahmed3132/TrueSignal/blob/main/Docs/siem/detection-rules.md#truesignal-hub-defense-change"
+  ],
+  "false_positives": [
+    "Every routine admin change. Review, do not page, except for the high-severity actions."
+  ],
+  "note": "## Triage\n1. `event.action` is the Doppel audit action (`docs/audit-actions.md`); `url.path` the concrete path (node and sensor IDs). Request bodies are never logged.\n2. Match against the change calendar. `source.ip` is the admin's client.\n3. `events.delete_all` or `system.factory_reset` outside a planned change: treat as tampering; events are still in the SIEM.",
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": {
+        "id": "TA0005",
+        "name": "Defense Evasion",
+        "reference": "https://attack.mitre.org/tactics/TA0005/"
+      },
+      "technique": [
+        {
+          "id": "T1562",
+          "name": "Impair Defenses",
+          "reference": "https://attack.mitre.org/techniques/T1562/",
+          "subtechnique": [
+            {
+              "id": "T1562.001",
+              "name": "Disable or Modify Tools",
+              "reference": "https://attack.mitre.org/techniques/T1562/001/"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "query": "event.dataset:\"truesignal.audit\" and event.outcome:\"success\" and event.action:(\"config.update\" or \"system.arm\" or \"system.password_change\" or \"system.factory_reset\" or \"sensor.silence\" or \"node.delete\" or \"sensor.delete\" or \"events.delete_all\" or \"events.archive_all\" or \"beacon.delete\" or \"assets.replace\" or \"mfa.recovery_codes_regenerate\" or \"siem.update\" or \"webhook.update\")",
+  "type": "query",
+  "language": "kuery",
+  "severity_mapping": [
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "events.delete_all",
+      "severity": "high"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "system.factory_reset",
+      "severity": "high"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "config.update",
+      "severity": "medium"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "system.arm",
+      "severity": "medium"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "sensor.silence",
+      "severity": "medium"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "node.delete",
+      "severity": "medium"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "sensor.delete",
+      "severity": "medium"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "events.archive_all",
+      "severity": "medium"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "siem.update",
+      "severity": "medium"
+    },
+    {
+      "field": "event.action",
+      "operator": "equals",
+      "value": "webhook.update",
+      "severity": "medium"
+    }
+  ]
+}

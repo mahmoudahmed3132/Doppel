@@ -51,8 +51,8 @@ func New(files fs.FS) *UI {
 func (u *UI) Built() bool { return u.index != nil }
 
 const notBuilt = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>TrueSignal</title></head>
-<body><h1>TrueSignal Hub</h1><p>The admin UI is not part of this build. Build it with <code>make ui</code> before <code>go build</code>, or use a release image. The API is available under /api/v3/.</p></body></html>
+<html lang="en"><head><meta charset="utf-8"><title>Doppel</title></head>
+<body><h1>Doppel Hub</h1><p>The admin UI is not part of this build. Build it with <code>make ui</code> before <code>go build</code>, or use a release image. The API is available under /api/v3/.</p></body></html>
 `
 
 func (u *UI) ServeHTTP(w http.ResponseWriter, r *http.Request) {

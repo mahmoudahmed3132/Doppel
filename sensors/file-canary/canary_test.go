@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/sdk/go/sensor"
+	"github.com/mahmoudahmed3132/Doppel/sdk/go/sensor"
 )
 
 var ht = Honeytoken{ID: "ht_1", Username: "svc_backup", Secret: "S3cr3t-honey"}

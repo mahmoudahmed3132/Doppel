@@ -70,7 +70,7 @@ type Error struct {
 
 func (e *Error) Error() string {
 	if e.Status == http.StatusUpgradeRequired {
-		return fmt.Sprintf("the Hub requires truesignal CLI major version %d; install the matching CLI release", e.RequiredMajor)
+		return fmt.Sprintf("the Hub requires doppel CLI major version %d; install the matching CLI release", e.RequiredMajor)
 	}
 	msg := e.Message
 	if e.SensorID != "" {

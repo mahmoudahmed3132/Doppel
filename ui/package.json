@@ -2,7 +2,7 @@
   "name": "truesignal-ui",
   "private": true,
   "version": "3.0.0",
-  "description": "TrueSignal Hub admin UI",
+  "description": "Doppel Hub admin UI",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {

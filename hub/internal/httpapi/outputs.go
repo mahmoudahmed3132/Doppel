@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/siem"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webhook"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/siem"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/webhook"
 )
 
 // Outputs serves SIEM, webhook and armed-state settings. Secrets (SIEM

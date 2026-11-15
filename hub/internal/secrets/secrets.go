@@ -10,7 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ids"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ids"
 )
 
 // Settings keys. The settings API must never return these values.

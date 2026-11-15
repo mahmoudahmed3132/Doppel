@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "description": "Passively watches inbound packets and reports sources that probe many distinct ports in a short window (SYN, FIN, NULL, Xmas, connect and UDP scans).",
   "category": "network",
-  "author": "TrueSignal",
+  "author": "Doppel",
   "documentation": "Captures inbound frames with an AF_PACKET socket (headers only, never payloads). Runs as UID 0 with every capability dropped except NET_RAW, host network, read-only filesystem, no-new-privileges. Only TCP segments without ACK/RST and UDP datagrams count, so established traffic never looks like a scan. Tool guesses (nmap, masscan, zmap) come from public SYN fingerprints and are left empty when not confident. CPU cost grows with inbound packet rate: every inbound frame is read in user space.",
   "image": {"repository": "ghcr.io/mahmoudahmed3132/ts-sensor-network-scan-detector", "tag": "1.0.0", "digest": "", "platforms": ["linux/amd64"]},
   "runtime": {"user": "0:0", "network_mode": "host", "cap_add": ["NET_RAW"], "memory_mb": 128},

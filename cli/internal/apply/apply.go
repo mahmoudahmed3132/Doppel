@@ -19,9 +19,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/config"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/docker"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/hub"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/config"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/docker"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/hub"
 )
 
 // Results reported to the Hub.
@@ -98,7 +98,7 @@ func Lock(p config.Paths) (func(), error) {
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
-		return nil, errors.New("another truesignal apply is running")
+		return nil, errors.New("another doppel apply is running")
 	}
 	return func() { syscall.Flock(int(f.Fd()), syscall.LOCK_UN); f.Close() }, nil
 }

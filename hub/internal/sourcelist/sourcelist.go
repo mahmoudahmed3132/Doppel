@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 )
 
 const (

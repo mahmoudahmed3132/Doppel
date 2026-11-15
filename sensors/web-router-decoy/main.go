@@ -14,14 +14,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/sdk/go/sensor"
+	"github.com/mahmoudahmed3132/Doppel/sdk/go/sensor"
 )
 
 // ContainerPort is the fixed listening port inside the container.
 const ContainerPort = 8080
 
 // skins is the page renderer; replaced by the PORTED module on import.
-var skins Skins = stubSkins{}
+var skins Skins = builtinSkins{}
 
 var spec = sensor.Spec{
 	Drill: sensor.Drill{

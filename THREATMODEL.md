@@ -1,6 +1,6 @@
 # Threat model
 
-Scope: TrueSignal Hub, node CLI, sensors, sensor registry, admin UI and the
+Scope: Doppel Hub, node CLI, sensors, sensor registry, admin UI and the
 release pipeline as implemented in this repository. Modules marked PORTED
 (§12) are seams here; their own threat models belong with them.
 
@@ -156,8 +156,27 @@ operationally: dedicated host, restricted Docker group, encrypted volume and
 backups. Encrypting these settings at rest under a key outside the database
 (KMS/TPM/env) is a recommended future change.
 
+## Imported modules (merge from Doppel)
+
+Modules imported through the PORTED seams are in scope from their import on.
+Each row names the module and the control it carries; `MERGE-INVENTORY.md`
+and `PROVENANCE.md` record its origin.
+
+| Module | Controls and residual risk |
+|---|---|
+| TOTP and recovery codes (`hub/internal/totp`) | RFC 6238 SHA-1/6 digits/30 s, ±1 step, constant-time comparison over every window; replay refused for any step ≤ the stored last step (the Hub's CAS is the authority). Recovery codes: 50 bits each, only SHA-256 hashes stored, constant-time comparison over the full list, single use. Residual: the TOTP seed is stored in plaintext (R1) |
+| GeoIP (`hub/internal/geoip`) | Internal addresses (private, CGNAT, loopback, link-local, ULA) are never looked up. The database is loaded from a private copy, so overwriting the file in place cannot corrupt the live mapping; a file that is not a City database is refused and the current one stays. Auto-update (off by default, Q70): HTTPS only, same-host redirects only, size limits, validated before the swap. Residual: DB-IP publishes no signature, so a compromised download host could feed false locations; locations are advisory enrichment and never drive a security decision |
+| Asset inventory (`hub/internal/assets`) | Strict JSON (unknown fields refused), at most 5000 assets, 256-byte fields, 20 tags, duplicates and invalid IP/CIDR refused; a refused save keeps the current inventory. Lookups never resolve names (IP sources only). Residual: the inventory reveals the internal network layout to anyone with an admin session |
+| ATT&CK mapping (`hub/internal/attack`) | A fixed table plus two suffix rules; no input reaches it except the trigger, which ingest has already validated (Q8). Unmapped triggers carry nothing rather than a guess. Hub-raised liveness and apply-failure events are excluded from the matrix. Residual: a wrong mapping misleads SOC triage; `TestDocMatchesCode` keeps `docs/siem/attack-mapping.md` and the code in step |
+| Honeytoken service (`hub/internal/honeytoken`) | Tokens are random (`svc_<word><4 hex>`, 15-character secret from a 57-symbol alphabet), one per File Canary instance, and stable. Secrets never leave the Hub except into that sensor's rendered compose (node-authenticated fetch only, Q26); the inventory, API listing and raised events never carry them. Password matching uses HMAC under the reporting node's capture key, compared with `hmac.Equal`, so a node can only test its own captures; usernames match fleet-wide. Hub-raised `honeytoken_used` is never re-matched and is reserved for sensors. Residual: secrets are stored in plaintext in SQLite (R1); a plaintext capture mode on a sensor exposes tried passwords to the Hub |
+| Beacon service (`hub/internal/beacon`) | Tokens: 80 random bits plus a 40-bit HMAC tag under the receiver key, so receivers drop invented names offline; the Hub resolves only tokens it stored, and an unknown token is medium severity with `beacon_known: false`. The master key never leaves the Hub; the receiver key is shared by every receiver (a compromised receiver can mint valid-looking tokens, which still resolve to nothing). Artefacts carry neither the beacon name nor the memo nor the product name. Residual: web bugs are plain `http://` (an HTTPS front end is an operator choice); the shared receiver key is a single secret for every receiver |
+| ECS renderer (`hub/internal/ecs`) | Output-only. `source.ip` is set only from a parseable address, so a sensor-controlled source string cannot break a typed SIEM field. Captured secrets stay in `truesignal.details`, never in `user.*`. Inventory documents never carry a honeytoken secret. Residual: `truesignal.details` passes sensor-supplied content to the SIEM as data; SIEM-side parsers must treat it as untrusted |
+| HTTP SIEM transports (`hub/internal/siemhttp`) | HTTPS only (addresses without credentials), TLS 1.2+, system roots plus the optional SIEM CA bundle, redirects never followed (the token cannot leak to another host; a redirect is terminal), 10 s per request, responses read to 64 KiB. Outcomes: network, 5xx and 429 transient (retried by the SIEM service), everything else terminal. Residual: the API key or ingest token is stored in plaintext in SQLite (R1) |
+| Analytics projections (`hub/internal/projections`) | Read-only aggregations over the Hub window (at most the Hub's projection event cap); parameters are bounded by the Hub (16 keys, 256 bytes) and validated per projection (`source` ≤ 256 bytes, report range ≤ 366 days). Hub-raised liveness is excluded. Residual: an attack-path timeline returns raw event details to the admin session, as the events API does |
+| Lure content (`sensors/file-canary/lures_generated.go`) | Everything in a lure is fabricated: the honeytoken from the Hub plus random secrets, loopback hosts only, no product name, so a stolen lure leaks nothing real. Lures are created with `O_EXCL|O_NOFOLLOW` (never overwrite, never follow a link; base code). Residual: content shape may be fingerprinted by an attacker who knows the product |
+| Web skins (`sensors/web-router-decoy/skins_builtin.go`) | Fixed skin data rendered by `html/template` (auto-escaped; the posted username is never echoed). Pages never name the product. The Basic realm comes from fixed data. Capture and rate limiting stay in the base decoy (hash capture, per-source limits). Residual: skins are generic look-alikes, not vendor copies; a careful attacker may recognise a decoy |
+| Token Receiver (`sensors/token-receiver`) and decoy helper (`sdk/go/decoy`) | Internet-facing by design: authoritative-only DNS (no recursion or forwarding, REFUSED outside the zone, 50 replies/s per source, small answers, so no amplification), fixed HTTP response, TCP caps per source and in total, XFF trusted only from configured proxies, attacker input sanitised and capped. Tokens are verified offline before anything is reported. The helper's password capture defaults to keyed HMAC (never cleartext). Residual: the receiver key is shared by all receivers; a compromised receiver node can report forged-but-valid tokens, which the Hub resolves only if they exist |
+
 ## Out of scope
-PORTED modules (TOTP core, manifest verifier, ATT&CK/geo/asset enrichment,
-honeytoken and beacon services, ECS/HTTP SIEM transports, projections, lure
-content, web skins); denial of service by a volumetric network attacker
+The four decoys awaiting clean implementation (`docs/clean-specs/`); denial of service by a volumetric network attacker
 against the Hub (put it behind the reverse proxy / network controls).

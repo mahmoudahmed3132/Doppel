@@ -18,11 +18,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from truesignal_sdk import Drill, Options, Severity, SourceLimiter, Spec, printable, clean, run  # noqa: E402
-from truesignal_sdk.config import Config, ConfigError  # noqa: E402
-from truesignal_sdk.eventqueue import EventQueue  # noqa: E402
-from truesignal_sdk.events import encode_details  # noqa: E402
-from truesignal_sdk.uuid7 import UUID7  # noqa: E402
+from doppel_sdk import Drill, Options, Severity, SourceLimiter, Spec, printable, clean, run  # noqa: E402
+from doppel_sdk.config import Config, ConfigError  # noqa: E402
+from doppel_sdk.eventqueue import EventQueue  # noqa: E402
+from doppel_sdk.events import encode_details  # noqa: E402
+from doppel_sdk.uuid7 import UUID7  # noqa: E402
 
 UUID7_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 KEY = "tsk_" + "a" * 64
@@ -295,7 +295,7 @@ class SensorTests(unittest.TestCase):
         script = f"""
 import sys, threading
 sys.path.insert(0, {os.path.dirname(HERE)!r})
-from truesignal_sdk import Drill, Spec, Options, run
+from doppel_sdk import Drill, Spec, Options, run
 def body(s, stop):
     print("ready", flush=True)
     stop.wait()
@@ -313,3 +313,21 @@ sys.exit(run(Spec(Drill("x_trigger", "X"), body), Options(batch_delay=0.05)))
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompatibilityAliasTest(unittest.TestCase):
+    """The old package name works for one release and warns (Q66)."""
+
+    def test_truesignal_sdk_alias(self):
+        import importlib
+        import warnings
+        sys.modules.pop("truesignal_sdk", None)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            old = importlib.import_module("truesignal_sdk")
+        self.assertTrue(any(issubclass(x.category, DeprecationWarning) for x in w))
+        import doppel_sdk
+        from truesignal_sdk.config import Config as OldConfig
+        from doppel_sdk.config import Config
+        self.assertIs(old.Spec, doppel_sdk.Spec)
+        self.assertIs(OldConfig, Config)

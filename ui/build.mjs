@@ -52,13 +52,13 @@ const html = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>TrueSignal</title>
+<title>Doppel</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="${css}">
 <script type="module" src="${js}"></script>
 </head>
 <body>
-<div id="app"><noscript>The TrueSignal admin UI requires JavaScript.</noscript></div>
+<div id="app"><noscript>The Doppel admin UI requires JavaScript.</noscript></div>
 </body>
 </html>
 `;

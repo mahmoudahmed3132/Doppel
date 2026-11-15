@@ -1,4 +1,4 @@
-module github.com/mahmoudahmed3132/TrueSignal-Rewrite/sdk/go
+module github.com/mahmoudahmed3132/Doppel/sdk/go
 
 go 1.26.0
 

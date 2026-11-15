@@ -11,39 +11,50 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/assets"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/attack"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/beacon"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ecs"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/honeytoken"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/projections"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/siemhttp"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/audit"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/catalogue"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/compose"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/config"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/enrich"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/httpapi"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/hubsettings"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/livefeed"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/manifest"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ratelimit"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/secrets"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/siem"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/signing"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/sourcelist"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/updatecheck"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webhook"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/webui"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/audit"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/catalogue"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/compose"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/config"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/enrich"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/geoip"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/httpapi"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/hubsettings"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ingest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/livefeed"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/liveness"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/manifest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ratelimit"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/secrets"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/siem"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/signing"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/sourcelist"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/totp"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/updatecheck"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/webhook"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/webui"
 )
 
 // Version is the Hub version; overridden at build time with -ldflags -X.
@@ -119,9 +130,13 @@ func serve(log *slog.Logger) error {
 	defer db.Close()
 
 	// SIEM output first, so every later audit record reaches it.
-	siemSvc := &siem.Service{PEN: cfg.SyslogPEN, CABundle: cfg.SIEMCABundle, Log: log}
-	// Renderer and HTTP transports are PORTED; until installed only
-	// tcp/udp/tls with RFC 5424 are available.
+	// ECS renderer and Elastic / LogScale transports: merged modules
+	// (imports H9, H10).
+	httpSIEM, err := siemhttp.New(cfg.SIEMCABundle)
+	if err != nil {
+		return err
+	}
+	siemSvc := &siem.Service{PEN: cfg.SyslogPEN, CABundle: cfg.SIEMCABundle, Log: log, Renderer: ecs.Renderer{}, HTTP: httpSIEM}
 	siemCfg, err := siem.LoadConfig(ctx, db)
 	if err == nil {
 		siemCfg, err = siemCfg.Normalize(siemSvc.Capabilities())
@@ -150,12 +165,10 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules not yet installed: TOTP/MFA, beacons, honeytokens, ATT&CK/asset/GeoIP enrichment, ECS rendering and Elastic/LogScale transports are inactive")
-
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
 		Hasher:             auth.NewHasher(auth.DefaultArgon2, 4),
-		TOTP:               nil, // PORTED module; MFA endpoints answer 503 until it is installed
+		TOTP:               totp.Module{}, // PORTED module, installed (merge import H5/H6)
 		Log:                log,
 		Now:                time.Now,
 		SessionTTL:         cfg.SessionTTL,
@@ -181,19 +194,57 @@ func serve(log *slog.Logger) error {
 	}
 	notifier.Start(ctx)
 
-	// Source lists use the PORTED matcher (step 1); the asset inventory is
-	// PORTED and not yet installed, so it is read-only.
-	settingsSvc := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log}
+	// Source lists use the PORTED matcher (step 1); the asset inventory is the
+	// merged module (import H2).
+	settingsSvc := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, Assets: assets.Module{}, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log}
 
 	if err := settingsSvc.Load(ctx); err != nil {
 		return err
 	}
 	go settingsSvc.RunRetentionLoop(ctx, db)
-	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc}
+	// GeoIP (merge import H1): TS_GEOIP_DB, default geoip/dbip-city-lite.mmdb
+	// next to the database. Without a file, events carry no location.
+	geoPath := cfg.GeoIPDB
+	if geoPath == "" {
+		geoPath = filepath.Join(filepath.Dir(cfg.DBPath), "geoip", "dbip-city-lite.mmdb")
+	}
+	geoSvc := geoip.New(geoPath, cfg.GeoIPAutoUpdate, log)
+	defer geoSvc.Close()
+	go geoSvc.StartUpdater(ctx)
+	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc, Geo: geoip.Locator{S: geoSvc}, Attack: attack.Mapper{}}
+
+	// Honeytokens (merge import H8): planted by the compose compiler (with
+	// SIEM inventory records), matched by the ingest pipeline.
+	hubKeys := &secrets.Keys{Store: db}
+	honeytokens := &siem.InventoryHoneytokens{Sink: siemSvc, Log: log, Now: time.Now,
+		HoneytokenService: &honeytoken.Service{Store: db, Now: time.Now,
+			CaptureKey: func(nodeID string) []byte {
+				mk, err := hubKeys.CaptureMasterKey(ctx)
+				if err != nil {
+					log.Warn("capture master key unavailable; honeytoken passwords not compared", "error", err.Error())
+					return nil
+				}
+				return compose.CaptureKey(mk, nodeID)
+			}}}
+
+	// SIEM watchlist: every honeytoken at start and every 24 h, so a SIEM
+	// indicator index stays complete after its own retention.
+	go honeytokens.Run(ctx, 24*time.Hour)
+
+	// Beacons (merge import H7): tokens tagged under the receiver key the
+	// compose compiler injects; zone from the deployed Token Receiver.
+	beacons := &beacon.Service{Store: db, Now: time.Now, Domains: beacon.ZonesFromFleet(db),
+		ReceiverKey: func(ctx context.Context) (string, error) {
+			mk, err := hubKeys.BeaconMasterKey(ctx)
+			if err != nil {
+				return "", err
+			}
+			return compose.BeaconReceiverKey(mk), nil
+		}}
 
 	broker := livefeed.NewBroker()
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
-		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker}
+		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker, Honeytokens: honeytokens, Beacons: beacons}
 	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
 		Run(ctx, siem.HeartbeatInterval)
 	live := &liveness.Service{Store: db, Raiser: pipe, Publisher: broker, Log: log, Now: time.Now, StartedAt: startedAt}
@@ -239,12 +290,12 @@ func serve(log *slog.Logger) error {
 	go cat.Run(ctx)
 
 	compiler := &compose.Compiler{
-		Manifests: cat,
-		Settings:  db,
-		Keys:      &secrets.Keys{Store: db},
-		// Honeytokens: PORTED module; File Canary deploys fail closed until installed.
-		Options: manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
-		Log:     log,
+		Manifests:   cat,
+		Settings:    db,
+		Keys:        hubKeys,
+		Honeytokens: honeytokens,
+		Options:     manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
+		Log:         log,
 	}
 	fleetSvc := &fleet.Service{Store: db, Compiler: compiler, Catalogue: cat, Keys: keys, Log: log, Now: time.Now}
 	(&httpapi.Fleet{
@@ -264,9 +315,11 @@ func serve(log *slog.Logger) error {
 	(&httpapi.Insights{Store: db, Enricher: enricher, Updates: updates, Settings: settingsSvc, Auth: authSvc, Live: broker,
 		Armed: notifier.Armed, SIEMStats: siemSvc.Stats, Version: Version, Schema: store.SchemaVersion(),
 		StartedAt: startedAt, Development: cfg.Development, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin,
-		// Projections and the ATT&CK mapper are PORTED.
+		// Merged modules: ATT&CK mapper and projections (MERGE-INVENTORY.md).
+		Attack:      attack.Mapper{},
+		Projections: installedProjections(geoSvc),
 	}).Register(admin)
-	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
+	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, Beacons: beacons, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
 			if err := db.FactoryReset(ctx, purge); err != nil {
 				return err
@@ -348,4 +401,14 @@ func purgeSessions(ctx context.Context, a *auth.Service, log *slog.Logger) {
 			}
 		}
 	}
+}
+
+// installedProjections lists the installed analytics projections by name (Q56).
+func installedProjections(geo *geoip.Service) map[string]ported.Projection {
+	out := map[string]ported.Projection{}
+	for _, p := range []ported.Projection{attack.MatrixProjection{}, projections.Sources{}, projections.GeoMap{GeoIP: geo},
+		projections.AttackPath{}, projections.Report{}} {
+		out[p.Name()] = p
+	}
+	return out
 }

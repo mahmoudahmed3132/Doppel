@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/config"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/docker"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/hub"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/config"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/docker"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/hub"
 )
 
 const key = "tsk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "description": "Reports ICMP echo and other request messages reaching the host (ping sweeps, host discovery). Never sends packets.",
   "category": "network",
-  "author": "TrueSignal",
+  "author": "Doppel",
   "documentation": "Uses a raw ICMP socket: runs as UID 0 with every capability dropped except NET_RAW, host network, read-only filesystem, no-new-privileges. IPv6 is used when available.",
   "image": {"repository": "ghcr.io/mahmoudahmed3132/ts-sensor-icmp-canary", "tag": "1.0.0", "digest": "", "platforms": ["linux/amd64"]},
   "runtime": {"user": "0:0", "network_mode": "host", "cap_add": ["NET_RAW"], "memory_mb": 64},

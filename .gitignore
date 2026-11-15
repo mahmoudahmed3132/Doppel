@@ -12,3 +12,9 @@ hub/internal/webui/dist/*
 !hub/internal/webui/dist/.placeholder
 __pycache__/
 *.pyc
+/sensors/file-canary/file-canary
+/sensors/icmp-canary/icmp-canary
+/sensors/network-scan-detector/network-scan-detector
+/sensors/tcp-tarpit/tcp-tarpit
+/sensors/template/template
+/sensors/web-router-decoy/web-router-decoy

@@ -16,15 +16,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/fleet"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/liveness"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/nodekey"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported/stub"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ratelimit"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ingest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/liveness"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ratelimit"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 // portCompiler refuses duplicate TS_PORT values and emits a secret marker

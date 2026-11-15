@@ -1,6 +1,7 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
-// Command truesignal is the TrueSignal node agent CLI.
+// Command doppel is the Doppel node agent CLI (installed with a
+// `truesignal` compatibility link for one release, Q66).
 package main
 
 import (
@@ -9,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/cli/internal/app"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/app"
 )
 
 // Version is set at build time with -ldflags "-X main.Version=…".

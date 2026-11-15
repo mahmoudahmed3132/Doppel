@@ -1,4 +1,10 @@
-# Node agent CLI (`truesignal`)
+# Node agent CLI (`doppel`)
+
+The command is `doppel`. For one release the installer also creates a
+`truesignal` link to it, and a node linked under the old paths
+(`/etc/truesignal/config.json`, `/opt/truesignal`) keeps using them; new
+links use `/etc/doppel/config.json` and `/opt/doppel`. `TS_CONFIG_FILE` and
+`TS_WORK_DIR` override both (QUESTIONS Q66).
 
 Spec §8. Runs on each node as root, on demand (not a daemon). Linux amd64 and
 arm64 builds; sensors are deployed only on amd64 unless `TS_ALLOW_NON_AMD64=true`.
@@ -10,10 +16,11 @@ curl -fsSL https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-release
   | sudo TS_NODE_KEY='tsk_…' sh -s -- --hub https://hub.example.com
 ```
 
-`install.sh` downloads `truesignal-linux-<arch>` from the `cli/vX.Y.Z` release,
+`install.sh` downloads `doppel-linux-<arch>` from the `cli/vX.Y.Z` release,
 verifies it against `SHA256SUMS`, optionally against `--sha256 <hex>`, and —
-when `cosign` is installed — against `truesignal-linux-<arch>.sigstore.json`
-(identity: `.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`). Only
+when `cosign` is installed — against `doppel-linux-<arch>.sigstore.json`
+(identity: `https://github.com/mahmoudahmed3132/Doppel/.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`;
+releases before the move to Doppel name `mahmoudahmed3132/TrueSignal-Rewrite`, operations §9.2). Only
 `https://` (or `file://` for mirrors) is fetched. The script body runs from
 `main()` on its last line, so a truncated download executes nothing.
 
@@ -21,10 +28,10 @@ when `cosign` is installed — against `truesignal-linux-<arch>.sigstore.json`
 
 | Path | Mode | Contents |
 |---|---|---|
-| `/etc/truesignal/config.json` | 0600 (dir 0700) | `hub_endpoint`, `node_id`, `node_key`. Refused if group/other-readable. |
-| `/opt/truesignal/compose.json` | 0600 | active compose file (contains the node key and sensor secrets) |
-| `/opt/truesignal/compose.json.bak` | 0600 | previous compose file (rollback) |
-| `/opt/truesignal/.apply.lock` | 0600 | prevents concurrent applies |
+| `/etc/doppel/config.json` | 0600 (dir 0700) | `hub_endpoint`, `node_id`, `node_key`. Refused if group/other-readable. |
+| `/opt/doppel/compose.json` | 0600 | active compose file (contains the node key and sensor secrets) |
+| `/opt/doppel/compose.json.bak` | 0600 | previous compose file (rollback) |
+| `/opt/doppel/.apply.lock` | 0600 | prevents concurrent applies |
 
 `TS_CONFIG_FILE` and `TS_WORK_DIR` override the locations.
 
@@ -37,7 +44,7 @@ when `cosign` is installed — against `truesignal-linux-<arch>.sigstore.json`
 | `discover [--yes] [--no-apply]` | Reads `/proc` (listening TCP/UDP sockets, process names) and checks files — no network probing; a local bind test checks candidate ports. Matches manifest discovery heuristics, renders defaults (`free_port`, `random_choice`, `hostname` only), asks per proposal, registers via the admin API, then applies. Admin password/MFA from `TS_ADMIN_PASSWORD` / `TS_ADMIN_MFA_CODE` or no-echo prompts; never stored. |
 | `firedrill` | Sends SIGUSR1 to every container labelled `io.truesignal.role=sensor`. |
 | `status [--json]` | Node identity, Hub reachability and version, desired vs local revision, container states. Exit 1 if the Hub is unreachable. |
-| `uninstall [--yes]` | `docker compose down --remove-orphans`, removes `/opt/truesignal`, the config and the binary. **Lure files are left in place** and listed; reminds you to delete the node in the Hub. |
+| `uninstall [--yes]` | `docker compose down --remove-orphans`, removes `/opt/doppel`, the config and the binary. **Lure files are left in place** and listed; reminds you to delete the node in the Hub. |
 | `version` | |
 
 Every Hub request sends `X-TrueSignal-CLI-Version`; on `426` the CLI states the

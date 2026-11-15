@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/sdk/go/sensor"
+	"github.com/mahmoudahmed3132/Doppel/sdk/go/sensor"
 )
 
 // Triggers.

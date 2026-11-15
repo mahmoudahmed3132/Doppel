@@ -18,6 +18,7 @@ legally; whichever is intended should be settled before any public release.
 The repository is `github.com/mahmoudahmed3132/TrueSignal-Rewrite`. Is that
 the final import path, or will it move (rename/org transfer)?
 **Meanwhile:** module paths use `github.com/mahmoudahmed3132/TrueSignal-Rewrite/<component>`.
+**Answer (owner, 2026-11-15, Q66):** the repository is now `mahmoudahmed3132/Doppel`; module paths are `github.com/mahmoudahmed3132/Doppel/<component>`.
 
 ### Q3 — §4.1 vs §5.3 — `dropped_events` in heartbeats
 §4.1 rejects unknown top-level fields; §4.3 lists the heartbeat body as
@@ -295,6 +296,9 @@ The release workflow (§10) must produce exactly these.
 **Update (Q64, 2026-11-01):** assets and identity unchanged; the release is
 now created in `mahmoudahmed3132/truesignal-releases`, which `install.sh`
 downloads from.
+**Update (Q66, 2026-11-15):** the source repository is `mahmoudahmed3132/Doppel`; the identity is
+`https://github.com/mahmoudahmed3132/Doppel/.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`.
+Releases up to `cli/v3.0.0` keep the old identity (`docs/operations.md` §9.2).
 
 ### Q47 — §2 / §11 — Sensors that need a privilege run as UID 0
 Docker grants `cap_add` capabilities only to UID 0 (no ambient capabilities in
@@ -318,6 +322,7 @@ deploy it (`honeytoken_unavailable`) until the PORTED honeytoken module is
 installed, and the stub lure content must be replaced by the PORTED lure
 generator before production use. Lures are created owned by root, mode 0644;
 tell us if they should take the directory owner's uid/gid.
+**Update (merge imports H8, S1, 2026-11-15):** the honeytoken module and the lure generator are installed, so the File Canary deploys and plants realistic lures. Lure ownership (root, 0644) is unchanged.
 
 ### Q50 — §11.3 — Scan detector capture cost
 **Meanwhile:** no kernel BPF filter; every inbound frame header is read in
@@ -387,6 +392,7 @@ The beacon module's supported `type` values are part of its PORTED contract.
 **Meanwhile:** the Beacons page takes the type as free text (≤ 32 chars) and
 relies on the Hub/module to validate it.
 **Answer (owner, 2026-10-31):** confirmed; the "Meanwhile" behaviour stands.
+**Update (merge import H7, 2026-11-15):** with the beacon module installed the types are `dns`, `web-bug` and `kubeconfig` (kebab-case, as the API requires); the page offers them as a choice. A beacon points at the zone of the deployed Token Receiver (`TS_BEACON_DOMAIN`); creation is refused unless exactly one zone is deployed.
 
 ### Q59 — §7 — Hub upgrade notice
 **Meanwhile:** "new Hub release" is a dismissible banner for the current page
@@ -506,3 +512,20 @@ Auto-update adds an outbound call (Q55 lists the allowed ones).
 fetches only the DB-IP Lite URL documented in `docs/operations.md`, over
 HTTPS with no redirects to other hosts.
 **Answer (owner, 2026-11-15):** the default (off) is approved.
+
+### Q71 — Q66 follow-up — Rebrand items applied in this merge, and the one deferred
+**Applied (branch `rebrand/doppel`):** product text (README, docs, UI, sensor
+manifest authors, TOTP issuer); the CLI command `doppel` (directory
+`cli/cmd/doppel`) with a `truesignal` link from `install.sh` and legacy-path
+fallback; release assets `doppel-linux-<arch>`; the Python SDK `doppel-sdk` /
+`doppel_sdk` with a warning `truesignal_sdk` alias. **Kept, as approved:**
+`TS_*`, `tsk_`, `io.truesignal.*`, the compose project name `truesignal`,
+`x-truesignal`, the `ts-hub` / `ts-sensor-*` images, `truesignal-releases`,
+the `X-TrueSignal-CLI-Version` header, the User-Agent strings, the SIEM rule
+IDs, and the copyright holder.
+**Deferred:** the `siem_legacy_names` switch for syslog and ECS names. With the
+approved default (on), output is exactly what Doppel emits today, so nothing
+changes until the switch exists. Implementing it changes the SIEM contract,
+the settings API and OpenAPI, and the detection rules. **Meanwhile:** legacy
+names only; implement the switch in its own branch before announcing new
+SIEM names.

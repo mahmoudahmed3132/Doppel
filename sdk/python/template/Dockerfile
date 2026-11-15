@@ -5,7 +5,7 @@
 # Distroless Python (no shell, non-root); pinned by digest, bump deliberately.
 FROM gcr.io/distroless/python3-debian13:nonroot@sha256:6c4cb3bfa4b555429dd19541796a6ba6b30c84675b460bd0bd5072f7d5bdae71
 WORKDIR /app
-COPY sdk/python/truesignal_sdk/ /app/truesignal_sdk/
+COPY sdk/python/doppel_sdk/ /app/doppel_sdk/
 COPY sdk/python/template/sensor.py /app/sensor.py
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 USER 65532:65532

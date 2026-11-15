@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "description": "Reference sensor: reports every TCP connection to one port and closes it.",
   "category": "reference",
-  "author": "TrueSignal",
+  "author": "Doppel",
   "documentation": "Copy `sensors/template` to start a new sensor.",
   "image": {
     "repository": "ghcr.io/mahmoudahmed3132/ts-sensor-template",

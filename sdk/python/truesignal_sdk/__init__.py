@@ -1,26 +1,19 @@
 # Copyright (c) 2026 TrueSignal Deception. All rights reserved.
-"""TrueSignal Python sensor SDK (contract v3, spec §5 / §11.6).
+"""Compatibility alias for one release (QUESTIONS Q66): the SDK is now
+``doppel_sdk``. ``import truesignal_sdk`` (and its submodules) keeps working
+and warns; switch imports to ``doppel_sdk``."""
 
-Standard library only. A sensor defines a :class:`Spec` (fire-drill event and
-a ``run(sensor, stop)`` function) and calls :func:`main`::
+import importlib
+import sys
+import warnings
 
-    from truesignal_sdk import Spec, Drill, main
+import doppel_sdk
+from doppel_sdk import *  # noqa: F401,F403
 
-    def run(sensor, stop):
-        while not stop.wait(1):
-            ...
-            sensor.report("my_trigger", source, target, {"key": "value"})
+warnings.warn("truesignal_sdk is renamed doppel_sdk; this alias is removed in the next release",
+              DeprecationWarning, stacklevel=2)
 
-    main(Spec(drill=Drill("my_trigger", "My decoy"), run=run))
-"""
+for _name in ("client", "config", "eventqueue", "events", "limiter", "sensor", "util", "uuid7"):
+    sys.modules[__name__ + "." + _name] = importlib.import_module("doppel_sdk." + _name)
 
-from .config import Config, ConfigError
-from .events import Severity, DRILL_SOURCE
-from .limiter import SourceLimiter
-from .sensor import SDK_VERSION, Drill, Options, Reporter, Sensor, Spec, main, run
-from .util import clean, printable
-
-__all__ = [
-    "Config", "ConfigError", "Drill", "Options", "DRILL_SOURCE", "Reporter", "SDK_VERSION", "Sensor",
-    "Severity", "SourceLimiter", "Spec", "clean", "main", "printable", "run",
-]
+__all__ = getattr(doppel_sdk, "__all__", [])

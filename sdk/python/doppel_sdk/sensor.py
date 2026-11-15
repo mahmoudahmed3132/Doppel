@@ -83,7 +83,7 @@ class _JSONFormatter(logging.Formatter):
 
 
 def _default_logger() -> logging.Logger:
-    log = logging.getLogger("truesignal_sdk")
+    log = logging.getLogger("doppel_sdk")
     if not log.handlers:
         h = logging.StreamHandler(sys.stderr)
         h.setFormatter(_JSONFormatter())

@@ -9,7 +9,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 const sensorCols = `node_id, id, catalogue_name, version, config, silenced, status, status_changed_at,

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 // ContentSecurityPolicy is applied to every response (§7, §13).

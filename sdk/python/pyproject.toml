@@ -1,16 +1,16 @@
 # Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 # Runtime: standard library only (spec §11.6). setuptools is needed only to
-# build/install the package with pip; sensors can also vendor truesignal_sdk/.
+# build/install the package with pip; sensors can also vendor doppel_sdk/.
 [build-system]
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "truesignal-sdk"
+name = "doppel-sdk"
 version = "3.0.0"
-description = "TrueSignal sensor SDK (contract v3), standard library only"
+description = "Doppel sensor SDK (contract v3), standard library only"
 requires-python = ">=3.11"
 dependencies = []
 
 [tool.setuptools]
-packages = ["truesignal_sdk"]
+packages = ["doppel_sdk", "truesignal_sdk"]

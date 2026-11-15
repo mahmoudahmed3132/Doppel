@@ -9,7 +9,7 @@
 # Options:
 #   --version X.Y.Z   CLI version (default: newest cli/vX.Y.Z release)
 #   --sha256 HEX      also require this SHA-256 for the binary (pinning)
-#   --hub URL         run `truesignal link URL` afterwards (needs TS_NODE_KEY)
+#   --hub URL         run `doppel link URL` afterwards (needs TS_NODE_KEY)
 #   --prefix DIR      install directory (default /usr/local/bin)
 #   --base-url URL    release base URL (https:// or file://; for mirrors/tests)
 #
@@ -22,11 +22,11 @@ set -eu
 # Releases are downloaded from the public releases repository; they are built
 # and signed in the (private) source repository, which the signature names.
 RELEASES_REPO="mahmoudahmed3132/truesignal-releases"
-SIGNER_REPO="mahmoudahmed3132/TrueSignal-Rewrite"
+SIGNER_REPO="mahmoudahmed3132/Doppel"
 WORKFLOW="publish-cli.yml"
 OIDC_ISSUER="https://token.actions.githubusercontent.com"
 
-say() { printf '%s\n' "truesignal-install: $*" >&2; }
+say() { printf '%s\n' "doppel-install: $*" >&2; }
 die() { say "error: $*"; exit 1; }
 
 fetch() { # url dest
@@ -112,8 +112,8 @@ main() {
 
 	[ -n "$VERSION" ] || VERSION=$(latest_version)
 	[ -n "$BASE" ] || BASE="https://github.com/$RELEASES_REPO/releases/download/cli/v$VERSION"
-	ASSET="truesignal-linux-$ARCH"
-	say "installing truesignal $VERSION ($ARCH) from $BASE"
+	ASSET="doppel-linux-$ARCH"
+	say "installing doppel $VERSION ($ARCH) from $BASE"
 
 	fetch "$BASE/$ASSET" "$TMP/$ASSET"
 	fetch "$BASE/SHA256SUMS" "$TMP/SHA256SUMS"
@@ -139,12 +139,14 @@ main() {
 	fi
 
 	mkdir -p "$PREFIX"
-	install -m 0755 "$TMP/$ASSET" "$PREFIX/truesignal"
-	say "installed $PREFIX/truesignal"
+	install -m 0755 "$TMP/$ASSET" "$PREFIX/doppel"
+	# Compatibility for one release (Q66): the old command name still works.
+	ln -sf doppel "$PREFIX/truesignal"
+	say "installed $PREFIX/doppel (and the compatibility link $PREFIX/truesignal)"
 
 	if [ -n "$HUB" ]; then
 		[ -n "${TS_NODE_KEY:-}" ] || die "--hub given but TS_NODE_KEY is not set"
-		"$PREFIX/truesignal" link "$HUB"
+		"$PREFIX/doppel" link "$HUB"
 	fi
 }
 

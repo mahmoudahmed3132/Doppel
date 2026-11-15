@@ -11,16 +11,16 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/analytics"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/auth"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/domain"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/hubsettings"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ingest"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/livefeed"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/ported"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/semver"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/store"
-	"github.com/mahmoudahmed3132/TrueSignal-Rewrite/hub/internal/updatecheck"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/analytics"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/hubsettings"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ingest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/livefeed"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/updatecheck"
 )
 
 // InsightStore is the persistence analytics needs.
