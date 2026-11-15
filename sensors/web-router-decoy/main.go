@@ -21,7 +21,7 @@ import (
 const ContainerPort = 8080
 
 // skins is the page renderer; replaced by the PORTED module on import.
-var skins Skins = stubSkins{}
+var skins Skins = builtinSkins{}
 
 var spec = sensor.Spec{
 	Drill: sensor.Drill{

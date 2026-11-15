@@ -15,7 +15,7 @@
   },
   "config": [
     {"name": "TS_PORT", "type": "port", "default": "8080", "description": "Host port the decoy appears on"},
-    {"name": "TS_SKIN", "type": "string", "default": "generic", "description": "Device skin to impersonate", "validation": {"pattern": "[a-z0-9-]{1,40}"}},
+    {"name": "TS_SKIN", "type": "string", "default": "generic", "description": "Login surface to impersonate: generic, router, nas, vpn, webmail, admin or basic (HTTP Basic auth)", "validation": {"pattern": "[a-z0-9-]{1,40}"}},
     {"name": "TS_PASSWORD_CAPTURE", "type": "enum", "default": "hash", "description": "hash: HMAC with the node capture key; plain: clear text; none: not captured", "validation": {"enum": ["hash", "plain", "none"]}},
     {"name": "TS_CAPTURE_KEY", "type": "string", "hub_reserved": true, "description": "Per-node capture hash key"},
     {"name": "TS_PAGEVIEW_WINDOW_SEC", "type": "int", "default": "300", "description": "One page-view event per source per window", "validation": {"min": 0, "max": 86400}},
