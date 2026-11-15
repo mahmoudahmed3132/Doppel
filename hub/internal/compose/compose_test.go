@@ -443,6 +443,15 @@ func TestRealManifestsRender(t *testing.T) {
 				cfg[k.Name] = strconv.Itoa(30000 + i)
 			case k.ItemType == "path" || k.Type == "path":
 				cfg[k.Name] = lureDir + "/passwords.txt"
+			case k.Name == "TS_BEACON_DOMAIN":
+				cfg[k.Name] = "t.example.com"
+			}
+		}
+		// Every listen port gets a distinct value, so sensors whose defaults
+		// collide (DNS 53, HTTP 80) still render together on one node.
+		for j, lp := range m.Runtime.ListenPorts {
+			if _, set := cfg[lp.ConfigKey]; !set {
+				cfg[lp.ConfigKey] = strconv.Itoa(31000 + 10*i + j)
 			}
 		}
 		sensors = append(sensors, domain.Sensor{ID: "ts-sensor-" + m.Name, CatalogueName: m.Name, Version: m.Version, Config: cfg})
@@ -477,6 +486,7 @@ func TestRealManifestsRender(t *testing.T) {
 		"ts-sensor-file-canary-init":      {"0:0", "DAC_OVERRIDE", "none"},
 		"ts-sensor-web-router-decoy":      {DefaultUser, "", "bridge"},
 		"ts-sensor-template":              {DefaultUser, "", "host"},
+		"ts-sensor-token-receiver":        {"0:0", "NET_BIND_SERVICE", "host"},
 	}
 	for name, w := range want {
 		s := d.Services[name]
@@ -489,7 +499,8 @@ func TestRealManifestsRender(t *testing.T) {
 		}
 	}
 	if d.Services["ts-sensor-web-router-decoy"].Environment["TS_CAPTURE_KEY"] == "" ||
-		d.Services["ts-sensor-file-canary-init"].Environment["TS_HONEYTOKEN"] == "" {
+		d.Services["ts-sensor-file-canary-init"].Environment["TS_HONEYTOKEN"] == "" ||
+		d.Services["ts-sensor-token-receiver"].Environment["TS_BEACON_KEY"] == "" {
 		t.Fatal("hub secrets not injected")
 	}
 	if len(d.Meta.HostPaths) != 1 || d.Meta.HostPaths[0] != lureDir+"/passwords.txt" {
