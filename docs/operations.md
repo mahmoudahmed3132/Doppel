@@ -60,11 +60,34 @@ refuse unsigned manifests and unpinned images.
    record**. Audit records and events flow there; the Hub is not the system
    of record for PCI DSS 10.x retention.
 
+### Secrets at rest
+
+The Hub seals its secrets (master keys, SIEM token, webhook URL, TOTP seed,
+honeytoken secrets) under a key-encryption key (KEK) that production requires:
+
+```sh
+mkdir -p secrets && docker run --rm ghcr.io/mahmoudahmed3132/ts-hub:3.0.0@sha256:<digest> kek-generate > secrets/hub_kek && chmod 600 secrets/hub_kek
+```
+
+`deploy/compose.yaml` mounts it as the Docker secret `hub_kek` (`TS_KEK_FILE`).
+On first start with a KEK the Hub seals existing plaintext in place and
+VACUUMs. Rules:
+
+- **Back the KEK up separately** from the database and its backups; without it
+  the sealed secrets are unrecoverable. Never store it in `hub-data`.
+- Rotate: stop the Hub, `truesignal-hub kek-rotate OLD_FILE NEW_FILE`, point
+  `TS_KEK_FILE` at the new file, start. Only the data key is re-wrapped.
+- The upgrade writes `<db>.pre-v3-<time>.bak` first. It is **plaintext** (the
+  rollback copy for the previous Hub). Delete it once the upgrade is verified.
+- Development without a KEK needs `TS_ENV=development` and
+  `TS_DEV_ALLOW_PLAINTEXT_SECRETS=true`.
+- An encrypted database cannot be opened without its KEK, and a Hub older than
+  schema v3 refuses it.
+
 Back up the `hub-data` volume (SQLite database) with the Hub stopped, or use
-`sqlite3 truesignal.db ".backup out.db"` while running. It contains the argon2id
-password hash, node-key hashes and, **in plaintext**, the Hub master keys, the SIEM
-token, the webhook URL and the TOTP seed: encrypt backups and restrict the
-volume to the Hub user (see THREATMODEL.md R1).
+`sqlite3 truesignal.db ".backup out.db"` while running. With a KEK in place the
+backup holds the argon2id password hash, node-key hashes and the **sealed**
+secrets; the KEK is not in it (see THREATMODEL.md R1).
 
 ## 3. Upgrade the Hub
 

@@ -15,13 +15,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/seal"
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 )
 
 // DB is the Hub database.
 type DB struct {
-	sql *sql.DB
-	now func() time.Time
+	sql    *sql.DB
+	now    func() time.Time
+	sealer *seal.Sealer // nil until EnableEncryption
 }
 
 // Options configures Open.

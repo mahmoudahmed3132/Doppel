@@ -4,6 +4,8 @@
 //
 //	truesignal-hub [serve]   run the Hub (default)
 //	truesignal-hub mfa-reset remove MFA from the admin account (Hub stopped)
+//	truesignal-hub kek-generate        print a new key-encryption key (64 hex characters)
+//	truesignal-hub kek-rotate OLD NEW  re-wrap the data key under a new KEK file (Hub stopped)
 //	truesignal-hub version   print the version
 package main
 
@@ -46,6 +48,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/manifest"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ratelimit"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/seal"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/secrets"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/siem"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/signing"
@@ -74,16 +77,90 @@ func main() {
 		err = serve(log)
 	case "mfa-reset":
 		err = mfaReset(log)
+	case "kek-generate":
+		err = kekGenerate()
+	case "kek-rotate":
+		err = kekRotate(log, os.Args[2:])
 	case "version":
 		fmt.Printf("truesignal-hub %s (contract %d, schema v%d)\n", Version, contractVersion, store.SchemaVersion())
 	default:
-		fmt.Fprintf(os.Stderr, "usage: truesignal-hub [serve|mfa-reset|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: truesignal-hub [serve|mfa-reset|kek-generate|kek-rotate|version]\n")
 		os.Exit(2)
 	}
 	if err != nil {
 		log.Error("fatal", "error", err.Error())
 		os.Exit(1)
 	}
+}
+
+// openStore opens the database and applies the secrets-at-rest policy: with a
+// KEK file every secret is sealed (existing plaintext is migrated); without
+// one the Hub refuses to start in production, and refuses a database that is
+// already encrypted.
+func openStore(ctx context.Context, cfg *config.Config, log *slog.Logger) (*store.DB, error) {
+	if err := cfg.SecretsPolicy(); err != nil {
+		return nil, err
+	}
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	if err != nil {
+		return nil, err
+	}
+	if cfg.KEKFile != "" {
+		if err := db.EnableEncryption(ctx, seal.FileProvider{Path: cfg.KEKFile}, log); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("secrets at rest: %w", err)
+		}
+		return db, nil
+	}
+	if on, _, err := db.EncryptionState(ctx); err != nil || on {
+		db.Close()
+		if err == nil {
+			err = store.ErrSealedNoKey
+		}
+		return nil, err
+	}
+	return db, nil
+}
+
+func kekGenerate() error {
+	k, err := seal.GenerateKEK()
+	if err != nil {
+		return err
+	}
+	fmt.Println(k)
+	return nil
+}
+
+// kekRotate re-wraps the data key under a new KEK. The Hub must be stopped;
+// the new file must exist and be what TS_KEK_FILE points to afterwards. Back
+// up the old KEK until the Hub has started once with the new one.
+func kekRotate(log *slog.Logger, args []string) error {
+	if len(args) != 2 {
+		return errors.New("usage: truesignal-hub kek-rotate OLD_KEK_FILE NEW_KEK_FILE")
+	}
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	oldKEK, err := seal.FileProvider{Path: args[0]}.KEK(ctx)
+	if err != nil {
+		return err
+	}
+	newKEK, err := seal.FileProvider{Path: args[1]}.KEK(ctx)
+	if err != nil {
+		return err
+	}
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := db.RotateKEK(ctx, oldKEK, newKEK); err != nil {
+		return err
+	}
+	log.Warn("key-encryption key rotated; point TS_KEK_FILE at the new file before starting the Hub", "kek_fingerprint", seal.Fingerprint(newKEK))
+	return nil
 }
 
 func mfaReset(log *slog.Logger) error {
@@ -95,7 +172,7 @@ func mfaReset(log *slog.Logger) error {
 		return fmt.Errorf("database %s: %w", cfg.DBPath, err)
 	}
 	ctx := context.Background()
-	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	db, err := openStore(ctx, cfg, log)
 	if err != nil {
 		return err
 	}
@@ -123,7 +200,7 @@ func serve(log *slog.Logger) error {
 	defer stop()
 
 	startedAt := time.Now().UTC()
-	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	db, err := openStore(ctx, cfg, log)
 	if err != nil {
 		return err
 	}

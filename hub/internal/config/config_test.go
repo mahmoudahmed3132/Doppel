@@ -77,3 +77,33 @@ func TestInvalidValuesRefuse(t *testing.T) {
 		t.Fatal("secret echoed in error")
 	}
 }
+
+func TestSecretsPolicy(t *testing.T) {
+	for name, tc := range map[string]struct {
+		env map[string]string
+		ok  bool
+	}{
+		"production, no kek":     {map[string]string{}, false},
+		"production, plaintext":  {map[string]string{"TS_DEV_ALLOW_PLAINTEXT_SECRETS": "true"}, false},
+		"production, kek":        {map[string]string{"TS_KEK_FILE": "/run/secrets/k"}, true},
+		"development, no flag":   {map[string]string{"TS_ENV": "development"}, false},
+		"development, plaintext": {map[string]string{"TS_ENV": "development", "TS_DEV_ALLOW_PLAINTEXT_SECRETS": "true"}, true},
+		"development, kek":       {map[string]string{"TS_ENV": "development", "TS_KEK_FILE": "/k"}, true},
+	} {
+		c, err := Load(env(tc.env))
+		if err != nil {
+			t.Fatal(name, err)
+		}
+		if got := c.SecretsPolicy() == nil; got != tc.ok {
+			t.Errorf("%s: ok=%v want %v", name, got, tc.ok)
+		}
+	}
+	c, _ := Load(env(map[string]string{"TS_ENV": "development", "TS_DEV_ALLOW_PLAINTEXT_SECRETS": "true"}))
+	found := false
+	for _, w := range c.DevWarnings() {
+		found = found || strings.Contains(w, "plaintext")
+	}
+	if !found {
+		t.Error("no warning for plaintext secrets")
+	}
+}

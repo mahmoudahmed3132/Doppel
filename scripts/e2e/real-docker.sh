@@ -64,8 +64,9 @@ done
 (cd "$W/reg" && exec python3 -m http.server 18081 --bind 127.0.0.1 >/dev/null 2>&1) &
 REGPID=$!
 
-step "start the Hub"
-TS_ENV=development TS_SETUP_TOKEN=e2e-setup-token-0123456789abcdef TS_DB_PATH="$W/ts.db" TS_LISTEN_PORT=18080 \
+step "start the Hub (secrets sealed under a generated KEK)"
+"$W/hub" kek-generate > "$W/kek"; chmod 600 "$W/kek"
+TS_KEK_FILE="$W/kek" TS_ENV=development TS_SETUP_TOKEN=e2e-setup-token-0123456789abcdef TS_DB_PATH="$W/ts.db" TS_LISTEN_PORT=18080 \
 	TS_REGISTRY_URL=http://127.0.0.1:18081/ TS_DEV_ALLOW_UNSIGNED_MANIFESTS=1 \
 	TS_UPDATE_CHECK_URL=https://127.0.0.1:1/none "$W/hub" serve > "$W/hub.log" 2>&1 &
 echo $! > "$W/hub.pid"

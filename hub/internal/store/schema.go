@@ -135,6 +135,18 @@ CREATE TABLE catalogue_cache (
 	PRIMARY KEY (name, version)
 );
 `},
+	// v3: secrets at rest (docs/plan/ROADMAP.md E1). The wrapped data key
+	// lives here. Its presence also makes older Hubs refuse the database
+	// (schema too new) instead of reading sealed values as if they were keys.
+	{Version: 3, SQL: `
+CREATE TABLE crypto_meta (
+	id              INTEGER PRIMARY KEY CHECK (id = 1),
+	wrapped_dek     TEXT    NOT NULL,
+	kek_fingerprint TEXT    NOT NULL,
+	created_at      INTEGER NOT NULL,
+	rotated_at      INTEGER
+);
+`},
 }
 
 // SchemaVersion is the schema version this build migrates to.
