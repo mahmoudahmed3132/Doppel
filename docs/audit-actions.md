@@ -14,6 +14,9 @@ Request bodies are never included.
 | `mfa.enrol_confirm` | MFA enrolment confirmed | `POST /api/v3/mfa/enrolment/confirm` |
 | `mfa.disable` | MFA disabled | `POST /api/v3/mfa/disable` |
 | `mfa.recovery_codes_regenerate` | recovery codes regenerated | `POST /api/v3/mfa/recovery-codes` |
+| `secrets.sealed` | first start with `TS_KEK_FILE`: existing secrets sealed at rest (`method` = `CLI`, `actor_ip` = `local`, emitted on that start) | — |
+| `secrets.kek_rotate_cli` | host command `truesignal-hub kek-rotate`; emitted on the next start | — |
+| `secrets.reset_cli` | break-glass `truesignal-hub secrets-reset --destroy-secrets` (KEK lost); emitted on the next start | — |
 | `mfa.reset_cli` | break-glass `truesignal-hub mfa-reset`; emitted on the next Hub start (`method` = `CLI`, `actor_ip` = `local`) | — |
 | `system.password_change` | admin password change | `POST /api/v3/system/password` |
 | `node.create` | node created (key issued) | `POST /api/v3/nodes` |

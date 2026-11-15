@@ -6,9 +6,11 @@ package decoy
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"net"
 	"strconv"
 	"strings"
 	"testing"
@@ -147,5 +149,35 @@ func TestLimiterSweepKeepsSuppressedCountsOneWindow(t *testing.T) {
 	l.Allow("yet-another")
 	if l.seen["new"] != nil {
 		t.Fatal("stale suppressed entry kept past the extra window")
+	}
+}
+
+func TestServePacket(t *testing.T) {
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip("no udp:", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	got := make(chan []byte, 4)
+	done := make(chan struct{})
+	go func() { ServePacket(ctx, pc, 8, func(_ net.Addr, p []byte) { got <- p }); close(done) }()
+	c, _ := net.Dial("udp", pc.LocalAddr().String())
+	c.Write([]byte("abc"))
+	c.Write([]byte("0123456789")) // longer than maxSize: truncated, still delivered
+	for _, want := range []string{"abc", "01234567"} {
+		select {
+		case p := <-got:
+			if string(p) != want {
+				t.Errorf("got %q want %q", p, want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("no datagram")
+		}
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ServePacket did not stop")
 	}
 }

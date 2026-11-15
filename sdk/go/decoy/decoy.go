@@ -16,6 +16,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -256,4 +257,37 @@ func (l *Limiter) Allow(src string) (bool, int) {
 	}
 	st.suppressed++
 	return false, 0
+}
+
+// ServePacket reads datagrams from pc until ctx ends and calls handle for
+// each with a private copy of the payload, so handle may keep it. Datagrams
+// longer than maxSize are truncated to maxSize bytes and still delivered
+// (the handler's parser rejects them); a read error other than shutdown is
+// retried. handle runs on the read goroutine: it must be quick and must not
+// block, because a slow handler would otherwise let an attacker queue
+// unbounded work. Replies are the handler's job; keep them no larger than
+// the request (see network-service-decoy.md, anti-amplification).
+func ServePacket(ctx context.Context, pc net.PacketConn, maxSize int, handle func(from net.Addr, payload []byte)) {
+	if maxSize <= 0 {
+		maxSize = 1500
+	}
+	defer pc.Close()
+	go func() {
+		<-ctx.Done()
+		pc.Close()
+	}()
+	buf := make([]byte, maxSize)
+	for {
+		n, from, err := pc.ReadFrom(buf)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
+			continue
+		}
+		handle(from, append([]byte(nil), buf[:n]...))
+	}
 }

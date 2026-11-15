@@ -4,6 +4,9 @@
 //
 //	truesignal-hub [serve]   run the Hub (default)
 //	truesignal-hub mfa-reset remove MFA from the admin account (Hub stopped)
+//	truesignal-hub kek-generate        print a new key-encryption key (64 hex characters)
+//	truesignal-hub kek-rotate OLD NEW  re-wrap the data key under a new KEK file (Hub stopped)
+//	truesignal-hub secrets-reset --destroy-secrets   KEK lost: drop every sealed secret (Hub stopped)
 //	truesignal-hub version   print the version
 package main
 
@@ -46,6 +49,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/manifest"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ratelimit"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/seal"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/secrets"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/siem"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/signing"
@@ -74,16 +78,141 @@ func main() {
 		err = serve(log)
 	case "mfa-reset":
 		err = mfaReset(log)
+	case "kek-generate":
+		err = kekGenerate()
+	case "secrets-reset":
+		err = secretsReset(log, os.Args[2:])
+	case "kek-rotate":
+		err = kekRotate(log, os.Args[2:])
 	case "version":
 		fmt.Printf("truesignal-hub %s (contract %d, schema v%d)\n", Version, contractVersion, store.SchemaVersion())
 	default:
-		fmt.Fprintf(os.Stderr, "usage: truesignal-hub [serve|mfa-reset|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: truesignal-hub [serve|mfa-reset|kek-generate|kek-rotate|secrets-reset|version]\n")
 		os.Exit(2)
 	}
 	if err != nil {
 		log.Error("fatal", "error", err.Error())
 		os.Exit(1)
 	}
+}
+
+// openStore opens the database and applies the secrets-at-rest policy: with a
+// KEK file every secret is sealed (existing plaintext is migrated); without
+// one the Hub refuses to start in production, and refuses a database that is
+// already encrypted.
+func openStore(ctx context.Context, cfg *config.Config, log *slog.Logger) (*store.DB, error) {
+	if err := cfg.SecretsPolicy(); err != nil {
+		return nil, err
+	}
+	// Check the KEK before the database is touched: a bad key file must not
+	// fail after the schema migration has already made the file unreadable to
+	// the previous Hub.
+	var provider seal.KeyProvider
+	if cfg.KEKFile != "" {
+		provider = seal.FileProvider{Path: cfg.KEKFile}
+		if _, err := provider.KEK(ctx); err != nil {
+			return nil, fmt.Errorf("secrets at rest: %w (the Hub user, uid 65532 in the container, must be able to read %s: chown 65532:65532 and chmod 400)", err, cfg.KEKFile)
+		}
+	}
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	if err != nil {
+		return nil, err
+	}
+	if provider != nil {
+		if err := db.EnableEncryption(ctx, provider, log); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("secrets at rest: %w", err)
+		}
+		// The pre-migration snapshots hold the secrets in plaintext. Once
+		// sealing has completed they are deleted, so no backup of the data
+		// directory carries them. Rolling back to a Hub without encryption is
+		// therefore not possible after the first sealed start.
+		removed, err := db.PurgePlaintextSnapshots(ctx)
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("deleting plaintext pre-migration snapshots: %w", err)
+		}
+		if len(removed) > 0 {
+			log.Info("deleted plaintext pre-migration snapshots (secrets are sealed)", "files", removed)
+		}
+		return db, nil
+	}
+	if on, _, err := db.EncryptionState(ctx); err != nil || on {
+		db.Close()
+		if err == nil {
+			err = store.ErrSealedNoKey
+		}
+		return nil, err
+	}
+	return db, nil
+}
+
+func kekGenerate() error {
+	k, err := seal.GenerateKEK()
+	if err != nil {
+		return err
+	}
+	fmt.Println(k)
+	return nil
+}
+
+// kekRotate re-wraps the data key under a new KEK. The Hub must be stopped;
+// the new file must exist and be what TS_KEK_FILE points to afterwards. Back
+// up the old KEK until the Hub has started once with the new one.
+func kekRotate(log *slog.Logger, args []string) error {
+	if len(args) != 2 {
+		return errors.New("usage: truesignal-hub kek-rotate OLD_KEK_FILE NEW_KEK_FILE")
+	}
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	oldKEK, err := seal.FileProvider{Path: args[0]}.KEK(ctx)
+	if err != nil {
+		return err
+	}
+	newKEK, err := seal.FileProvider{Path: args[1]}.KEK(ctx)
+	if err != nil {
+		return err
+	}
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := db.RotateKEK(ctx, oldKEK, newKEK); err != nil {
+		return err
+	}
+	log.Warn("key-encryption key rotated; point TS_KEK_FILE at the new file before starting the Hub", "kek_fingerprint", seal.Fingerprint(newKEK))
+	return nil
+}
+
+// secretsReset is the break-glass when the KEK is lost and cannot be
+// recovered: the sealed secrets are unreadable, so they are deleted. It needs
+// only host access to the database, like mfa-reset.
+func secretsReset(log *slog.Logger, args []string) error {
+	if len(args) != 1 || args[0] != "--destroy-secrets" {
+		return errors.New("usage: truesignal-hub secrets-reset --destroy-secrets  (deletes the SIEM token, webhook URL, master keys, admin MFA and honeytoken secrets; use only when the KEK is lost)")
+	}
+	cfg, err := config.Load(os.Getenv)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(cfg.DBPath); err != nil {
+		return fmt.Errorf("database %s: %w", cfg.DBPath, err)
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	if err := db.ResetSecrets(ctx); err != nil {
+		return err
+	}
+	log.Warn("sealed secrets deleted; re-enter the SIEM token and webhook, re-enrol MFA, expect planted honeytokens and beacons to be re-minted; start the Hub with a new TS_KEK_FILE; an audit record (secrets.reset_cli) will be emitted on next start")
+	return nil
 }
 
 func mfaReset(log *slog.Logger) error {
@@ -95,7 +224,7 @@ func mfaReset(log *slog.Logger) error {
 		return fmt.Errorf("database %s: %w", cfg.DBPath, err)
 	}
 	ctx := context.Background()
-	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	db, err := openStore(ctx, cfg, log)
 	if err != nil {
 		return err
 	}
@@ -123,7 +252,7 @@ func serve(log *slog.Logger) error {
 	defer stop()
 
 	startedAt := time.Now().UTC()
-	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	db, err := openStore(ctx, cfg, log)
 	if err != nil {
 		return err
 	}
@@ -158,6 +287,14 @@ func serve(log *slog.Logger) error {
 	}()
 
 	auditor := &audit.Recorder{Log: log, SIEM: siemSvc}
+	queued, err := db.TakeCLIAudits(ctx)
+	if err != nil {
+		return err
+	}
+	for _, q := range queued {
+		auditor.Record(ctx, domain.AuditRecord{Time: q.At, Action: q.Action, Method: "CLI",
+			Route: q.Route, Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
+	}
 	if pending, err := db.TakeMFAResetMarker(ctx); err != nil {
 		return err
 	} else if pending {

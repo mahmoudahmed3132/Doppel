@@ -30,7 +30,7 @@ Not part of `make` (needs a browser). Start a fresh development Hub, then:
 
 ```sh
 TS_ENV=development TS_SETUP_TOKEN=e2e-setup-token-0123456789abcdef \
-TS_DB_PATH=/tmp/ts-e2e.db TS_LISTEN_PORT=18080 \
+TS_DEV_ALLOW_PLAINTEXT_SECRETS=1 TS_DB_PATH=/tmp/ts-e2e.db TS_LISTEN_PORT=18080 \
 TS_REGISTRY_URL=http://127.0.0.1:18081/ TS_DEV_ALLOW_UNSIGNED_MANIFESTS=1 \
 TS_DEV_ALLOW_UNPINNED_IMAGES=1 ./bin/truesignal-hub serve
 node ui/e2e/smoke.cjs /tmp/shots

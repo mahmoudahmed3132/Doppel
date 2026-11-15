@@ -20,8 +20,11 @@ services:
       TS_ENV: production
       TS_TRUSTED_PROXIES: "127.0.0.1/32"
       TS_REQUIRE_MFA: "true"
+      TS_KEK_FILE: /run/secrets/hub_kek   # required in production (docs/operations.md "Secrets at rest")
     ports:
       - "127.0.0.1:8080:8080"
+    secrets:
+      - hub_kek
     volumes:
       - hub-data:/data
     mem_limit: 512m
@@ -29,5 +32,10 @@ services:
     logging:
       driver: json-file
       options: {max-size: "20m", max-file: "5"}
+secrets:
+  hub_kek:
+    # 64 hex characters from `truesignal-hub kek-generate`. Keep it OUT of the
+    # hub-data volume and out of the backups of that volume.
+    file: ./secrets/hub_kek
 volumes:
   hub-data: {}

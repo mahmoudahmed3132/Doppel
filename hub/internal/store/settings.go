@@ -14,7 +14,13 @@ func (db *DB) Setting(ctx context.Context, key string) (value string, ok bool, e
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
-	return value, err == nil, err
+	if err != nil {
+		return "", false, err
+	}
+	if value, err = db.openSetting(key, value); err != nil {
+		return "", false, err
+	}
+	return value, true, nil
 }
 
 // Settings returns all settings.
@@ -30,6 +36,9 @@ func (db *DB) Settings(ctx context.Context) (map[string]string, error) {
 		if err := rows.Scan(&k, &v); err != nil {
 			return nil, err
 		}
+		if v, err = db.openSetting(k, v); err != nil {
+			return nil, err
+		}
 		out[k] = v
 	}
 	return out, rows.Err()
@@ -43,8 +52,11 @@ func (db *DB) PutSettings(ctx context.Context, kv map[string]*string) error {
 			if v == nil {
 				_, err = tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, k)
 			} else {
-				_, err = tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)
-					ON CONFLICT (key) DO UPDATE SET value = excluded.value`, k, *v)
+				var sv string
+				if sv, err = db.sealSetting(k, *v); err == nil {
+					_, err = tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)
+						ON CONFLICT (key) DO UPDATE SET value = excluded.value`, k, sv)
+				}
 			}
 			if err != nil {
 				return err
@@ -57,7 +69,11 @@ func (db *DB) PutSettings(ctx context.Context, kv map[string]*string) error {
 // PutSettingIfAbsent stores value under key unless the key exists, and
 // returns the value that is stored afterwards (race-safe create-once).
 func (db *DB) PutSettingIfAbsent(ctx context.Context, key, value string) (string, error) {
-	if _, err := db.sql.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING`, key, value); err != nil {
+	sv, err := db.sealSetting(key, value)
+	if err != nil {
+		return "", err
+	}
+	if _, err := db.sql.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING`, key, sv); err != nil {
 		return "", err
 	}
 	v, ok, err := db.Setting(ctx, key)

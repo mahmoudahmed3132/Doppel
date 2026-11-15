@@ -147,14 +147,41 @@ identity-checked. The source repository's name is public in every
 certificate and in the Rekor log (accepted, Q64). GitHub and Sigstore themselves are trusted.
 
 ### B7: Hub host
-**Residual (R1):** the Hub master keys, SIEM token, webhook URL and TOTP seed
-are stored **in plaintext** in the SQLite database (the password and node keys
-are hashed). Anyone with read access to the data volume or a backup can forge
-honeytoken/beacon hits, push to the SIEM and webhook, and generate TOTP codes.
-`truesignal-hub mfa-reset` likewise requires only Docker-host access. Mitigate
-operationally: dedicated host, restricted Docker group, encrypted volume and
-backups. Encrypting these settings at rest under a key outside the database
-(KMS/TPM/env) is a recommended future change.
+**R1 (secrets at rest), mitigated by `hub/internal/seal`.** The Hub master
+keys (`capture_master_key`, `beacon_master_key`), the SIEM token, the webhook
+URL, the admin TOTP seed and pending seed, and honeytoken secrets are sealed
+with AES-256-GCM under a data key (DEK). The DEK is stored wrapped by a
+key-encryption key (KEK) read from `TS_KEK_FILE` (a file or Docker secret,
+outside the database and its backups). Each value's authenticated data binds
+it to its table, column and row, so ciphertext moved elsewhere does not open;
+once sealing is recorded (`crypto_meta.sealed_at`) the Hub is strict from the
+first read and refuses to start if a plaintext secret appears in the database
+(locations are logged, never values). Sealing and the scrub are resumable. Production refuses to start without a KEK; an encrypted
+database refuses to start without its KEK (no silent fallback). Older Hubs
+refuse the database (schema v3), so they cannot misread sealed values.
+**Protects:** a copy of the database file, a volume snapshot or a backup taken
+without the KEK. The plaintext pre-migration snapshots are deleted after the
+first sealed start (residual (a)); plaintext remnants are removed from free pages and the WAL at
+migration (VACUUM, temporary copy placed next to the database; secure_delete is
+on for later deletes). **Does not protect against:** root on the running Hub host
+(the DEK is in process memory and the KEK file is readable by the Hub user),
+nor `truesignal-hub mfa-reset`, which needs only Docker-host access.
+**Residual:** (a) the pre-migration snapshots `<db>.pre-v*-<time>.bak` are
+plaintext rollback copies. The Hub deletes every snapshot written before
+sealing (modification time not after `sealed_at`) once sealing and the scrub
+have completed, at every start, so a crash between the two is repaired. The
+cost: rolling back to a Hub without encryption is impossible after the first
+sealed start, and the window between the upgrade's snapshot and the first
+sealed start is the exposure (Q74); a backup taken by hand inside that window
+or before it still holds plaintext; (b) `beacons.token` is not sealed
+(equality lookup; an identifier printed into artefacts, no authority by
+itself); (c) sensor configuration is not sealed: no manifest declares a
+`secret` key yet, and Hub-reserved keys are derived at render time, never
+stored; (d) KEK loss means the sealed secrets are unrecoverable. Recovery is the
+host-side `truesignal-hub secrets-reset --destroy-secrets` (Hub stopped; audited
+on the next start as `secrets.reset_cli`): it deletes the sealed secrets, so the
+SIEM token, webhook and MFA must be re-entered and planted honeytokens and
+beacons are orphaned. Back the KEK up separately from the database.
 
 ## Imported modules (merge from Doppel)
 
@@ -168,10 +195,10 @@ and `PROVENANCE.md` record its origin.
 | GeoIP (`hub/internal/geoip`) | Internal addresses (private, CGNAT, loopback, link-local, ULA) are never looked up. The database is loaded from a private copy, so overwriting the file in place cannot corrupt the live mapping; a file that is not a City database is refused and the current one stays. Auto-update (off by default, Q70): HTTPS only, same-host redirects only, size limits, validated before the swap. Residual: DB-IP publishes no signature, so a compromised download host could feed false locations; locations are advisory enrichment and never drive a security decision |
 | Asset inventory (`hub/internal/assets`) | Strict JSON (unknown fields refused), at most 5000 assets, 256-byte fields, 20 tags, duplicates and invalid IP/CIDR refused; a refused save keeps the current inventory. Lookups never resolve names (IP sources only). Residual: the inventory reveals the internal network layout to anyone with an admin session |
 | ATT&CK mapping (`hub/internal/attack`) | A fixed table plus two suffix rules; no input reaches it except the trigger, which ingest has already validated (Q8). Unmapped triggers carry nothing rather than a guess. Hub-raised liveness and apply-failure events are excluded from the matrix. Residual: a wrong mapping misleads SOC triage; `TestDocMatchesCode` keeps `docs/siem/attack-mapping.md` and the code in step |
-| Honeytoken service (`hub/internal/honeytoken`) | Tokens are random (`svc_<word><4 hex>`, 15-character secret from a 57-symbol alphabet), one per File Canary instance, and stable. Secrets never leave the Hub except into that sensor's rendered compose (node-authenticated fetch only, Q26); the inventory, API listing and raised events never carry them. Password matching uses HMAC under the reporting node's capture key, compared with `hmac.Equal`, so a node can only test its own captures; usernames match fleet-wide. Hub-raised `honeytoken_used` is never re-matched and is reserved for sensors. Residual: secrets are stored in plaintext in SQLite (R1); a plaintext capture mode on a sensor exposes tried passwords to the Hub |
+| Honeytoken service (`hub/internal/honeytoken`) | Tokens are random (`svc_<word><4 hex>`, 15-character secret from a 57-symbol alphabet), one per File Canary instance, and stable. Secrets never leave the Hub except into that sensor's rendered compose (node-authenticated fetch only, Q26); the inventory, API listing and raised events never carry them. Password matching uses HMAC under the reporting node's capture key, compared with `hmac.Equal`, so a node can only test its own captures; usernames match fleet-wide. Hub-raised `honeytoken_used` is never re-matched and is reserved for sensors. Residual: secrets are sealed at rest (R1) but the Hub holds them in memory; a plaintext capture mode on a sensor exposes tried passwords to the Hub |
 | Beacon service (`hub/internal/beacon`) | Tokens: 80 random bits plus a 40-bit HMAC tag under the receiver key, so receivers drop invented names offline; the Hub resolves only tokens it stored, and an unknown token is medium severity with `beacon_known: false`. The master key never leaves the Hub; the receiver key is shared by every receiver (a compromised receiver can mint valid-looking tokens, which still resolve to nothing). Artefacts carry neither the beacon name nor the memo nor the product name. Residual: web bugs are plain `http://` (an HTTPS front end is an operator choice); the shared receiver key is a single secret for every receiver |
 | ECS renderer (`hub/internal/ecs`) | Output-only. `source.ip` is set only from a parseable address, so a sensor-controlled source string cannot break a typed SIEM field. Captured secrets stay in `truesignal.details`, never in `user.*`. Inventory documents never carry a honeytoken secret. Residual: `truesignal.details` passes sensor-supplied content to the SIEM as data; SIEM-side parsers must treat it as untrusted |
-| HTTP SIEM transports (`hub/internal/siemhttp`) | HTTPS only (addresses without credentials), TLS 1.2+, system roots plus the optional SIEM CA bundle, redirects never followed (the token cannot leak to another host; a redirect is terminal), 10 s per request, responses read to 64 KiB. Outcomes: network, 5xx and 429 transient (retried by the SIEM service), everything else terminal. Residual: the API key or ingest token is stored in plaintext in SQLite (R1) |
+| HTTP SIEM transports (`hub/internal/siemhttp`) | HTTPS only (addresses without credentials), TLS 1.2+, system roots plus the optional SIEM CA bundle, redirects never followed (the token cannot leak to another host; a redirect is terminal), 10 s per request, responses read to 64 KiB. Outcomes: network, 5xx and 429 transient (retried by the SIEM service), everything else terminal. Residual: the API key or ingest token is sealed at rest (R1) |
 | Analytics projections (`hub/internal/projections`) | Read-only aggregations over the Hub window (at most the Hub's projection event cap); parameters are bounded by the Hub (16 keys, 256 bytes) and validated per projection (`source` ≤ 256 bytes, report range ≤ 366 days). Hub-raised liveness is excluded. Residual: an attack-path timeline returns raw event details to the admin session, as the events API does |
 | Lure content (`sensors/file-canary/lures_generated.go`) | Everything in a lure is fabricated: the honeytoken from the Hub plus random secrets, loopback hosts only, no product name, so a stolen lure leaks nothing real. Lures are created with `O_EXCL|O_NOFOLLOW` (never overwrite, never follow a link; base code). Residual: content shape may be fingerprinted by an attacker who knows the product |
 | Web skins (`sensors/web-router-decoy/skins_builtin.go`) | Fixed skin data rendered by `html/template` (auto-escaped; the posted username is never echoed). Pages never name the product. The Basic realm comes from fixed data. Capture and rate limiting stay in the base decoy (hash capture, per-source limits). Residual: skins are generic look-alikes, not vendor copies; a careful attacker may recognise a decoy |

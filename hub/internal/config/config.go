@@ -34,6 +34,8 @@ const (
 	EnvDevAllowUnpinned    = "TS_DEV_ALLOW_UNPINNED_IMAGES"
 	EnvRegistryURL         = "TS_REGISTRY_URL"
 	EnvUpdateCheckURL      = "TS_UPDATE_CHECK_URL"
+	EnvKEKFile             = "TS_KEK_FILE"
+	EnvDevAllowPlaintext   = "TS_DEV_ALLOW_PLAINTEXT_SECRETS"
 )
 
 // Config is the Hub process configuration.
@@ -55,6 +57,8 @@ type Config struct {
 	SigstoreRoot      string
 	DevAllowUnsigned  bool
 	DevAllowUnpinned  bool
+	KEKFile           string // key-encryption key file (secrets at rest); required in production
+	DevAllowPlaintext bool   // development only: run without a KEK, secrets in plaintext
 	RegistryURL       string // default registry; the registry_url setting overrides it
 	UpdateCheckURL    string // releases API queried by the update check (§6.11)
 }
@@ -131,6 +135,8 @@ func Load(getenv func(string) string) (*Config, error) {
 	boolVar(EnvGeoIPAutoUpdate, &c.GeoIPAutoUpdate)
 	boolVar(EnvDevAllowUnsigned, &c.DevAllowUnsigned)
 	boolVar(EnvDevAllowUnpinned, &c.DevAllowUnpinned)
+	boolVar(EnvDevAllowPlaintext, &c.DevAllowPlaintext)
+	c.KEKFile = get(EnvKEKFile)
 
 	// Secrets are not trimmed beyond surrounding whitespace and never echoed.
 	c.DashboardPassword = getenv(EnvDashboardPassword)
@@ -199,6 +205,16 @@ func parsePrefix(s string) (netip.Prefix, error) {
 	return netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()), nil
 }
 
+// SecretsPolicy says how the Hub must treat secrets at rest: a KEK file is
+// always used when given; without one, only a development Hub that opted in
+// with TS_DEV_ALLOW_PLAINTEXT_SECRETS may start.
+func (c *Config) SecretsPolicy() error {
+	if c.KEKFile != "" || (c.Development && c.DevAllowPlaintext) {
+		return nil
+	}
+	return fmt.Errorf("%s is required: the Hub encrypts its secrets at rest under a key-encryption key (create one with `truesignal-hub kek-generate`; development may set %s=true instead)", EnvKEKFile, EnvDevAllowPlaintext)
+}
+
 // DevWarnings lists active development-only relaxations, for a loud startup log.
 func (c *Config) DevWarnings() []string {
 	var w []string
@@ -207,6 +223,9 @@ func (c *Config) DevWarnings() []string {
 	}
 	if c.DevAllowUnpinned {
 		w = append(w, EnvDevAllowUnpinned+" is set: images without @sha256 digests are accepted")
+	}
+	if c.DevAllowPlaintext && c.KEKFile == "" {
+		w = append(w, EnvDevAllowPlaintext+" is set: secrets are stored in plaintext")
 	}
 	if c.Development {
 		w = append(w, EnvEnvironment+"=development: cookie Secure flag and WebSocket origin check are relaxed")
