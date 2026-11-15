@@ -507,3 +507,49 @@ func TestRealManifestsRender(t *testing.T) {
 		t.Fatalf("host paths %v", d.Meta.HostPaths)
 	}
 }
+
+// A multi-protocol decoy declares one port key and one enable flag per
+// protocol; a disabled protocol must not hold its default port.
+func TestEnabledKeyPorts(t *testing.T) {
+	m := tarpit()
+	m.Name = "multi-decoy"
+	m.Runtime.ListenPorts = []manifest.ListenPort{
+		{ConfigKey: "TS_SSH_PORT", Protocol: "tcp", EnabledKey: "TS_SSH_ENABLED"},
+		{ConfigKey: "TS_SNMP_PORT", Protocol: "udp", EnabledKey: "TS_SNMP_ENABLED"},
+	}
+	m.Config = []manifest.ConfigKey{
+		{Name: "TS_SSH_ENABLED", Type: "bool", Default: str("true"), Description: "ssh"},
+		{Name: "TS_SSH_PORT", Type: "port", Default: str("22"), Description: "ssh port"},
+		{Name: "TS_SNMP_ENABLED", Type: "bool", Default: str("true"), Description: "snmp"},
+		{Name: "TS_SNMP_PORT", Type: "port", Default: str("161"), Description: "snmp port"},
+		{Name: "TS_CAPTURE_KEY", Type: "string", HubReserved: true, Description: "capture key"},
+	}
+	if err := m.Validate(manifest.Options{AllowUnpinned: true}); err != nil {
+		t.Fatalf("manifest invalid: %v", err)
+	}
+	c := compiler(tarpit(), m)
+	other := sensor("ts-sensor-a", "tcp-tarpit", map[string]string{"TS_PORTS": "22"})
+	// enabled: SSH default port 22 collides with the tarpit.
+	_, _, err := render(t, c, true, other, sensor("ts-sensor-b", "multi-decoy", nil))
+	wantCode(t, err, 409, "port_conflict")
+	// disabled: no claim, so both render.
+	if _, _, err := render(t, c, true, other, sensor("ts-sensor-b", "multi-decoy", map[string]string{"TS_SSH_ENABLED": "false"})); err != nil {
+		t.Fatalf("disabled port still conflicts: %v", err)
+	}
+	// enabled_key must reference a declared bool key.
+	bad := *m
+	bad.Runtime.ListenPorts = []manifest.ListenPort{{ConfigKey: "TS_SSH_PORT", Protocol: "tcp", EnabledKey: "TS_SSH_PORT"}}
+	if err := bad.Validate(manifest.Options{AllowUnpinned: true}); err == nil {
+		t.Error("non-bool enabled_key accepted")
+	}
+	// bridge mode does not publish a disabled port.
+	br := *m
+	br.Runtime.NetworkMode, br.Runtime.CapAdd = "bridge", nil
+	d, _, err := render(t, compiler(&br), true, sensor("ts-sensor-b", "multi-decoy", map[string]string{"TS_SSH_ENABLED": "false"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := d.Services["ts-sensor-b"].Ports; len(p) != 1 || p[0].Target != 161 || p[0].Protocol != "udp" {
+		t.Fatalf("ports %+v", p)
+	}
+}

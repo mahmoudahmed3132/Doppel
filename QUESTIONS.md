@@ -538,3 +538,7 @@ to Go 1.27 in one deliberate branch, once a Go 1.27 patch release is at least
 14 days old: `go.work`, every `go.mod` (`go` and `toolchain`), CI and CodeQL
 `setup-go`, the Dockerfiles' golang images and HANDOFF/README. Run all gates
 before merging.
+
+### Q73 — clean specs, common-decoy — Per-protocol enable flags and conditional privilege
+`common-decoy.md` wants one enable flag and one port per protocol, and UID 0 with `NET_BIND_SERVICE` only when a configured port is below 1024. A manifest is static, and rule 7 treated every declared port as claimed even when its protocol was off.
+**Meanwhile:** manifest v3 gains the optional `listen_ports[].enabled_key` (a declared bool key; false means no conflict check and no publishing). The privilege cannot depend on config: a decoy whose default ports are below 1024 declares UID 0 plus `NET_BIND_SERVICE` (as `tcp-tarpit` does, Q47); one that is configured to high ports only still gets that capability. A Hub older than this change rejects manifests carrying `enabled_key` (strict decoding), so release the Hub before publishing a decoy.
