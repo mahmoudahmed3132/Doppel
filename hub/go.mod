@@ -1,6 +1,10 @@
 module github.com/mahmoudahmed3132/Doppel/hub
 
-go 1.27.0
+go 1.26.0
+
+toolchain go1.26.10
+
+require modernc.org/sqlite v1.61.1
 
 require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
