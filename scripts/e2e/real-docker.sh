@@ -6,10 +6,11 @@
 # Hub, the real CLI applying the Hub-rendered compose with `docker compose`,
 # real connections to the decoys, events and heartbeats arriving, container
 # hardening as rendered (§6.12), fire drill, idempotent re-apply, uninstall.
+# KEEP=1 stops before the uninstall and leaves the POC running (docs/poc.md).
 #
 # Needs: docker with the compose plugin, go, jq, curl, sudo (the CLI runs as
-# root). Development flag used: unsigned manifests (the PORTED verifier is
-# not installed); images are still pinned by digest.
+# root). Development flag used: unsigned manifests (the local registry is not
+# signed by a release workflow); images are still pinned by digest.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 W=$(mktemp -d)
@@ -30,6 +31,7 @@ cleanup() {
 		echo "--- containers"; docker ps -a --filter label=io.truesignal.role=sensor || true
 		for c in $(docker ps -aq --filter label=io.truesignal.role=sensor); do echo "--- logs $c"; docker logs --tail 30 "$c" 2>&1 || true; done
 	fi
+	if [ "${KEEP:-0}" = 1 ] && [ "$rc" -eq 0 ]; then exit 0; fi # POC mode: leave everything running
 	sudo -n "$CLI" uninstall --yes >/dev/null 2>&1 || true
 	[ -f "$W/hub.pid" ] && kill "$(cat "$W/hub.pid")" 2>/dev/null || true
 	docker rm -f ts-e2e-registry >/dev/null 2>&1 || true
@@ -152,6 +154,19 @@ sudo -n "$CLI" status
 sudo -n "$CLI" apply 2>&1 | tee "$W/apply2.txt"
 grep -q "nothing to do" "$W/apply2.txt" || fail "second apply was not a no-op"
 api GET "/nodes/$NODE" | jq -e '.node.health.in_sync' >/dev/null || fail "node not in sync after apply"
+
+if [ "${KEEP:-0}" = 1 ]; then
+	step "POC mode (KEEP=1): everything stays running"
+	cat <<POC
+Admin UI:      $HUB   (password: $PW)
+Decoys:        tcp-tarpit on 2222, template on 9099, web-router-decoy on 8081
+Try:           curl -s -X POST -d 'username=admin&password=x' http://127.0.0.1:8081/login
+               nc -z 127.0.0.1 2222; sudo $CLI firedrill
+Stop:          sudo $CLI uninstall --yes; kill \$(cat $W/hub.pid) $REGPID; docker rm -f ts-e2e-registry
+Workspace:     $W
+POC
+	exit 0
+fi
 
 step "uninstall"
 sudo -n "$CLI" uninstall --yes
