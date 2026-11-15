@@ -17,6 +17,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ecs"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/honeytoken"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/projections"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/siemhttp"
 	"log/slog"
 	"net"
@@ -312,7 +313,7 @@ func serve(log *slog.Logger) error {
 		StartedAt: startedAt, Development: cfg.Development, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin,
 		// Merged modules: ATT&CK mapper and projections (MERGE-INVENTORY.md).
 		Attack:      attack.Mapper{},
-		Projections: projections(),
+		Projections: installedProjections(geoSvc),
 	}).Register(admin)
 	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, Beacons: beacons, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
@@ -398,10 +399,11 @@ func purgeSessions(ctx context.Context, a *auth.Service, log *slog.Logger) {
 	}
 }
 
-// projections lists the installed analytics projections by name (Q56).
-func projections() map[string]ported.Projection {
+// installedProjections lists the installed analytics projections by name (Q56).
+func installedProjections(geo *geoip.Service) map[string]ported.Projection {
 	out := map[string]ported.Projection{}
-	for _, p := range []ported.Projection{attack.MatrixProjection{}} {
+	for _, p := range []ported.Projection{attack.MatrixProjection{}, projections.Sources{}, projections.GeoMap{GeoIP: geo},
+		projections.AttackPath{}, projections.Report{}} {
 		out[p.Name()] = p
 	}
 	return out
