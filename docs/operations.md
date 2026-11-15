@@ -83,10 +83,13 @@ VACUUMs. Rules:
   the sealed secrets are unrecoverable. Never store it in `hub-data`.
 - Rotate: stop the Hub, `truesignal-hub kek-rotate OLD_FILE NEW_FILE`, point
   `TS_KEK_FILE` at the new file, start. Only the data key is re-wrapped.
-- The upgrade writes `<db>.pre-v3-<time>.bak` first (and older upgrades left
-  `pre-v2` snapshots). They are **plaintext** rollback copies inside the data
-  directory, so every backup of that directory contains the secrets until you
-  delete them once the upgrade is verified. The Hub warns about them at every start.
+- The upgrade writes `<db>.pre-v3-<time>.bak` first (older upgrades may have
+  left `pre-v2` snapshots). They are **plaintext** rollback copies. The Hub
+  **deletes them automatically** once sealing has completed (at the first start
+  with `TS_KEK_FILE`, and at every later start for any it finds that predate
+  sealing). Consequence: you cannot roll back to a Hub without encryption after
+  that start. If you need that safety net, copy the snapshot somewhere
+  encrypted before the first sealed start, and delete it yourself afterwards.
 - **KEK lost:** `truesignal-hub secrets-reset --destroy-secrets` (Hub stopped)
   deletes the sealed secrets and the wrapped data key; then start with a new KEK,
   re-enter the SIEM token and webhook, re-enrol MFA. Planted honeytokens and

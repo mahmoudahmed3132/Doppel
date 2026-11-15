@@ -20,7 +20,7 @@ Governance files: `PROVENANCE.md`, `QUESTIONS.md`, `THIRD_PARTY.md`.
 
 ## Development
 
-Requires Go 1.26.10+ (the `toolchain` directive enforces it; earlier 1.26 patches carry HIGH stdlib CVEs).
+Requires Go 1.27.3+ (the `toolchain` directive enforces it; Go 1.27 is required by sigstore-go 1.4.0).
 
 ```sh
 make            # header check, go vet, go test -race in every module

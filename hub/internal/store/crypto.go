@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -262,12 +263,38 @@ func (db *DB) scrubFreePages(ctx context.Context) error {
 	return err
 }
 
-// PlaintextSnapshots lists pre-migration snapshots next to the database. They
-// are plaintext copies kept for rollback; they travel with every backup of
-// the data directory.
-func (db *DB) PlaintextSnapshots() []string {
-	m, _ := filepath.Glob(db.path + ".pre-v*.bak")
-	return m
+// PurgePlaintextSnapshots deletes the pre-migration snapshots
+// (<db>.pre-v*.bak) written before secrets were sealed: a snapshot whose
+// modification time is not after sealed_at holds plaintext secrets and would
+// travel with every backup of the data directory. Snapshots written later
+// (for example before a future migration) hold sealed values and are kept.
+// It runs at every start after sealing, so a crash between sealing and
+// deletion is repaired on the next start. It returns the files removed.
+func (db *DB) PurgePlaintextSnapshots(ctx context.Context) ([]string, error) {
+	var sealedAt sql.NullInt64
+	if err := db.sql.QueryRowContext(ctx, `SELECT sealed_at FROM crypto_meta WHERE id = 1`).Scan(&sealedAt); err != nil {
+		return nil, err
+	}
+	if !sealedAt.Valid {
+		return nil, errors.New("secrets are not sealed yet; refusing to delete rollback snapshots")
+	}
+	cutoff := fromMS(sealedAt.Int64)
+	files, err := filepath.Glob(db.path + ".pre-v*.bak")
+	if err != nil {
+		return nil, err
+	}
+	var removed []string
+	for _, f := range files {
+		fi, err := os.Lstat(f)
+		if err != nil || !fi.Mode().IsRegular() || fi.ModTime().After(cutoff) {
+			continue
+		}
+		if err := os.Remove(f); err != nil {
+			return removed, err
+		}
+		removed = append(removed, f)
+	}
+	return removed, nil
 }
 
 // QueueCLIAudit records an action performed outside the running Hub (a host

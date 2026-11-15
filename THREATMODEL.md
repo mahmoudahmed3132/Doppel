@@ -147,7 +147,7 @@ identity-checked. The source repository's name is public in every
 certificate and in the Rekor log (accepted, Q64). GitHub and Sigstore themselves are trusted.
 
 ### B7: Hub host
-**R1 (secrets at rest), mitigated by `hub/internal/seal` (in progress: see the snapshot residual).** The Hub master
+**R1 (secrets at rest), mitigated by `hub/internal/seal`.** The Hub master
 keys (`capture_master_key`, `beacon_master_key`), the SIEM token, the webhook
 URL, the admin TOTP seed and pending seed, and honeytoken secrets are sealed
 with AES-256-GCM under a data key (DEK). The DEK is stored wrapped by a
@@ -159,18 +159,21 @@ first read and refuses to start if a plaintext secret appears in the database
 (locations are logged, never values). Sealing and the scrub are resumable. Production refuses to start without a KEK; an encrypted
 database refuses to start without its KEK (no silent fallback). Older Hubs
 refuse the database (schema v3), so they cannot misread sealed values.
-**Protects:** a copy of the database file taken without the KEK, **provided no
-plaintext pre-migration snapshot is in the same data directory** (see
-residual (a)); plaintext remnants are removed from free pages and the WAL at
+**Protects:** a copy of the database file, a volume snapshot or a backup taken
+without the KEK. The plaintext pre-migration snapshots are deleted after the
+first sealed start (residual (a)); plaintext remnants are removed from free pages and the WAL at
 migration (VACUUM, temporary copy placed next to the database; secure_delete is
 on for later deletes). **Does not protect against:** root on the running Hub host
 (the DEK is in process memory and the KEK file is readable by the Hub user),
 nor `truesignal-hub mfa-reset`, which needs only Docker-host access.
 **Residual:** (a) the pre-migration snapshots `<db>.pre-v*-<time>.bak` are
-plaintext by design (rollback copies for a Hub without encryption) and sit in
-the data directory, so they travel with every backup of it; the Hub logs a
-warning listing them at every start; delete them once the upgrade is verified
-(Q74); (b) `beacons.token` is not sealed
+plaintext rollback copies. The Hub deletes every snapshot written before
+sealing (modification time not after `sealed_at`) once sealing and the scrub
+have completed, at every start, so a crash between the two is repaired. The
+cost: rolling back to a Hub without encryption is impossible after the first
+sealed start, and the window between the upgrade's snapshot and the first
+sealed start is the exposure (Q74); a backup taken by hand inside that window
+or before it still holds plaintext; (b) `beacons.token` is not sealed
 (equality lookup; an identifier printed into artefacts, no authority by
 itself); (c) sensor configuration is not sealed: no manifest declares a
 `secret` key yet, and Hub-reserved keys are derived at render time, never

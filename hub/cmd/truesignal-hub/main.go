@@ -123,9 +123,17 @@ func openStore(ctx context.Context, cfg *config.Config, log *slog.Logger) (*stor
 			db.Close()
 			return nil, fmt.Errorf("secrets at rest: %w", err)
 		}
-		if snaps := db.PlaintextSnapshots(); len(snaps) > 0 {
-			log.Warn("plaintext pre-migration snapshots are in the data directory and travel with every backup of it; delete them once the upgrade is verified",
-				"files", snaps)
+		// The pre-migration snapshots hold the secrets in plaintext. Once
+		// sealing has completed they are deleted, so no backup of the data
+		// directory carries them. Rolling back to a Hub without encryption is
+		// therefore not possible after the first sealed start.
+		removed, err := db.PurgePlaintextSnapshots(ctx)
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("deleting plaintext pre-migration snapshots: %w", err)
+		}
+		if len(removed) > 0 {
+			log.Info("deleted plaintext pre-migration snapshots (secrets are sealed)", "files", removed)
 		}
 		return db, nil
 	}
