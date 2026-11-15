@@ -165,9 +165,10 @@ and `PROVENANCE.md` record its origin.
 | Module | Controls and residual risk |
 |---|---|
 | TOTP and recovery codes (`hub/internal/totp`) | RFC 6238 SHA-1/6 digits/30 s, ±1 step, constant-time comparison over every window; replay refused for any step ≤ the stored last step (the Hub's CAS is the authority). Recovery codes: 50 bits each, only SHA-256 hashes stored, constant-time comparison over the full list, single use. Residual: the TOTP seed is stored in plaintext (R1) |
+| GeoIP (`hub/internal/geoip`) | Internal addresses (private, CGNAT, loopback, link-local, ULA) are never looked up. The database is loaded from a private copy, so overwriting the file in place cannot corrupt the live mapping; a file that is not a City database is refused and the current one stays. Auto-update (off by default, Q70): HTTPS only, same-host redirects only, size limits, validated before the swap. Residual: DB-IP publishes no signature, so a compromised download host could feed false locations; locations are advisory enrichment and never drive a security decision |
 
 ## Out of scope
-PORTED modules not yet installed ( ATT&CK/geo/asset enrichment,
-honeytoken and beacon services, ECS/HTTP SIEM transports, projections, lure
-content, web skins); denial of service by a volumetric network attacker
+PORTED modules not yet installed (ATT&CK enrichment, asset enrichment,
+honeytoken service, beacon service, ECS renderer, HTTP SIEM transports,
+projections, lure content, web skins); denial of service by a volumetric network attacker
 against the Hub (put it behind the reverse proxy / network controls).

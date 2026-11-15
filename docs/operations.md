@@ -98,6 +98,29 @@ The node key is shown once at node creation; rotate it from the node page if
 it may have leaked (the old key stops working immediately). Upgrade the CLI by
 re-running the installer with the new version.
 
+## 5a. GeoIP database (DB-IP City Lite)
+
+Locations on events, the geo-map projection and the SIEM output come from a
+DB-IP IP to City Lite database (MMDB, CC BY 4.0: the UI credits DB-IP
+wherever it shows a location).
+
+* **Path:** `TS_GEOIP_DB`, default `geoip/dbip-city-lite.mmdb` next to the
+  Hub database (`/data/geoip/dbip-city-lite.mmdb` in the shipped compose
+  file). Without a file, events carry no location; nothing else changes.
+* **Manual update (default):** download the current month's
+  `dbip-city-lite-YYYY-MM.mmdb.gz` from <https://db-ip.com/db/download/ip-to-city-lite>,
+  `gunzip` it and copy it to the path. The Hub re-reads the file within an
+  hour, from a private copy, so it is safe to overwrite in place. A file
+  that is not a City database is refused and the loaded one stays.
+* **Automatic update (Q70, off by default):** `TS_GEOIP_AUTO_UPDATE=true`
+  makes the Hub fetch `https://download.db-ip.com/free/dbip-city-lite-YYYY-MM.mmdb.gz`
+  at start and daily when the loaded file is from an earlier month: HTTPS
+  only, redirects followed only to the same host (at most 3), at most
+  256 MiB compressed and 1 GiB uncompressed, validated before it replaces the
+  current file. This is an outbound call in addition to Q55's list; allow
+  `download.db-ip.com` in egress filtering only if you turn it on. DB-IP
+  publishes no signature, so integrity rests on HTTPS.
+
 ## 6. Sensor registry rollback
 
 A bad sensor version is withdrawn by **Actions → registry-rollback → Run

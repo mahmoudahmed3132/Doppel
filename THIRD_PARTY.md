@@ -92,7 +92,7 @@ v1.83.2 for CVE-2026-84304 and CVE-2026-84445.
 | `go.opentelemetry.io/otel` | v1.44.0 | Apache-2.0 |
 | `go.opentelemetry.io/otel/metric` | v1.44.0 | Apache-2.0 |
 | `go.opentelemetry.io/otel/trace` | v1.44.0 | Apache-2.0 |
-| `go.yaml.in/yaml/v3` | v3.0.4 | Apache-2.0 |
+| `go.yaml.in/yaml/v3` | v3.0.5 | Apache-2.0 |
 | `golang.org/x/mod` | v0.42.0 | BSD-3-Clause |
 | `golang.org/x/net` | v0.60.0 | BSD-3-Clause |
 | `golang.org/x/sync` | v0.24.0 | BSD-3-Clause |
@@ -148,3 +148,15 @@ Base images (pinned by digest): `golang:1.26.10-bookworm` (BSD-3-Clause Go;
 Debian packages under their own licences, build stage only) and
 `gcr.io/distroless/static-debian12:nonroot` (Apache-2.0; shipped runtime base).
 
+
+### GeoIP module (hub, merge import H1)
+
+| Module | Component | Version | Licence | Justification |
+|---|---|---|---|---|
+| `github.com/oschwald/maxminddb-golang/v2` | hub (`internal/geoip`) | v2.9.0 (2026-10-31) | ISC | Reads the MMDB format of the DB-IP City Lite database. The standard library has no MMDB reader. Its v2.9.0 also raises `go.yaml.in/yaml/v3` to v3.0.5 (transitive, Apache-2.0) |
+| `github.com/maxmind/mmdbwriter` | test fixture generator only (`hub/internal/geoip/testdata/gen`, not in any `go.mod`) | v1.2.0 | Apache-2.0 | Regenerates the two test databases. It is never built into the Hub |
+
+**Data, not code:** the operator supplies DB-IP IP to City Lite
+(<https://db-ip.com>, CC BY 4.0). It is not distributed with Doppel. The UI
+credits DB-IP wherever it shows a location, as the licence requires
+(`ui/src/pages/events.tsx`, `ui/src/pages/modules.tsx`).

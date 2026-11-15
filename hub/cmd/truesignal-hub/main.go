@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/enrich"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/geoip"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/httpapi"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/hubsettings"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ingest"
@@ -151,7 +153,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules not yet installed: beacons, honeytokens, ATT&CK/asset/GeoIP enrichment, ECS rendering and Elastic/LogScale transports are inactive")
+	log.Warn("PORTED modules not yet installed: beacons, honeytokens, ATT&CK/asset enrichment, ECS rendering and Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
@@ -190,7 +192,16 @@ func serve(log *slog.Logger) error {
 		return err
 	}
 	go settingsSvc.RunRetentionLoop(ctx, db)
-	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc}
+	// GeoIP (merge import H1): TS_GEOIP_DB, default geoip/dbip-city-lite.mmdb
+	// next to the database. Without a file, events carry no location.
+	geoPath := cfg.GeoIPDB
+	if geoPath == "" {
+		geoPath = filepath.Join(filepath.Dir(cfg.DBPath), "geoip", "dbip-city-lite.mmdb")
+	}
+	geoSvc := geoip.New(geoPath, cfg.GeoIPAutoUpdate, log)
+	defer geoSvc.Close()
+	go geoSvc.StartUpdater(ctx)
+	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc, Geo: geoip.Locator{S: geoSvc}}
 
 	broker := livefeed.NewBroker()
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
