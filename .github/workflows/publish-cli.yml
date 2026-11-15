@@ -78,15 +78,15 @@ jobs:
           mkdir -p dist
           for arch in amd64 arm64; do
             (cd cli && CGO_ENABLED=0 GOOS=linux GOARCH="$arch" GOWORK=off \
-              go build -trimpath -ldflags "-s -w -buildid= -X main.Version=$VERSION" -o "../dist/truesignal-linux-$arch" ./cmd/truesignal)
-            file "dist/truesignal-linux-$arch" | grep -q "statically linked" || { echo "::error::$arch binary is not static"; exit 1; }
+              go build -trimpath -ldflags "-s -w -buildid= -X main.Version=$VERSION" -o "../dist/doppel-linux-$arch" ./cmd/doppel)
+            file "dist/doppel-linux-$arch" | grep -q "statically linked" || { echo "::error::$arch binary is not static"; exit 1; }
           done
-          ./dist/truesignal-linux-amd64 version | grep -F "$VERSION"
-          (cd dist && sha256sum truesignal-linux-amd64 truesignal-linux-arm64 > SHA256SUMS && cat SHA256SUMS)
+          ./dist/doppel-linux-amd64 version | grep -F "$VERSION"
+          (cd dist && sha256sum doppel-linux-amd64 doppel-linux-arm64 > SHA256SUMS && cat SHA256SUMS)
       - name: sign and verify (Sigstore keyless)
         run: |
           for arch in amd64 arm64; do
-            f="dist/truesignal-linux-$arch"
+            f="dist/doppel-linux-$arch"
             cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
             cosign verify-blob --bundle "$f.sigstore.json" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$f"
           done
@@ -116,11 +116,11 @@ jobs:
           sudo sh install.sh --version $VERSION --sha256 <hash from SHA256SUMS>
           # manual check:
           sha256sum -c SHA256SUMS --ignore-missing
-          cosign verify-blob --bundle truesignal-linux-amd64.sigstore.json \\
+          cosign verify-blob --bundle doppel-linux-amd64.sigstore.json \\
             --certificate-identity $IDENTITY \\
-            --certificate-oidc-issuer $ISSUER truesignal-linux-amd64
+            --certificate-oidc-issuer $ISSUER doppel-linux-amd64
           \`\`\`
           NOTES
           scripts/release/publish-release.sh --install-sh install.sh "$GITHUB_REF_NAME" "CLI v$VERSION" notes.md \
-            dist/truesignal-linux-amd64 dist/truesignal-linux-arm64 dist/SHA256SUMS \
-            dist/truesignal-linux-amd64.sigstore.json dist/truesignal-linux-arm64.sigstore.json
+            dist/doppel-linux-amd64 dist/doppel-linux-arm64 dist/SHA256SUMS \
+            dist/doppel-linux-amd64.sigstore.json dist/doppel-linux-arm64.sigstore.json

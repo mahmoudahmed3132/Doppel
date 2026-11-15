@@ -169,7 +169,7 @@ func TestVersionMismatchMessage(t *testing.T) {
 	if code := a.Run(context.Background(), []string{"apply"}); code == 0 {
 		t.Fatal("apply succeeded against a newer Hub")
 	}
-	if !strings.Contains(errb.String(), "requires truesignal CLI major version 4") || !strings.Contains(errb.String(), "This CLI is version 3.0.0") {
+	if !strings.Contains(errb.String(), "requires doppel CLI major version 4") || !strings.Contains(errb.String(), "This CLI is version 3.0.0") {
 		t.Fatalf("unclear message: %s", errb)
 	}
 }

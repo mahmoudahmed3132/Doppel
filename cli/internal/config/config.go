@@ -18,11 +18,15 @@ import (
 // Default locations (§8). TS_CONFIG_FILE and TS_WORK_DIR override them,
 // mainly for tests.
 const (
-	DefaultConfigFile = "/etc/truesignal/config.json"
-	DefaultWorkDir    = "/opt/truesignal"
-	ComposeFile       = "compose.json"
-	BackupFile        = "compose.json.bak"
-	LockFile          = ".apply.lock"
+	DefaultConfigFile = "/etc/doppel/config.json"
+	DefaultWorkDir    = "/opt/doppel"
+	// Legacy paths (before the Doppel rename). For one release a node
+	// linked under them keeps using them (Q66); new links use the defaults.
+	LegacyConfigFile = "/etc/truesignal/config.json"
+	LegacyWorkDir    = "/opt/truesignal"
+	ComposeFile      = "compose.json"
+	BackupFile       = "compose.json.bak"
+	LockFile         = ".apply.lock"
 )
 
 // Paths locates the agent's files.
@@ -33,7 +37,19 @@ type Paths struct {
 
 // PathsFromEnv returns the default paths with environment overrides.
 func PathsFromEnv(getenv func(string) string) Paths {
+	return pathsFromEnv(getenv, exists)
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func pathsFromEnv(getenv func(string) string, exists func(string) bool) Paths {
 	p := Paths{ConfigFile: DefaultConfigFile, WorkDir: DefaultWorkDir}
+	if !exists(DefaultConfigFile) && exists(LegacyConfigFile) {
+		p = Paths{ConfigFile: LegacyConfigFile, WorkDir: LegacyWorkDir}
+	}
 	if v := getenv("TS_CONFIG_FILE"); v != "" {
 		p.ConfigFile = v
 	}
@@ -67,8 +83,8 @@ var (
 // ValidKey reports whether k has the node key format.
 func ValidKey(k string) bool { return keyRE.MatchString(k) }
 
-// ErrNotLinked means `truesignal link` has not run yet.
-var ErrNotLinked = errors.New("this node is not linked; run `truesignal link <hub-url>` first")
+// ErrNotLinked means `doppel link` has not run yet.
+var ErrNotLinked = errors.New("this node is not linked; run `doppel link <hub-url>` first")
 
 // Load reads and validates the config file. It refuses a file readable by
 // group or others, since it contains the node key.
@@ -92,7 +108,7 @@ func Load(p Paths) (*Config, error) {
 		return nil, fmt.Errorf("%s is corrupt: %w", p.ConfigFile, err)
 	}
 	if c.HubEndpoint == "" || !nodeRE.MatchString(c.NodeID) || !ValidKey(c.NodeKey) {
-		return nil, fmt.Errorf("%s is incomplete; run `truesignal link` again", p.ConfigFile)
+		return nil, fmt.Errorf("%s is incomplete; run `doppel link` again", p.ConfigFile)
 	}
 	return &c, nil
 }

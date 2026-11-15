@@ -1,10 +1,10 @@
-# TrueSignal Python sensor SDK
+# Doppel Python sensor SDK
 
 Contract v3 (`docs/contract-v3.md`), the same behaviour as the Go SDK (§5),
 standard library only (Python ≥ 3.11). For community sensors (§11.6).
 
 ```python
-from truesignal_sdk import Drill, Spec, Severity, main
+from doppel_sdk import Drill, Spec, Severity, main
 
 def run(sensor, stop):            # runs in a worker thread
     while not stop.wait(1):

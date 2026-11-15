@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "description": "Serves a fake router/device admin login page and reports page views, path probes and every login attempt. Logins always fail.",
   "category": "web",
-  "author": "TrueSignal",
+  "author": "Doppel",
   "documentation": "Runs unprivileged (UID 65532, no capabilities) on port 8080 inside a bridge-networked container; the Hub publishes host port TS_PORT (e.g. 80) to it. Passwords are reported as an HMAC with the node's capture key by default (TS_PASSWORD_CAPTURE=hash), which still lets the Hub detect honeytoken credentials without storing plaintext; 'plain' reports them in clear. Source IPs are preserved with Docker's default iptables port publishing; with the userland proxy they appear as the Docker gateway.",
   "image": {"repository": "ghcr.io/mahmoudahmed3132/ts-sensor-web-router-decoy", "tag": "1.0.0", "digest": "", "platforms": ["linux/amd64"]},
   "runtime": {

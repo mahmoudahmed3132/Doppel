@@ -1,4 +1,4 @@
-# TrueSignal
+# Doppel
 
 Self-hosted deception platform: a Hub, node agent CLI, Go sensor SDK and
 containerised decoy sensors. Clean-room implementation of specification v1.

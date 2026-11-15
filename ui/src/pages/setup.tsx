@@ -64,7 +64,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
   return (
     <div class="center-screen">
       <form class="auth-card" onSubmit={submit}>
-        <h1>Set up TrueSignal</h1>
+        <h1>Set up Doppel</h1>
         <p class="muted">The one-time setup token is printed in the Hub log at first start.</p>
         {err ? <Alert kind="error">{err}</Alert> : null}
         <Field label="Setup token">

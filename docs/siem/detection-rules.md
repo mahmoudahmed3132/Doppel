@@ -1,6 +1,6 @@
 # Detection Rules
 
-Imported from TrueSignal (merge import R1, `PROVENANCE.md`); Hub audit rules re-keyed to Doppel audit actions (`docs/audit-actions.md`).
+Imported from Doppel (merge import R1, `PROVENANCE.md`); Hub audit rules re-keyed to Doppel audit actions (`docs/audit-actions.md`).
 
 Doppel ships 16 Elastic Security rules (`docs/siem/elastic/`) and a LogScale query for each (`docs/siem/logscale/`). They cover every alert the Hub forwards, plus correlation, liveness and Hub audit. They read only fields the Hub emits (`hub/internal/ecs`, `docs/siem-integration.md`). A test fails if a rule references a field no emitted document carries.
 
@@ -63,7 +63,7 @@ The honeytoken rule for **real** systems (`truesignal-honeytoken-authentication`
 
 ### truesignal-beacon-triggered
 
-**TrueSignal beacon triggered.** A Token Receiver resolved a beacon (DNS name, web bug or kubeconfig) that the Hub created. Beacons are planted where only an intruder looks, so a known beacon firing means the planted file or record was opened or used. Internal sources are left to truesignal-beacon-internal-source, so each beacon event raises one of the two.
+**Doppel beacon triggered.** A Token Receiver resolved a beacon (DNS name, web bug or kubeconfig) that the Hub created. Beacons are planted where only an intruder looks, so a known beacon firing means the planted file or record was opened or used. Internal sources are left to truesignal-beacon-internal-source, so each beacon event raises one of the two.
 
 | | |
 |---|---|
@@ -86,12 +86,12 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 
 **Expected false positives**
 
-- A fire drill (`truesignal firedrill`) on the Token Receiver uses token `firedrill`, which is unknown to the Hub and raises truesignal-beacon-unknown-token instead.
+- A fire drill (`doppel firedrill`) on the Token Receiver uses token `firedrill`, which is unknown to the Hub and raises truesignal-beacon-unknown-token instead.
 - Security tooling that opens planted documents or resolves names in them (sandbox detonation, DLP crawlers, mail link scanners). Identify it, then move or re-plant the beacon; do not whitelist the resolver, the Hub ignores the lists for known beacons.
 
 ### truesignal-beacon-internal-source
 
-**TrueSignal beacon triggered from inside the network.** A known beacon fired and the reporting source is internal: a private, CGNAT or ULA address, or an address on the Hub's Assets page (for example the public egress of the corporate resolvers). The planted object is being used from inside the network, so the reading host is compromised or an insider is involved.
+**Doppel beacon triggered from inside the network.** A known beacon fired and the reporting source is internal: a private, CGNAT or ULA address, or an address on the Hub's Assets page (for example the public egress of the corporate resolvers). The planted object is being used from inside the network, so the reading host is compromised or an insider is involved.
 
 | | |
 |---|---|
@@ -109,7 +109,7 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 1. DNS channel with an internal `source.ip`: it is one of your resolvers. Pull its query log for `truesignal.details.query_name` at `@timestamp` to get the real client.
 2. `truesignal.source_asset.name` names the inventoried host or egress range; for an egress range, map it back through firewall/NAT logs (Palo Alto, FortiGate).
 3. HTTP channel: `source.ip` (or `truesignal.details.proxy`) is the client or your proxy; use proxy logs for the user.
-4. Contain the client host, then review what else it touched (other TrueSignal alerts from the same `source.ip`, EDR timeline).
+4. Contain the client host, then review what else it touched (other Doppel alerts from the same `source.ip`, EDR timeline).
 
 **Expected false positives**
 
@@ -118,7 +118,7 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 
 ### truesignal-beacon-unknown-token
 
-**TrueSignal beacon token not known to the Hub.** A Token Receiver reported an HMAC-valid token that matches no beacon on the Hub (truesignal.details.beacon_known: false). Either the beacon was deleted while copies are still in circulation, or a node holding the receiver key forged it. Unlike known beacons, these respect the whitelist and known-scanner lists.
+**Doppel beacon token not known to the Hub.** A Token Receiver reported an HMAC-valid token that matches no beacon on the Hub (truesignal.details.beacon_known: false). Either the beacon was deleted while copies are still in circulation, or a node holding the receiver key forged it. Unlike known beacons, these respect the whitelist and known-scanner lists.
 
 | | |
 |---|---|
@@ -144,7 +144,7 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 
 ### truesignal-beacon-unexpected-country
 
-**TrueSignal beacon located outside the expected countries.** A known beacon fired from outside the expected countries. The location is trusted only when it describes the client: an EDNS client subnet (truesignal.source_geo.basis: client_subnet) or the source address of an HTTP beacon. A DNS beacon located by its source is the resolver, so it is never used here. Ships disabled: set the expected-country list first.
+**Doppel beacon located outside the expected countries.** A known beacon fired from outside the expected countries. The location is trusted only when it describes the client: an EDNS client subnet (truesignal.source_geo.basis: client_subnet) or the source address of an HTTP beacon. A DNS beacon located by its source is the resolver, so it is never used here. Ships disabled: set the expected-country list first.
 
 | | |
 |---|---|
@@ -170,7 +170,7 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 
 ### truesignal-receiver-saturated-sustained
 
-**TrueSignal Token Receiver saturated for 15 minutes.** A Token Receiver kept refusing connections on one listener for 15 minutes (three or more receiver_saturated reports; the sensor sends at most one per listener every 5 minutes). Sustained saturation is a flood against the internet-facing receiver and can hide beacon traffic.
+**Doppel Token Receiver saturated for 15 minutes.** A Token Receiver kept refusing connections on one listener for 15 minutes (three or more receiver_saturated reports; the sensor sends at most one per listener every 5 minutes). Sustained saturation is a flood against the internet-facing receiver and can hide beacon traffic.
 
 | | |
 |---|---|
@@ -198,7 +198,7 @@ Threshold: `host.id, truesignal.details.listener` ≥ 3.
 
 ### truesignal-honeytoken-used
 
-**TrueSignal honeytoken credential used against a decoy.** The Hub matched a planted honeytoken (a fabricated credential written into a File Canary lure) in a login against a decoy. The lure was read and its credential is being used. Raised by the Hub only (sensors cannot send it) and never subject to the whitelist or known-scanner lists, so this rule does not filter on them.
+**Doppel honeytoken credential used against a decoy.** The Hub matched a planted honeytoken (a fabricated credential written into a File Canary lure) in a login against a decoy. The lure was read and its credential is being used. Raised by the Hub only (sensors cannot send it) and never subject to the whitelist or known-scanner lists, so this rule does not filter on them.
 
 | | |
 |---|---|
@@ -224,7 +224,7 @@ event.dataset:"truesignal.alert" and event.action:"honeytoken_used"
 
 ### truesignal-lateral-movement
 
-**TrueSignal lateral movement attempt against a decoy.** An SSH or RDP login against a decoy (ATT&CK tactic TA0008 in the Hub's mapping). Decoys mirror production hosts and have no users, so a remote-services login means a host on the network is moving laterally.
+**Doppel lateral movement attempt against a decoy.** An SSH or RDP login against a decoy (ATT&CK tactic TA0008 in the Hub's mapping). Decoys mirror production hosts and have no users, so a remote-services login means a host on the network is moving laterally.
 
 | | |
 |---|---|
@@ -249,7 +249,7 @@ event.dataset:"truesignal.alert" and threat.tactic.id:"TA0008" and not truesigna
 
 ### truesignal-decoy-login
 
-**TrueSignal login attempt against a decoy.** Someone tried to authenticate to a TrueSignal decoy service (LDAP/LDAPS, database, FTP/Telnet, web login). Decoys have no legitimate users, so any attempt is credential testing or use. SSH/RDP attempts are left to truesignal-lateral-movement and planted-credential use to truesignal-honeytoken-used.
+**Doppel login attempt against a decoy.** Someone tried to authenticate to a Doppel decoy service (LDAP/LDAPS, database, FTP/Telnet, web login). Decoys have no legitimate users, so any attempt is credential testing or use. SSH/RDP attempts are left to truesignal-lateral-movement and planted-credential use to truesignal-honeytoken-used.
 
 | | |
 |---|---|
@@ -267,16 +267,16 @@ event.dataset:"truesignal.alert" and event.category:"authentication" and not eve
 1. `user.name` / `user.domain` is the account tried. Search your directory and real authentication logs for it from `source.ip`: the same credential is likely being tried on real systems.
 2. `truesignal.source_asset` names the source host when it is inventoried; otherwise identify it via DHCP/EDR.
 3. Passwords are HMAC'd (`truesignal.details.password_hmac`); compare with other decoy events to see whether the same password is sprayed.
-4. Pivot on `source.ip` for other TrueSignal alerts (scan-then-touch, other decoys).
+4. Pivot on `source.ip` for other Doppel alerts (scan-then-touch, other decoys).
 
 **Expected false positives**
 
 - Vulnerability scanners and asset-discovery tools with credential checks: add them to the Hub's known scanners.
-- Administrators testing a decoy. Use `truesignal firedrill` instead.
+- Administrators testing a decoy. Use `doppel firedrill` instead.
 
 ### truesignal-decoy-interaction
 
-**TrueSignal decoy interaction.** Baseline rule: any TrueSignal decoy alert not covered by a dedicated rule (scans, connections, queries, path probes, page views, file access and tampering). Every interaction with a decoy is suspicious by design; severity and risk follow the event. Beacons, receiver saturation, logins and honeytoken use have their own rules.
+**Doppel decoy interaction.** Baseline rule: any Doppel decoy alert not covered by a dedicated rule (scans, connections, queries, path probes, page views, file access and tampering). Every interaction with a decoy is suspicious by design; severity and risk follow the event. Beacons, receiver saturation, logins and honeytoken use have their own rules.
 
 | | |
 |---|---|
@@ -293,16 +293,16 @@ event.dataset:"truesignal.alert" and event.kind:"alert" and not event.category:"
 
 1. `event.action` and `truesignal.details` say what was done; `threat.*` carries the ATT&CK mapping.
 2. File Canary (`decoy_file_accessed`/`decoy_file_tampered`): `file.path` is the lure; find the process via EDR file telemetry on `host.name`.
-3. Network decoys: identify `source.ip` and look for other TrueSignal alerts from it (scan-then-touch fires when it escalates).
+3. Network decoys: identify `source.ip` and look for other Doppel alerts from it (scan-then-touch fires when it escalates).
 
 **Expected false positives**
 
 - Monitoring (ICMP/uptime checks, SNMP pollers), backup and inventory agents reaching the decoys: add them to the whitelist or known scanners on the Hub.
-- Fire drills (`truesignal firedrill`): each sensor's drill event.
+- Fire drills (`doppel firedrill`): each sensor's drill event.
 
 ### truesignal-scan-then-touch
 
-**TrueSignal scan followed by decoy interaction from the same source.** A source was seen scanning (network_scan_detected or icmp_scan_received) and, within an hour, interacted with a decoy beyond discovery (any medium-or-higher alert that is not a scan or a bare *_connection). Scan-then-touch separates an operator working through targets from background noise. Correlates across nodes by source.ip.
+**Doppel scan followed by decoy interaction from the same source.** A source was seen scanning (network_scan_detected or icmp_scan_received) and, within an hour, interacted with a decoy beyond discovery (any medium-or-higher alert that is not a scan or a bare *_connection). Scan-then-touch separates an operator working through targets from background noise. Correlates across nodes by source.ip.
 
 | | |
 |---|---|
@@ -329,7 +329,7 @@ sequence by source.ip with maxspan=1h
 
 ### truesignal-critical-asset-source
 
-**TrueSignal decoy touched from a high-criticality asset.** A decoy was touched from an address the Hub's Assets page marks high or critical. A production system has no reason to talk to a decoy, so the asset itself is the likely compromised machine. Escalation on top of the per-event rule.
+**Doppel decoy touched from a high-criticality asset.** A decoy was touched from an address the Hub's Assets page marks high or critical. A production system has no reason to talk to a decoy, so the asset itself is the likely compromised machine. Escalation on top of the per-event rule.
 
 | | |
 |---|---|
@@ -355,7 +355,7 @@ event.dataset:"truesignal.alert" and event.kind:"alert" and truesignal.source_as
 
 ### truesignal-sensor-heartbeat-lost
 
-**TrueSignal sensor stopped reporting.** The Hub raised sensor_heartbeat_lost: a sensor stopped heartbeating (reason heartbeat_timeout), or was stopped and not restarted within 5 minutes (reason not_restarted_after_stop). Either is an outage or an intruder disabling a decoy.
+**Doppel sensor stopped reporting.** The Hub raised sensor_heartbeat_lost: a sensor stopped heartbeating (reason heartbeat_timeout), or was stopped and not restarted within 5 minutes (reason not_restarted_after_stop). Either is an outage or an intruder disabling a decoy.
 
 | | |
 |---|---|
@@ -371,17 +371,17 @@ event.dataset:"truesignal.alert" and event.action:"sensor_heartbeat_lost" and no
 **Triage**
 
 1. `truesignal.sensor_id` on `host.name`; `truesignal.details.reason` and `last_heartbeat`.
-2. Check for a `sensor_stopped` on the same sensor shortly before (graceful stop) and for an operator change (`truesignal apply`, maintenance window).
+2. Check for a `sensor_stopped` on the same sensor shortly before (graceful stop) and for an operator change (`doppel apply`, maintenance window).
 3. Several sensors on one node at once: the node or Docker is down, or someone with root on the decoy host stopped it. Check the host.
 4. truesignal-sensor-dark fires if it is still down after 30 minutes.
 
 **Expected false positives**
 
-- Planned maintenance, `truesignal apply` that replaces a container, node reboots.
+- Planned maintenance, `doppel apply` that replaces a container, node reboots.
 
 ### truesignal-sensor-dark
 
-**TrueSignal sensor still down after 30 minutes.** A sensor's latest liveness event in the last 24 hours is sensor_heartbeat_lost, at least 30 minutes old, with no sensor_recovered after it. The decoy is blind. Re-alerts every run while it stays down (ES|QL aggregating rule).
+**Doppel sensor still down after 30 minutes.** A sensor's latest liveness event in the last 24 hours is sensor_heartbeat_lost, at least 30 minutes old, with no sensor_recovered after it. The decoy is blind. Re-alerts every run while it stays down (ES|QL aggregating rule).
 
 | | |
 |---|---|
@@ -402,7 +402,7 @@ FROM logs-truesignal-*
 **Triage**
 
 1. The alert lists `host.name`, `truesignal.sensor_id`, `last_lost` and `last_recovered`.
-2. Restore the sensor (`truesignal apply` on the node) or record the outage; a decoy an intruder disabled is evidence, so check the host before redeploying.
+2. Restore the sensor (`doppel apply` on the node) or record the outage; a decoy an intruder disabled is evidence, so check the host before redeploying.
 3. Stops alerting once the sensor heartbeats again (the Hub emits `sensor_recovered`) or 24 hours after the loss.
 
 **Expected false positives**
@@ -412,7 +412,7 @@ FROM logs-truesignal-*
 
 ### truesignal-hub-mfa-reset
 
-**TrueSignal Hub admin MFA reset or disabled.** The Hub admin's MFA was removed: the break-glass mfa-reset command (audited on the next Hub start as mfa.reset_cli) or a successful mfa.disable. Removing the second factor is the first step to a quiet takeover of the deception platform.
+**Doppel Hub admin MFA reset or disabled.** The Hub admin's MFA was removed: the break-glass mfa-reset command (audited on the next Hub start as mfa.reset_cli) or a successful mfa.disable. Removing the second factor is the first step to a quiet takeover of the deception platform.
 
 | | |
 |---|---|
@@ -439,7 +439,7 @@ event.dataset:"truesignal.audit" and (event.action:"mfa.reset_cli" or (event.act
 
 ### truesignal-hub-defense-change
 
-**TrueSignal Hub change that can blind detection.** A successful admin change on the Hub that can suppress or erase detection: SIEM/webhook/whitelist/known-scanner config, disarming, silencing a sensor, deleting nodes, sensors, beacons or events, archiving all events, replacing the asset inventory, password change, recovery-code regeneration or factory reset. Change tracking for review; high for evidence destruction (clear events, factory reset).
+**Doppel Hub change that can blind detection.** A successful admin change on the Hub that can suppress or erase detection: SIEM/webhook/whitelist/known-scanner config, disarming, silencing a sensor, deleting nodes, sensors, beacons or events, archiving all events, replacing the asset inventory, password change, recovery-code regeneration or factory reset. Change tracking for review; high for evidence destruction (clear events, factory reset).
 
 | | |
 |---|---|
@@ -464,7 +464,7 @@ event.dataset:"truesignal.audit" and event.outcome:"success" and event.action:("
 
 ### truesignal-hub-login-bruteforce
 
-**TrueSignal Hub admin login failures.** Five or more failed Hub dashboard logins (POST /login, HTTP 401 or 429) from one source in 10 minutes. The Hub locks out per IP and account-wide, but repeated failures mean someone is trying the admin password of the deception platform.
+**Doppel Hub admin login failures.** Five or more failed Hub dashboard logins (POST /login, HTTP 401 or 429) from one source in 10 minutes. The Hub locks out per IP and account-wide, but repeated failures mean someone is trying the admin password of the deception platform.
 
 | | |
 |---|---|
@@ -503,7 +503,7 @@ The rules are tested against what the Hub really emits, not hand-written JSON.
 ## Known gaps
 
 - **A dead Hub needs a "no data" check.** Doppel emits a Hub heartbeat record (`truesignal.heartbeat`, every §6.6 interval); no shipped rule alerts on its absence yet. Add a "no data for 15 minutes" check on `event.dataset: truesignal.heartbeat` in your SIEM.
-- Fire drills (`truesignal firedrill`) raise real alerts by design; they test the path to the SOC. Expect them during node rollout.
+- Fire drills (`doppel firedrill`) raise real alerts by design; they test the path to the SOC. Expect them during node rollout.
 - `truesignal-sensor-dark` looks back 24 hours. A sensor dark for longer stops re-alerting; the Hub's Fleet page still shows it.
 - Internal ranges are fixed in the queries. If your organisation uses public address space internally, add it to the Assets page (preferred) or to the CIDR lists. [NOT IN PROJECT]
 - Not covered here: index or repository naming, alert routing and on-call: site decisions.

@@ -31,7 +31,7 @@ const (
 	RecoveryCodeCount  = 10
 	SettingEndpoint    = "public_endpoint"
 	sessionTouchPeriod = 15 * time.Second
-	totpIssuer         = "TrueSignal"
+	totpIssuer         = "Doppel"
 	totpAccount        = "admin"
 )
 

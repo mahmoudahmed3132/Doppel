@@ -512,3 +512,20 @@ Auto-update adds an outbound call (Q55 lists the allowed ones).
 fetches only the DB-IP Lite URL documented in `docs/operations.md`, over
 HTTPS with no redirects to other hosts.
 **Answer (owner, 2026-11-15):** the default (off) is approved.
+
+### Q71 — Q66 follow-up — Rebrand items applied in this merge, and the one deferred
+**Applied (branch `rebrand/doppel`):** product text (README, docs, UI, sensor
+manifest authors, TOTP issuer); the CLI command `doppel` (directory
+`cli/cmd/doppel`) with a `truesignal` link from `install.sh` and legacy-path
+fallback; release assets `doppel-linux-<arch>`; the Python SDK `doppel-sdk` /
+`doppel_sdk` with a warning `truesignal_sdk` alias. **Kept, as approved:**
+`TS_*`, `tsk_`, `io.truesignal.*`, the compose project name `truesignal`,
+`x-truesignal`, the `ts-hub` / `ts-sensor-*` images, `truesignal-releases`,
+the `X-TrueSignal-CLI-Version` header, the User-Agent strings, the SIEM rule
+IDs, and the copyright holder.
+**Deferred:** the `siem_legacy_names` switch for syslog and ECS names. With the
+approved default (on), output is exactly what Doppel emits today, so nothing
+changes until the switch exists. Implementing it changes the SIEM contract,
+the settings API and OpenAPI, and the detection rules. **Meanwhile:** legacy
+names only; implement the switch in its own branch before announcing new
+SIEM names.

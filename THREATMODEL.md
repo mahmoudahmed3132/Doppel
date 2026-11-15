@@ -1,6 +1,6 @@
 # Threat model
 
-Scope: TrueSignal Hub, node CLI, sensors, sensor registry, admin UI and the
+Scope: Doppel Hub, node CLI, sensors, sensor registry, admin UI and the
 release pipeline as implemented in this repository. Modules marked PORTED
 (§12) are seams here; their own threat models belong with them.
 
@@ -156,7 +156,7 @@ operationally: dedicated host, restricted Docker group, encrypted volume and
 backups. Encrypting these settings at rest under a key outside the database
 (KMS/TPM/env) is a recommended future change.
 
-## Imported modules (merge from TrueSignal)
+## Imported modules (merge from Doppel)
 
 Modules imported through the PORTED seams are in scope from their import on.
 Each row names the module and the control it carries; `MERGE-INVENTORY.md`

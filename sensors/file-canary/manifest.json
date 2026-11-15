@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "description": "Plants realistic lure files containing a honeytoken credential and reports every open, read, change, rename or deletion of them.",
   "category": "host",
-  "author": "TrueSignal",
+  "author": "Doppel",
   "documentation": "An init container without network creates missing lures (never overwriting existing files, never following symlinks); the sensor then watches the lure directories read-only with inotify, so deleted and recreated lures stay covered. Both run as UID 0 with every capability dropped except DAC_OVERRIDE (to reach lure directories owned by other users); the sensor's mounts are read-only. The sensor cannot see which process touched a lure (source is 'local'): correlate with EDR telemetry for the same host and time. Lure directories must exist before deploying.",
   "image": {"repository": "ghcr.io/mahmoudahmed3132/ts-sensor-file-canary", "tag": "1.0.0", "digest": "", "platforms": ["linux/amd64"]},
   "runtime": {

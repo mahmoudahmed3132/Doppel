@@ -19,7 +19,7 @@ HOSTIP=$(hostname -I | awk '{print $1}')
 HUB="http://$HOSTIP:18080"
 PW='e2e-correct-horse-battery-staple'
 SENSORS="tcp-tarpit template web-router-decoy"
-CLI="$W/truesignal"
+CLI="$W/doppel"
 fail() { echo "E2E FAIL: $*" >&2; exit 1; }
 step() { echo; echo "=== $*"; }
 
@@ -40,7 +40,7 @@ trap cleanup EXIT
 
 step "build Hub, CLI and registry tool"
 (cd "$ROOT/hub" && CGO_ENABLED=0 go build -o "$W/hub" ./cmd/truesignal-hub && go build -o "$W/ts-registry" ./cmd/ts-registry)
-(cd "$ROOT/cli" && CGO_ENABLED=0 go build -o "$CLI" ./cmd/truesignal)
+(cd "$ROOT/cli" && CGO_ENABLED=0 go build -o "$CLI" ./cmd/doppel)
 
 step "local image registry; build and push sensor images by digest"
 docker run -d --name ts-e2e-registry -p 127.0.0.1:5000:5000 "$REGISTRY_IMAGE" >/dev/null

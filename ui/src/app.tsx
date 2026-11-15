@@ -189,7 +189,7 @@ function Shell() {
       <aside class="sidebar">
         <div class="brand">
           <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><path d="M6 20h5l3-9 4 14 3-9h5" class="brand-mark" /></svg>
-          <span>TrueSignal</span>
+          <span>Doppel</span>
         </div>
         <nav aria-label="Main">
           {NAV.map(([href, label], i) => (

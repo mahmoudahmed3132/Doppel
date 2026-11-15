@@ -158,7 +158,7 @@ func (a *App) discover(ctx context.Context, args []string) int {
 		return 0
 	}
 	if *noApply {
-		a.info("Run truesignal apply to deploy.")
+		a.info("Run doppel apply to deploy.")
 		return 0
 	}
 	return a.apply(ctx, nil)

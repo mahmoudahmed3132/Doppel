@@ -1,6 +1,6 @@
 # Operations guide
 
-Deploy, upgrade, roll back and recover a TrueSignal Hub, nodes and the sensor
+Deploy, upgrade, roll back and recover a Doppel Hub, nodes and the sensor
 registry. Image: `ghcr.io/mahmoudahmed3132/ts-hub`; sensors:
 `ghcr.io/mahmoudahmed3132/ts-sensor-<name>` (Q60).
 
@@ -20,9 +20,9 @@ cosign verify ghcr.io/mahmoudahmed3132/ts-hub@sha256:<digest> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # CLI binary (install.sh does this automatically when cosign is installed)
-cosign verify-blob --bundle truesignal-linux-amd64.sigstore.json \
+cosign verify-blob --bundle doppel-linux-amd64.sigstore.json \
   --certificate-identity https://github.com/mahmoudahmed3132/Doppel/.github/workflows/publish-cli.yml@refs/tags/cli/v<version> \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com truesignal-linux-amd64
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com doppel-linux-amd64
 ```
 
 Sensor manifests are verified by the Hub itself (PORTED verifier) against
@@ -90,8 +90,8 @@ and, with cosign present, the signature):
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/cli/v<version>/install.sh
 sudo sh install.sh --version <version> --sha256 <hash from SHA256SUMS>
-sudo TS_NODE_KEY=<key> truesignal link https://hub.example.com
-sudo truesignal apply
+sudo TS_NODE_KEY=<key> doppel link https://hub.example.com
+sudo doppel apply
 ```
 
 The node key is shown once at node creation; rotate it from the node page if
@@ -169,7 +169,7 @@ admin access; restrict it accordingly.
 ## 9. Releasing (maintainers)
 
 * Bump the version in code (`hub/cmd/truesignal-hub/main.go`,
-  `cli/cmd/truesignal/main.go`, or `sensors/<name>/manifest.json` version and
+  `cli/cmd/doppel/main.go`, or `sensors/<name>/manifest.json` version and
   `image.tag`), merge to the default branch, then from that commit:
   `make tag-hub`, `make tag-cli`, `make tag-sensor NAME=<name>` or
   `make tag-sensors`. Each tag is pushed alone.

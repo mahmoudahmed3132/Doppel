@@ -1,6 +1,6 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
-// Package app implements the truesignal commands (§8).
+// Package app implements the doppel commands (§8).
 package app
 
 import (
@@ -90,16 +90,16 @@ func (a *App) fail(err error) int {
 	return 1
 }
 
-const usage = `truesignal — TrueSignal node agent
+const usage = `doppel — Doppel node agent
 
 Usage:
-  truesignal link <hub-url>    link this node (node key from TS_NODE_KEY)
-  truesignal apply             deploy the Hub's desired configuration
-  truesignal discover [--yes]  propose decoys for this host and deploy them
-  truesignal firedrill         make every sensor send its synthetic event
-  truesignal status [--json]   show node, Hub and container status
-  truesignal uninstall [--yes] remove TrueSignal from this node (lure files are kept)
-  truesignal version
+  doppel link <hub-url>    link this node (node key from TS_NODE_KEY)
+  doppel apply             deploy the Hub's desired configuration
+  doppel discover [--yes]  propose decoys for this host and deploy them
+  doppel firedrill         make every sensor send its synthetic event
+  doppel status [--json]   show node, Hub and container status
+  doppel uninstall [--yes] remove Doppel from this node (lure files are kept)
+  doppel version
 `
 
 // Run executes args (without the program name) and returns the exit code.
@@ -123,7 +123,7 @@ func (a *App) Run(ctx context.Context, args []string) int {
 	case "uninstall":
 		return a.uninstall(ctx, rest)
 	case "version", "--version":
-		a.info("truesignal %s (%s/%s)", a.Version, runtime.GOOS, a.Arch)
+		a.info("doppel %s (%s/%s)", a.Version, runtime.GOOS, a.Arch)
 		return 0
 	case "help", "-h", "--help":
 		fmt.Fprint(a.Stdout, usage)
@@ -153,7 +153,7 @@ func (a *App) link(ctx context.Context, args []string) int {
 	fs := a.flags("link")
 	keyFlag := fs.String("key", "", "node key (visible in ps; prefer TS_NODE_KEY)")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 1 {
-		fmt.Fprintln(a.Stderr, "usage: TS_NODE_KEY=tsk_… truesignal link <hub-url>")
+		fmt.Fprintln(a.Stderr, "usage: TS_NODE_KEY=tsk_… doppel link <hub-url>")
 		return 2
 	}
 	key := a.Getenv("TS_NODE_KEY")
@@ -180,7 +180,7 @@ func (a *App) link(ctx context.Context, args []string) int {
 		return a.fail(err)
 	}
 	a.ok("linked as %s (%s) to %s", id.NodeID, id.Alias, u.String())
-	a.info("Next: truesignal apply   (or: truesignal discover)")
+	a.info("Next: doppel apply   (or: doppel discover)")
 	return 0
 }
 
@@ -258,7 +258,7 @@ func (a *App) firedrill(ctx context.Context, _ []string) int {
 
 // --- status -------------------------------------------------------------
 
-// Status is the --json output of `truesignal status`.
+// Status is the --json output of `doppel status`.
 type Status struct {
 	CLIVersion      string             `json:"cli_version"`
 	NodeID          string             `json:"node_id"`
@@ -333,7 +333,7 @@ func (a *App) status(ctx context.Context, args []string) int {
 	} else {
 		a.info("Hub       %s %s: %s", st.HubEndpoint, a.paint("31", "unreachable"), st.HubError)
 	}
-	sync := a.paint("33", "out of sync — run truesignal apply")
+	sync := a.paint("33", "out of sync — run doppel apply")
 	if st.InSync {
 		sync = a.paint("32", "in sync")
 	}
@@ -397,7 +397,13 @@ func (a *App) uninstall(ctx context.Context, args []string) int {
 		os.Remove(filepath.Dir(a.Paths.ConfigFile)) // only if empty
 		a.ok("removed %s (node key)", a.Paths.ConfigFile)
 	}
-	if exe, err := a.Exe(); err == nil && filepath.Base(exe) == "truesignal" {
+	if exe, err := a.Exe(); err == nil && (filepath.Base(exe) == "doppel" || filepath.Base(exe) == "truesignal") {
+		// The installer's compatibility link next to the binary (Q66).
+		if link := filepath.Join(filepath.Dir(exe), "truesignal"); link != exe {
+			if t, err := os.Readlink(link); err == nil && (t == "doppel" || t == exe) {
+				os.Remove(link)
+			}
+		}
 		if err := os.Remove(exe); err != nil {
 			a.warn("removing %s: %v", exe, err)
 		} else {

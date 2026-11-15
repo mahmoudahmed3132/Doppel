@@ -13,7 +13,7 @@ import socket
 import sys
 import threading
 
-from truesignal_sdk import Drill, Spec, SourceLimiter, main
+from doppel_sdk import Drill, Spec, SourceLimiter, main
 
 TRIGGER = "template_connection"
 

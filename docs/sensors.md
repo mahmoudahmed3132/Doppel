@@ -53,7 +53,7 @@ the honeytoken secret with the event's node id.
 | Sensor | Seam | Module / stub |
 |---|---|---|
 | file-canary | `LureGenerator{Content(path, honeytoken) (bytes, category), Category(path)}` (`sensors/file-canary/lure.go`) | **installed** (`lures_generated.go`, merge import S1): `.env`, PHP config, `.pgpass`, SQL dump / `.bak`, VPN/WireGuard key file, generic note, chosen by file name; every lure embeds the honeytoken, all other secrets are random, all hosts loopback. The plain `stubLures` stays as the test stub |
-| web-router-decoy | `Skins{Skin(name)}` / `Skin{Name, LoginPaths, Render(kind, request)}` (`sensors/web-router-decoy/skin.go`) | **installed** (`skins_builtin.go`, merge import S2): `TS_SKIN` = `generic` (base page), `router`, `nas`, `vpn`, `webmail`, `admin` or `basic` (HTTP Basic challenge); every value is rendered through `html/template`, and every page carries a realistic `Server` header. `stubSkins` stays as the test stub. Custom skins (TrueSignal `TS_SKIN_JSON`) are not imported |
+| web-router-decoy | `Skins{Skin(name)}` / `Skin{Name, LoginPaths, Render(kind, request)}` (`sensors/web-router-decoy/skin.go`) | **installed** (`skins_builtin.go`, merge import S2): `TS_SKIN` = `generic` (base page), `router`, `nas`, `vpn`, `webmail`, `admin` or `basic` (HTTP Basic challenge); every value is rendered through `html/template`, and every page carries a realistic `Server` header. `stubSkins` stays as the test stub. Custom skins (Doppel `TS_SKIN_JSON`) are not imported |
 
 ## Notes per sensor
 
