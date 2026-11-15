@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/assets"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/attack"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/honeytoken"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 	"log/slog"
 	"net"
@@ -156,7 +157,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules not yet installed: beacons, honeytokens, ECS rendering and Elastic/LogScale transports are inactive")
+	log.Warn("PORTED modules not yet installed: beacons, ECS rendering and Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
@@ -206,9 +207,23 @@ func serve(log *slog.Logger) error {
 	go geoSvc.StartUpdater(ctx)
 	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc, Geo: geoip.Locator{S: geoSvc}, Attack: attack.Mapper{}}
 
+	// Honeytokens (merge import H8): planted by the compose compiler (with
+	// SIEM inventory records), matched by the ingest pipeline.
+	hubKeys := &secrets.Keys{Store: db}
+	honeytokens := &siem.InventoryHoneytokens{Sink: siemSvc, Log: log, Now: time.Now,
+		HoneytokenService: &honeytoken.Service{Store: db, Now: time.Now,
+			CaptureKey: func(nodeID string) []byte {
+				mk, err := hubKeys.CaptureMasterKey(ctx)
+				if err != nil {
+					log.Warn("capture master key unavailable; honeytoken passwords not compared", "error", err.Error())
+					return nil
+				}
+				return compose.CaptureKey(mk, nodeID)
+			}}}
+
 	broker := livefeed.NewBroker()
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
-		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker}
+		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker, Honeytokens: honeytokens}
 	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
 		Run(ctx, siem.HeartbeatInterval)
 	live := &liveness.Service{Store: db, Raiser: pipe, Publisher: broker, Log: log, Now: time.Now, StartedAt: startedAt}
@@ -254,12 +269,12 @@ func serve(log *slog.Logger) error {
 	go cat.Run(ctx)
 
 	compiler := &compose.Compiler{
-		Manifests: cat,
-		Settings:  db,
-		Keys:      &secrets.Keys{Store: db},
-		// Honeytokens: PORTED module; File Canary deploys fail closed until installed.
-		Options: manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
-		Log:     log,
+		Manifests:   cat,
+		Settings:    db,
+		Keys:        hubKeys,
+		Honeytokens: honeytokens,
+		Options:     manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
+		Log:         log,
 	}
 	fleetSvc := &fleet.Service{Store: db, Compiler: compiler, Catalogue: cat, Keys: keys, Log: log, Now: time.Now}
 	(&httpapi.Fleet{
