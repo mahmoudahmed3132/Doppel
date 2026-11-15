@@ -180,3 +180,20 @@ similarity.
 | trivy fs | **failed**: `golang.org/x/net` v0.60.0, CVE-2026-78661 (HIGH) | Branch `fix/baseline-cves`: v0.62.0 (19 days old) |
 | trivy image | **failed**: Python template image, `zlib1g` CVE-2026-76844 and CVE-2026-85091 (HIGH) | Branch `fix/baseline-cves`: distroless digest from 2026-11-08 (an exception to the 14-day rule, with the reason stated) |
 | CodeQL, real-Docker e2e | See the gate report in the hand-over message | — |
+
+## 7. Clean specs written (`docs/clean-specs/`)
+
+| Spec | Rows |
+|---|---|
+| `identity-decoy.md` | S5 |
+| `database-decoy.md` | S6 |
+| `remote-access-decoy.md` | S7 |
+| `network-service-decoy.md` | S8 |
+| `common-decoy.md` | shared requirements for S5–S8 |
+| `insights-projection.md` | H12 (without `attack_matrix`, imported with H4) |
+| `analytics-ui.md` | U1, U2 (Q69) |
+
+They are written from public protocol specifications and Doppel's own
+contracts. They contain no code, identifiers, file layout or comments from
+either source. The trigger names they use are Doppel's, already present in
+`docs/siem/attack-mapping.md`.
