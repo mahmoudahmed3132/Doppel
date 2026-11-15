@@ -227,6 +227,10 @@ func serve(log *slog.Logger) error {
 				return compose.CaptureKey(mk, nodeID)
 			}}}
 
+	// SIEM watchlist: every honeytoken at start and every 24 h, so a SIEM
+	// indicator index stays complete after its own retention.
+	go honeytokens.Run(ctx, 24*time.Hour)
+
 	// Beacons (merge import H7): tokens tagged under the receiver key the
 	// compose compiler injects; zone from the deployed Token Receiver.
 	beacons := &beacon.Service{Store: db, Now: time.Now, Domains: beacon.ZonesFromFleet(db),

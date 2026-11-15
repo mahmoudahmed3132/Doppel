@@ -33,6 +33,51 @@ Elastic). Captured secrets (password HMACs, NTLM responses) stay under
 `truesignal.details` and never reach `user.*`. The `truesignal` namespace,
 dataset prefix and vendor strings are wire identifiers (Q66).
 
+## Elastic setup
+
+`truesignal.details` differs per sensor, so map it as `flattened` to avoid mapping conflicts. The template below assumes Elastic 8.13+ (for the `ecs@mappings` component). Create it once:
+
+```json
+PUT _index_template/logs-truesignal
+{
+  "index_patterns": ["logs-truesignal-*"],
+  "data_stream": {},
+  "priority": 200,
+  "composed_of": ["logs@mappings", "logs@settings", "ecs@mappings"],
+  "template": {
+    "mappings": {
+      "properties": {
+        "truesignal": { "properties": { "details": { "type": "flattened" } } }
+      }
+    }
+  }
+}
+```
+
+API key for the Hub, limited to writing its own data stream:
+
+```json
+POST /_security/api_key
+{
+  "name": "truesignal-hub",
+  "role_descriptors": {
+    "truesignal_writer": {
+      "indices": [{ "names": ["logs-truesignal-*"], "privileges": ["create_doc", "auto_configure"] }]
+    }
+  }
+}
+```
+
+In the Hub's SIEM settings choose `elastic`, put the response's `encoded` value in the token field and set the address to `https://<es-host>:9200/logs-truesignal-default`. To check ingest, search `event.module:truesignal` in Discover.
+
+## LogScale setup
+
+1. Create (or choose) a repository and an **ingest token** for it. Assign a parser that parses JSON (for example the built-in `json` parser) so the ECS fields are extracted.
+2. In the Hub's SIEM settings choose `logscale`, set the address to `https://<your-logscale>/api/v1/ingest/hec` and the token to the ingest token.
+3. To check ingest, search the repository for `event.module = "truesignal"`.
+
+As an alternative, `tcp`/`tls` with format `ecs` works with the LogScale Collector or Elastic Agent's TCP input.
+
 ## RFC 5424 contract (this repository)
 
 ```
