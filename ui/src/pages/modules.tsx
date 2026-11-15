@@ -188,7 +188,11 @@ export function Assets() {
           {err ? <Alert kind="error">{err}</Alert> : null}
           <textarea class="input mono editor" spellcheck={false} aria-label="Asset inventory JSON" value={current}
             onInput={(e) => setText(e.currentTarget.value)} />
-          <p class="muted">The format is defined by the asset module; it is validated by the Hub on save.</p>
+          <p class="muted">
+            A JSON array of <code>{"{"}"name", "address", "criticality", "owner", "tags"{"}"}</code>. <code>address</code> is an IP
+            or a CIDR range; <code>criticality</code> is low, medium (default), high or critical. At most 5000 assets; the most
+            specific range wins. Validated by the Hub on save.
+          </p>
         </Card>
       )}
     </div>

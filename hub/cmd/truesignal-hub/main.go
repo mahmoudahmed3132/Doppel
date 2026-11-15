@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/assets"
 	"log/slog"
 	"net"
 	"net/http"
@@ -153,7 +154,7 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules not yet installed: beacons, honeytokens, ATT&CK/asset enrichment, ECS rendering and Elastic/LogScale transports are inactive")
+	log.Warn("PORTED modules not yet installed: beacons, honeytokens, ATT&CK enrichment, ECS rendering and Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
@@ -184,9 +185,9 @@ func serve(log *slog.Logger) error {
 	}
 	notifier.Start(ctx)
 
-	// Source lists use the PORTED matcher (step 1); the asset inventory is
-	// PORTED and not yet installed, so it is read-only.
-	settingsSvc := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log}
+	// Source lists use the PORTED matcher (step 1); the asset inventory is the
+	// merged module (import H2).
+	settingsSvc := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, Assets: assets.Module{}, DefaultRegistry: cfg.RegistryURL, AllowHTTP: cfg.Development, Log: log}
 
 	if err := settingsSvc.Load(ctx); err != nil {
 		return err
