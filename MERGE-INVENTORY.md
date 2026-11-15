@@ -1,6 +1,6 @@
 # Merge inventory: TrueSignal → Doppel
 
-**Status:** proposal, waiting for the owner's approval (task §4). Nothing listed
+**Status:** approved by the owner on 2026-11-15 (QUESTIONS Q66–Q70). Nothing listed
 here has been imported yet.
 **Base:** `TrueSignal-Rewrite` `main` at `cc05d14` (HANDOFF describes `650c285`;
 the three later commits are documentation only).
