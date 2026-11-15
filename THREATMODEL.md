@@ -156,8 +156,18 @@ operationally: dedicated host, restricted Docker group, encrypted volume and
 backups. Encrypting these settings at rest under a key outside the database
 (KMS/TPM/env) is a recommended future change.
 
+## Imported modules (merge from TrueSignal)
+
+Modules imported through the PORTED seams are in scope from their import on.
+Each row names the module and the control it carries; `MERGE-INVENTORY.md`
+and `PROVENANCE.md` record its origin.
+
+| Module | Controls and residual risk |
+|---|---|
+| TOTP and recovery codes (`hub/internal/totp`) | RFC 6238 SHA-1/6 digits/30 s, ±1 step, constant-time comparison over every window; replay refused for any step ≤ the stored last step (the Hub's CAS is the authority). Recovery codes: 50 bits each, only SHA-256 hashes stored, constant-time comparison over the full list, single use. Residual: the TOTP seed is stored in plaintext (R1) |
+
 ## Out of scope
-PORTED modules (TOTP core, manifest verifier, ATT&CK/geo/asset enrichment,
+PORTED modules not yet installed ( ATT&CK/geo/asset enrichment,
 honeytoken and beacon services, ECS/HTTP SIEM transports, projections, lure
 content, web skins); denial of service by a volumetric network attacker
 against the Hub (put it behind the reverse proxy / network controls).

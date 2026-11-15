@@ -41,6 +41,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/signing"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/sourcelist"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/totp"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/updatecheck"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/webhook"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/webui"
@@ -150,12 +151,12 @@ func serve(log *slog.Logger) error {
 			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
 	}
 
-	log.Warn("PORTED modules not yet installed: TOTP/MFA, beacons, honeytokens, ATT&CK/asset/GeoIP enrichment, ECS rendering and Elastic/LogScale transports are inactive")
+	log.Warn("PORTED modules not yet installed: beacons, honeytokens, ATT&CK/asset/GeoIP enrichment, ECS rendering and Elastic/LogScale transports are inactive")
 
 	authSvc, err := auth.New(auth.Options{
 		Store:              db,
 		Hasher:             auth.NewHasher(auth.DefaultArgon2, 4),
-		TOTP:               nil, // PORTED module; MFA endpoints answer 503 until it is installed
+		TOTP:               totp.Module{}, // PORTED module, installed (merge import H5/H6)
 		Log:                log,
 		Now:                time.Now,
 		SessionTTL:         cfg.SessionTTL,
