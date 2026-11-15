@@ -16,7 +16,7 @@
 #   migrate-releases-repo.sh [releases-repo] [source-repo]
 set -eu
 dst="${1:-mahmoudahmed3132/truesignal-releases}"
-src="${2:-mahmoudahmed3132/TrueSignal-Rewrite}"
+src="${2:-mahmoudahmed3132/Doppel}"
 here=$(cd "$(dirname "$0")" && pwd)
 die() { echo "migrate: $*" >&2; exit 1; }
 for t in gh git curl jq; do command -v "$t" >/dev/null || die "$t is required"; done

@@ -22,7 +22,7 @@ set -eu
 # Releases are downloaded from the public releases repository; they are built
 # and signed in the (private) source repository, which the signature names.
 RELEASES_REPO="mahmoudahmed3132/truesignal-releases"
-SIGNER_REPO="mahmoudahmed3132/TrueSignal-Rewrite"
+SIGNER_REPO="mahmoudahmed3132/Doppel"
 WORKFLOW="publish-cli.yml"
 OIDC_ISSUER="https://token.actions.githubusercontent.com"
 

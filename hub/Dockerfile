@@ -24,7 +24,7 @@ FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c
 ARG VERSION
 LABEL org.opencontainers.image.title="TrueSignal Hub" \
       org.opencontainers.image.version="$VERSION" \
-      org.opencontainers.image.source="https://github.com/mahmoudahmed3132/TrueSignal-Rewrite"
+      org.opencontainers.image.source="https://github.com/mahmoudahmed3132/Doppel"
 COPY --from=build /out/truesignal-hub /truesignal-hub
 COPY --from=build --chown=65532:65532 /out/data /data
 USER 65532:65532

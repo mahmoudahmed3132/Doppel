@@ -296,6 +296,9 @@ The release workflow (§10) must produce exactly these.
 **Update (Q64, 2026-11-01):** assets and identity unchanged; the release is
 now created in `mahmoudahmed3132/truesignal-releases`, which `install.sh`
 downloads from.
+**Update (Q66, 2026-11-15):** the source repository is `mahmoudahmed3132/Doppel`; the identity is
+`https://github.com/mahmoudahmed3132/Doppel/.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`.
+Releases up to `cli/v3.0.0` keep the old identity (`docs/operations.md` §9.2).
 
 ### Q47 — §2 / §11 — Sensors that need a privilege run as UID 0
 Docker grants `cap_add` capabilities only to UID 0 (no ambient capabilities in

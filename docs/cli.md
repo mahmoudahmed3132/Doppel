@@ -13,7 +13,8 @@ curl -fsSL https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-release
 `install.sh` downloads `truesignal-linux-<arch>` from the `cli/vX.Y.Z` release,
 verifies it against `SHA256SUMS`, optionally against `--sha256 <hex>`, and —
 when `cosign` is installed — against `truesignal-linux-<arch>.sigstore.json`
-(identity: `.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`). Only
+(identity: `https://github.com/mahmoudahmed3132/Doppel/.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`;
+releases before the move to Doppel name `mahmoudahmed3132/TrueSignal-Rewrite`, operations §9.2). Only
 `https://` (or `file://` for mirrors) is fetched. The script body runs from
 `main()` on its last line, so a truncated download executes nothing.
 

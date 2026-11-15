@@ -30,7 +30,7 @@ func virtual(t *testing.T) (*ca.VirtualSigstore, *Verifier) {
 
 func TestIdentityPinsRepoWorkflowAndTag(t *testing.T) {
 	_, v := virtual(t)
-	want := "https://github.com/mahmoudahmed3132/TrueSignal-Rewrite/.github/workflows/publish-sensor.yml@refs/tags/sensor/tcp-tarpit/v2.0.3"
+	want := "https://github.com/mahmoudahmed3132/Doppel/.github/workflows/publish-sensor.yml@refs/tags/sensor/tcp-tarpit/v2.0.3"
 	if got := v.Identity("tcp-tarpit", "2.0.3"); got != want {
 		t.Fatalf("identity %s", got)
 	}
@@ -139,8 +139,32 @@ func TestNewRejectsBadRepo(t *testing.T) {
 	}
 }
 
+// historicalSignerRepo signed the 1.0.0 fixtures below, before the project
+// moved to mahmoudahmed3132/Doppel. They are kept as historical tests and are
+// verified with that repository passed explicitly.
+const historicalSignerRepo = "mahmoudahmed3132/TrueSignal-Rewrite"
+
+// After the move, the default verifier refuses every manifest signed by the
+// old repository: Hubs on the new default need the 1.0.1 republish.
+func TestDefaultSignerRefusesHistoricalManifests(t *testing.T) {
+	tm, err := TrustedRoot("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := New(tm, DefaultSignerRepo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range publishedSensors {
+		m, b := published(t, n)
+		if err := v.Verify(m, b, n, "1.0.0"); err == nil {
+			t.Errorf("%s 1.0.0 signed by %s accepted under %s", n, historicalSignerRepo, DefaultSignerRepo)
+		}
+	}
+}
+
 // published loads a manifest and its bundle exactly as the publish-sensor.yml
-// workflow of this repository signed them for the 1.0.0 releases (copied from
+// workflow of the historical repository signed them for the 1.0.0 releases (copied from
 // the registry branch).
 func published(t *testing.T, name string) (manifest, bundleJSON []byte) {
 	t.Helper()
@@ -166,7 +190,7 @@ func TestRealPublishedManifestsVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := New(tm, DefaultSignerRepo)
+	v, err := New(tm, historicalSignerRepo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +207,7 @@ func TestRealPublishedManifestsVerify(t *testing.T) {
 // exact manifest bytes; the seam's argument order is respected.
 func TestRealSignatureIsNotTransferable(t *testing.T) {
 	tm, _ := TrustedRoot("")
-	v, _ := New(tm, DefaultSignerRepo)
+	v, _ := New(tm, historicalSignerRepo)
 	m, b := published(t, "tcp-tarpit")
 	otherM, otherB := published(t, "icmp-canary")
 	other, _ := New(tm, "someone/else")

@@ -42,7 +42,7 @@ const (
 	GitHubOIDCIssuer = "https://token.actions.githubusercontent.com"
 	// DefaultSignerRepo is the repository whose publish workflow signs the
 	// official registry. TS_MANIFEST_SIGNER_REPO overrides it.
-	DefaultSignerRepo = "mahmoudahmed3132/TrueSignal-Rewrite"
+	DefaultSignerRepo = "mahmoudahmed3132/Doppel"
 
 	// publishWorkflow is the workflow that signs sensor manifests (§10).
 	publishWorkflow = ".github/workflows/publish-sensor.yml"

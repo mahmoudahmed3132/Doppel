@@ -18,6 +18,10 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/signing"
 )
 
+// historicalSignerRepo signed the published fixtures (before the move to
+// mahmoudahmed3132/Doppel); passed explicitly.
+const historicalSignerRepo = "mahmoudahmed3132/TrueSignal-Rewrite"
+
 // published registry content: the registry branch as the publish-sensor.yml
 // workflow of this repository wrote it for the five 1.0.0 releases.
 const publishedRegistry = "../signing/testdata/registry"
@@ -33,7 +37,7 @@ func productionCatalogue(t *testing.T, dir string) *Catalogue {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v, err := signing.New(tm, signing.DefaultSignerRepo)
+	v, err := signing.New(tm, historicalSignerRepo)
 	if err != nil {
 		t.Fatal(err)
 	}
