@@ -1,16 +1,21 @@
 # Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 # Proposes bumps for SHA-pinned actions, Go modules, UI packages and base images.
+# cooldown: only versions released at least 14 days ago (dependency age rule).
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: weekly}
+    cooldown: {default-days: 14}
   - package-ecosystem: gomod
     directories: ["/hub", "/cli", "/sdk/go", "/sensors/*"]
     schedule: {interval: weekly}
+    cooldown: {default-days: 14}
   - package-ecosystem: npm
     directory: /ui
     schedule: {interval: weekly}
+    cooldown: {default-days: 14}
   - package-ecosystem: docker
     directories: ["/hub", "/sensors/*", "/sdk/python/template"]
     schedule: {interval: weekly}
+    cooldown: {default-days: 14}
