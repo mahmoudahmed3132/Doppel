@@ -17,8 +17,6 @@
 package geoip
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -226,17 +224,6 @@ func (s *Service) Enabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.db != nil
-}
-
-// ClientSubnetDetails decodes an event's details only when they can hold a
-// client subnet, so locating a page of events doesn't parse every one.
-func ClientSubnetDetails(raw []byte) map[string]any {
-	if !bytes.Contains(raw, []byte(`"client_subnet"`)) {
-		return nil
-	}
-	var d map[string]any
-	_ = json.Unmarshal(raw, &d)
-	return d
 }
 
 func (s *Service) Status() Status {

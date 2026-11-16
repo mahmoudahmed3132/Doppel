@@ -157,15 +157,3 @@ func TestDownload(t *testing.T) {
 		t.Fatalf("leftover files: %v", entries)
 	}
 }
-
-func TestClientSubnetDetails(t *testing.T) {
-	if ClientSubnetDetails([]byte(`{"username":"root"}`)) != nil {
-		t.Error("decoded details without a client subnet")
-	}
-	if d := ClientSubnetDetails([]byte(`{"client_subnet":"198.51.100.0/24"}`)); d["client_subnet"] != "198.51.100.0/24" {
-		t.Errorf("d = %v", d)
-	}
-	if (*Service)(nil).Enabled() || !newTestService(t).Enabled() {
-		t.Error("Enabled")
-	}
-}

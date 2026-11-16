@@ -93,16 +93,6 @@ func (db *DB) Sensors(ctx context.Context, nodeID string) ([]domain.Sensor, erro
 	return out, rows.Err()
 }
 
-// UpdateSensorSpec changes version and configuration.
-func (db *DB) UpdateSensorSpec(ctx context.Context, nodeID, id, version string, cfg map[string]string) error {
-	b, err := json.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	return affectedOne(db.sql.ExecContext(ctx, `UPDATE sensors SET version = ?, config = ? WHERE node_id = ? AND id = ?`,
-		version, string(b), nodeID, id))
-}
-
 // SetSensorSilenced toggles webhook silencing.
 func (db *DB) SetSensorSilenced(ctx context.Context, nodeID, id string, v bool) error {
 	return affectedOne(db.sql.ExecContext(ctx, `UPDATE sensors SET silenced = ? WHERE node_id = ? AND id = ?`, boolInt(v), nodeID, id))
