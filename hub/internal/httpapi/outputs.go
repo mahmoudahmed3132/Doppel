@@ -32,14 +32,14 @@ const (
 
 // Register mounts the routes.
 func (o *Outputs) Register(a *Admin) {
-	a.RouteFull("GET "+routeSIEM, "", o.getSIEM)
-	a.RouteFull("PUT "+routeSIEM, "siem.update", o.putSIEM)
-	a.RouteFull("POST "+routeSIEM+"/test", "siem.test", o.testSIEM)
-	a.RouteFull("GET /api/v3/settings/webhook", "", o.getWebhook)
-	a.RouteFull("PUT /api/v3/settings/webhook", "webhook.update", o.putWebhook)
-	a.RouteFull("POST /api/v3/settings/webhook/test", "webhook.test", o.testWebhook)
-	a.RouteFull("GET /api/v3/system/armed", "", o.getArmed)
-	a.RouteFull("PUT /api/v3/system/armed", "system.arm", o.putArmed)
+	a.RouteFull("GET "+routeSIEM, "", needAdmin, o.getSIEM)
+	a.RouteFull("PUT "+routeSIEM, "siem.update", needAdmin, o.putSIEM)
+	a.RouteFull("POST "+routeSIEM+"/test", "siem.test", needAdmin, o.testSIEM)
+	a.RouteFull("GET /api/v3/settings/webhook", "", needAdmin, o.getWebhook)
+	a.RouteFull("PUT /api/v3/settings/webhook", "webhook.update", needAdmin, o.putWebhook)
+	a.RouteFull("POST /api/v3/settings/webhook/test", "webhook.test", needAdmin, o.testWebhook)
+	a.RouteFull("GET /api/v3/system/armed", "", needViewer, o.getArmed)
+	a.RouteFull("PUT /api/v3/system/armed", "system.arm", needAdmin, o.putArmed)
 }
 
 func (o *Outputs) siemState() map[string]any {
@@ -77,7 +77,8 @@ func (o *Outputs) putSIEM(w http.ResponseWriter, r *http.Request) {
 	// The previous destination receives this audit record before the
 	// switch; the regular post-request audit reaches the new one.
 	pre := domain.AuditRecord{Time: o.Now().UTC(), Action: "siem.update", Method: r.Method, Route: routeSIEM,
-		Path: r.URL.Path, Status: http.StatusOK, Outcome: "success", ActorIP: o.Network.ClientIP(r)}
+		Path: r.URL.Path, Status: http.StatusOK, Outcome: "success", ActorIP: o.Network.ClientIP(r),
+		Actor: sessionFrom(r).Username, ActorID: sessionFrom(r).UserID}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	if err := o.SIEM.Switch(ctx, next, &pre); err != nil {

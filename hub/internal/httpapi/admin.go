@@ -12,6 +12,7 @@ import (
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
 // SessionCookie is the name of the admin session cookie.
@@ -30,6 +31,7 @@ type Admin struct {
 	Settings    SettingsReader
 	Audit       AuditSink
 	Network     Network
+	Users       UserStore
 	Development bool
 	Log         *slog.Logger
 	Now         func() time.Time
@@ -47,9 +49,56 @@ const (
 	full                    // fully authenticated session
 )
 
+// need is the privilege a route requires. A route cannot be registered
+// without one, so an unclassified route does not compile.
+type need int
+
+const (
+	needNone    need = iota // public route: no session
+	needAny                 // any session, including enrolment-only (logout)
+	needViewer              // read-only: every role
+	needAnalyst             // triage and sensitive reads: analyst, admin
+	needAdmin               // configuration and changes: admin
+	needLocal               // acts on the one local account (password, MFA): the bootstrap administrator
+)
+
+func (n need) String() string {
+	return [...]string{"none", "any", "viewer", "analyst", "admin", "local"}[n]
+}
+
+// allows reports whether session s may call a route that needs n.
+func (n need) allows(s *auth.Session) bool {
+	switch n {
+	case needNone, needAny:
+		return true
+	case needLocal:
+		return s.UserID == store.BootstrapUserID
+	case needViewer:
+		return s.Role == store.RoleViewer || s.Role == store.RoleAnalyst || s.Role == store.RoleAdmin
+	case needAnalyst:
+		return s.Role == store.RoleAnalyst || s.Role == store.RoleAdmin
+	case needAdmin:
+		return s.Role == store.RoleAdmin
+	}
+	return false
+}
+
 type ctxKey int
 
-const sessionKey ctxKey = 1
+const (
+	sessionKey ctxKey = 1
+	actorKey   ctxKey = 2
+)
+
+type actorRef struct{ name, id string }
+
+// SetActor lets a handler on a public route (login, the SSO callback) name
+// the actor of the audit record the wrapper writes for it.
+func SetActor(ctx context.Context, id, name string) {
+	if a, ok := ctx.Value(actorKey).(*actorRef); ok {
+		a.id, a.name = id, name
+	}
+}
 
 func sessionFrom(r *http.Request) *auth.Session {
 	s, _ := r.Context().Value(sessionKey).(*auth.Session)
@@ -66,17 +115,17 @@ func (a *Admin) Handler() http.Handler {
 // Route registers a handler. pattern is a net/http pattern
 // ("METHOD /api/v3/..."), which is also the audited route template;
 // action is the semantic audit action ("" = not audited: read-only).
-func (a *Admin) Route(pattern, action string, acc access, h http.HandlerFunc) {
+func (a *Admin) Route(pattern, action string, acc access, n need, h http.HandlerFunc) {
 	if a.mux == nil {
 		a.mux = http.NewServeMux()
 	}
 	method, route := splitPattern(pattern)
-	a.mux.Handle(pattern, a.wrap(method, route, action, acc, h))
+	a.mux.Handle(pattern, a.wrap(method, route, action, acc, n, h))
 }
 
 // RouteFull registers a fully authenticated route (for other packages).
-func (a *Admin) RouteFull(pattern, action string, h http.HandlerFunc) {
-	a.Route(pattern, action, full, h)
+func (a *Admin) RouteFull(pattern, action string, n need, h http.HandlerFunc) {
+	a.Route(pattern, action, full, n, h)
 }
 
 func splitPattern(p string) (string, string) {
@@ -89,25 +138,30 @@ func splitPattern(p string) (string, string) {
 }
 
 func (a *Admin) routes() {
-	a.Route("GET /api/v3/setup", "", public, a.setupStatus)
-	a.Route("POST /api/v3/setup", "setup.complete", public, a.setup)
-	a.Route("POST /api/v3/session/login", "session.login", public, a.login)
-	a.Route("POST /api/v3/session/logout", "session.logout", enrolment, a.logout)
-	a.Route("GET /api/v3/session", "", full, a.sessionInfo)
-	a.Route("GET /api/v3/mfa", "", enrolment, a.mfaStatus)
-	a.Route("POST /api/v3/mfa/enrolment", "mfa.enrol_begin", enrolment, a.mfaBegin)
-	a.Route("POST /api/v3/mfa/enrolment/confirm", "mfa.enrol_confirm", enrolment, a.mfaConfirm)
-	a.Route("POST /api/v3/mfa/disable", "mfa.disable", full, a.mfaDisable)
-	a.Route("POST /api/v3/mfa/recovery-codes", "mfa.recovery_codes_regenerate", full, a.mfaRegenerate)
-	a.Route("POST /api/v3/system/password", "system.password_change", full, a.changePassword)
+	a.Route("GET /api/v3/setup", "", public, needNone, a.setupStatus)
+	a.Route("POST /api/v3/setup", "setup.complete", public, needNone, a.setup)
+	a.Route("POST /api/v3/session/login", "session.login", public, needNone, a.login)
+	a.Route("POST /api/v3/session/logout", "session.logout", enrolment, needAny, a.logout)
+	a.Route("GET /api/v3/session", "", full, needViewer, a.sessionInfo)
+	a.Route("GET /api/v3/mfa", "", enrolment, needLocal, a.mfaStatus)
+	a.Route("POST /api/v3/mfa/enrolment", "mfa.enrol_begin", enrolment, needLocal, a.mfaBegin)
+	a.Route("POST /api/v3/mfa/enrolment/confirm", "mfa.enrol_confirm", enrolment, needLocal, a.mfaConfirm)
+	a.Route("POST /api/v3/mfa/disable", "mfa.disable", full, needLocal, a.mfaDisable)
+	a.Route("POST /api/v3/mfa/recovery-codes", "mfa.recovery_codes_regenerate", full, needLocal, a.mfaRegenerate)
+	a.Route("POST /api/v3/system/password", "system.password_change", full, needLocal, a.changePassword)
+	a.RouteFull("GET /api/v3/users", "", needAdmin, a.listUsers)
+	a.RouteFull("PATCH /api/v3/users/{id}", "user.update", needAdmin, a.updateUser)
+	a.RouteFull("DELETE /api/v3/users/{id}", "user.delete", needAdmin, a.deleteUser)
 }
 
 // wrap applies, in order: body limit, CSRF origin check for state-changing
 // requests, session authentication and access level, then auditing of
 // state-changing requests after completion.
-func (a *Admin) wrap(method, route, action string, acc access, h http.HandlerFunc) http.Handler {
+func (a *Admin) wrap(method, route, action string, acc access, n need, h http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sw := &statusWriter{ResponseWriter: w}
+		actor := &actorRef{name: "anonymous"}
+		r = r.WithContext(context.WithValue(r.Context(), actorKey, actor))
 		if action != "" {
 			defer func() {
 				status := sw.status
@@ -120,7 +174,7 @@ func (a *Admin) wrap(method, route, action string, acc access, h http.HandlerFun
 				}
 				a.Audit.Record(r.Context(), domain.AuditRecord{
 					Time: a.Now().UTC(), Action: action, Method: method, Route: route, Path: r.URL.Path,
-					Status: status, Outcome: outcome, ActorIP: a.Network.ClientIP(r),
+					Status: status, Outcome: outcome, ActorIP: a.Network.ClientIP(r), Actor: actor.name, ActorID: actor.id,
 				})
 			}()
 		}
@@ -144,6 +198,11 @@ func (a *Admin) wrap(method, route, action string, acc access, h http.HandlerFun
 			}
 			if acc == full && sess.EnrolOnly {
 				Fail(sw, http.StatusForbidden, "mfa_enrolment_required", "MFA enrolment is required before using the Hub")
+				return
+			}
+			actor.id, actor.name = sess.UserID, sess.Username
+			if !n.allows(sess) {
+				Fail(sw, http.StatusForbidden, "forbidden", "your role does not allow this action")
 				return
 			}
 			r = r.WithContext(context.WithValue(r.Context(), sessionKey, sess))
@@ -236,7 +295,7 @@ func (a *Admin) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
 }
 
 func sessionJSON(s *auth.Session) map[string]any {
-	return map[string]any{"enrol_only": s.EnrolOnly, "created_at": s.CreatedAt, "expires_at": s.ExpiresAt, "idle_expires_at": s.IdleExpiry}
+	return map[string]any{"user": map[string]any{"id": s.UserID, "username": s.Username, "role": s.Role, "source": s.Source}, "enrol_only": s.EnrolOnly, "created_at": s.CreatedAt, "expires_at": s.ExpiresAt, "idle_expires_at": s.IdleExpiry}
 }
 
 func (a *Admin) setupStatus(w http.ResponseWriter, r *http.Request) {
@@ -278,6 +337,7 @@ func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
 		a.failAuth(w, err)
 		return
 	}
+	SetActor(r.Context(), sess.UserID, sess.Username)
 	a.setCookie(w, sess)
 	OK(w, map[string]any{"session": sessionJSON(sess)})
 }

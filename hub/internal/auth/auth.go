@@ -70,6 +70,8 @@ type Store interface {
 	DisableMFA(ctx context.Context) error
 	AdvanceMFAStep(ctx context.Context, step int64) (bool, error)
 	ReplaceRecoveryCodes(ctx context.Context, old, replacement []string) (bool, error)
+	UserByID(ctx context.Context, id string) (*store.User, error)
+	RecordLogin(ctx context.Context, id string) error
 	CreateSession(ctx context.Context, s store.Session) error
 	SessionByHash(ctx context.Context, hash []byte) (*store.Session, error)
 	TouchSession(ctx context.Context, hash []byte, at time.Time) error
@@ -263,6 +265,10 @@ func (s *Service) Setup(ctx context.Context, ip, token, password, endpoint strin
 type Session struct {
 	Token      string // only set on creation
 	hash       []byte
+	UserID     string
+	Username   string
+	Role       string
+	Source     string
 	EnrolOnly  bool
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
@@ -274,14 +280,27 @@ func (s *Session) Hash() []byte { return s.hash }
 
 func tokenHash(token string) []byte { h := sha256.Sum256([]byte(token)); return h[:] }
 
-func (s *Service) newSession(ctx context.Context, enrolOnly bool) (*Session, error) {
+func (s *Service) newSession(ctx context.Context, u *store.User, enrolOnly bool) (*Session, error) {
 	now := s.now().UTC()
 	tok := ids.Token(32)
 	h := tokenHash(tok)
-	if err := s.store.CreateSession(ctx, store.Session{TokenHash: h, CreatedAt: now, LastSeenAt: now, EnrolOnly: enrolOnly}); err != nil {
+	if err := s.store.CreateSession(ctx, store.Session{TokenHash: h, UserID: u.ID, CreatedAt: now, LastSeenAt: now, EnrolOnly: enrolOnly}); err != nil {
 		return nil, err
 	}
-	return &Session{Token: tok, hash: h, EnrolOnly: enrolOnly, CreatedAt: now, ExpiresAt: now.Add(s.ttl), IdleExpiry: now.Add(s.idle)}, nil
+	if err := s.store.RecordLogin(ctx, u.ID); err != nil {
+		return nil, err
+	}
+	return &Session{Token: tok, hash: h, UserID: u.ID, Username: u.Username, Role: u.Role, Source: u.Source,
+		EnrolOnly: enrolOnly, CreatedAt: now, ExpiresAt: now.Add(s.ttl), IdleExpiry: now.Add(s.idle)}, nil
+}
+
+// NewUserSession starts a session for a user the caller has already
+// authenticated (the SSO callback). A disabled user gets none.
+func (s *Service) NewUserSession(ctx context.Context, u *store.User) (*Session, error) {
+	if u.Disabled {
+		return nil, ErrSessionInvalid
+	}
+	return s.newSession(ctx, u, false)
 }
 
 // Login verifies the password and, when MFA is enrolled, a TOTP or recovery
@@ -325,7 +344,11 @@ func (s *Service) Login(ctx context.Context, ip, password, code string) (*Sessio
 			return nil, err
 		}
 	}
-	sess, err := s.newSession(ctx, s.requireMFA && !a.MFAEnabled)
+	bu, err := s.store.UserByID(ctx, store.BootstrapUserID)
+	if err != nil {
+		return nil, err
+	}
+	sess, err := s.newSession(ctx, bu, s.requireMFA && !a.MFAEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +423,19 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*Session, err
 		}
 		last = now
 	}
-	return &Session{hash: h, EnrolOnly: rec.EnrolOnly, CreatedAt: rec.CreatedAt,
+	// The user is read on every request, so a demotion, disable or delete
+	// takes effect on the next call. A deleted user's sessions are gone by
+	// foreign key; a disabled user's are refused here as well.
+	u, err := s.store.UserByID(ctx, rec.UserID)
+	if errors.Is(err, domain.ErrNotFound) || (err == nil && u.Disabled) {
+		_ = s.store.DeleteSession(ctx, h)
+		return nil, ErrSessionInvalid
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &Session{hash: h, UserID: u.ID, Username: u.Username, Role: u.Role, Source: u.Source,
+		EnrolOnly: rec.EnrolOnly, CreatedAt: rec.CreatedAt,
 		ExpiresAt: rec.CreatedAt.Add(s.ttl), IdleExpiry: last.Add(s.idle)}, nil
 }
 
@@ -627,6 +662,13 @@ func (s *Service) Check(ctx context.Context, token string) error {
 	now := s.now().UTC()
 	if rec.EnrolOnly || now.Sub(rec.CreatedAt) >= s.ttl || now.Sub(rec.LastSeenAt) >= s.idle {
 		return ErrSessionInvalid
+	}
+	// Every role may read the feed, but a deleted or disabled user may not
+	// keep an open socket.
+	if u, err := s.store.UserByID(ctx, rec.UserID); errors.Is(err, domain.ErrNotFound) || (err == nil && u.Disabled) {
+		return ErrSessionInvalid
+	} else if err != nil {
+		return err
 	}
 	return nil
 }

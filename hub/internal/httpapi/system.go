@@ -48,16 +48,16 @@ type System struct {
 // Register mounts the routes.
 func (s *System) Register(a *Admin) {
 	s.admin = a
-	a.RouteFull("GET /api/v3/settings", "", s.getSettings)
-	a.RouteFull("PATCH /api/v3/settings", "config.update", s.patchSettings)
-	a.RouteFull("GET /api/v3/assets", "", s.getAssets)
-	a.RouteFull("PUT /api/v3/assets", "assets.replace", s.putAssets)
-	a.RouteFull("GET /api/v3/beacons", "", s.listBeacons)
-	a.RouteFull("POST /api/v3/beacons", "beacon.create", s.createBeacon)
-	a.RouteFull("GET /api/v3/beacons/{id}/artefact", "beacon.download", s.beaconArtefact)
-	a.RouteFull("DELETE /api/v3/beacons/{id}", "beacon.delete", s.deleteBeacon)
-	a.RouteFull("POST /api/v3/system/cli-notice/ack", "system.cli_notice_ack", s.ackCLINotice)
-	a.RouteFull("POST /api/v3/system/factory-reset", "system.factory_reset", s.factoryReset)
+	a.RouteFull("GET /api/v3/settings", "", needAdmin, s.getSettings)
+	a.RouteFull("PATCH /api/v3/settings", "config.update", needAdmin, s.patchSettings)
+	a.RouteFull("GET /api/v3/assets", "", needAnalyst, s.getAssets)
+	a.RouteFull("PUT /api/v3/assets", "assets.replace", needAdmin, s.putAssets)
+	a.RouteFull("GET /api/v3/beacons", "", needAnalyst, s.listBeacons)
+	a.RouteFull("POST /api/v3/beacons", "beacon.create", needAdmin, s.createBeacon)
+	a.RouteFull("GET /api/v3/beacons/{id}/artefact", "beacon.download", needAnalyst, s.beaconArtefact)
+	a.RouteFull("DELETE /api/v3/beacons/{id}", "beacon.delete", needAdmin, s.deleteBeacon)
+	a.RouteFull("POST /api/v3/system/cli-notice/ack", "system.cli_notice_ack", needAdmin, s.ackCLINotice)
+	a.RouteFull("POST /api/v3/system/factory-reset", "system.factory_reset", needAdmin, s.factoryReset)
 }
 
 func (s *System) fail(w http.ResponseWriter, err error) {
@@ -238,7 +238,7 @@ func (s *System) factoryReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pre := domain.AuditRecord{Time: s.Now().UTC(), Action: "system.factory_reset", Method: r.Method,
-		Route: "/api/v3/system/factory-reset", Path: r.URL.Path, Status: http.StatusOK, Outcome: "success", ActorIP: ip}
+		Route: "/api/v3/system/factory-reset", Path: r.URL.Path, Status: http.StatusOK, Outcome: "success", ActorIP: ip, Actor: sessionFrom(r).Username, ActorID: sessionFrom(r).UserID}
 	if s.SIEM != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		err := s.SIEM.DeliverNow(ctx, domain.Record{Kind: domain.RecordAudit, Audit: &pre})

@@ -251,7 +251,7 @@ func TestPlaintextSnapshotDeletedAfterSealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	snaps, _ := filepath.Glob(path + ".pre-v3-*.bak")
+	snaps, _ := filepath.Glob(path + ".pre-v*-*.bak")
 	if len(snaps) != 1 {
 		t.Fatalf("snapshots: %v", snaps)
 	}

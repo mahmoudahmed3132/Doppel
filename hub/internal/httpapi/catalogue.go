@@ -21,9 +21,9 @@ var catalogueNameRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // Register mounts the routes.
 func (c *Catalogue) Register(a *Admin) {
-	a.RouteFull("GET /api/v3/catalogue", "", c.list)
-	a.RouteFull("GET /api/v3/catalogue/{name}/{version}", "", c.details)
-	a.RouteFull("POST /api/v3/catalogue/refresh", "catalogue.refresh", c.refresh)
+	a.RouteFull("GET /api/v3/catalogue", "", needViewer, c.list)
+	a.RouteFull("GET /api/v3/catalogue/{name}/{version}", "", needViewer, c.details)
+	a.RouteFull("POST /api/v3/catalogue/refresh", "catalogue.refresh", needAdmin, c.refresh)
 }
 
 func (c *Catalogue) list(w http.ResponseWriter, r *http.Request) {

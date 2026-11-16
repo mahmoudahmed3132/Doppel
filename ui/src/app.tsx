@@ -8,7 +8,7 @@ import { ENROL_EVENT, UNAUTH_EVENT, get, post } from "./api";
 import { liveState, onLive, startLive, stopLive } from "./live";
 import { Link, match, navigate, useLocation } from "./router";
 import { store, useStore } from "./store";
-import type { SystemStatus } from "./types";
+import type { Me, Role, SystemStatus } from "./types";
 import { Button, Loading, Toasts, toast } from "./ui";
 import { Setup } from "./pages/setup";
 import { Login, EnrolOnly } from "./pages/login";
@@ -17,12 +17,17 @@ import { Events } from "./pages/events";
 import { FleetList, NodePage } from "./pages/fleet";
 import { Honeytokens, Beacons, Assets, Attack, Projection } from "./pages/modules";
 import { SettingsPage } from "./pages/settings";
+import { UsersPage } from "./pages/users";
 import { theme, toggleTheme } from "./theme";
 
 type Phase = "loading" | "setup" | "login" | "enrol" | "ready" | "down";
 export const phase = store<Phase>("loading");
 export const unread = store<number>(0);
 export const systemStatus = store<SystemStatus | null>(null);
+/** The signed-in user. The server enforces roles; the UI only hides what a role cannot use. */
+export const me = store<Me | null>(null);
+const RANK: Record<Role, number> = { viewer: 0, analyst: 1, admin: 2 };
+export const can = (u: Me | null, min: Role) => !!u && RANK[u.role] >= RANK[min];
 
 export async function refreshStatus() {
   try {
@@ -51,7 +56,8 @@ export async function resolvePhase() {
     return phase.set("down");
   }
   try {
-    const r = await get<{ session: { enrol_only: boolean } }>("/session");
+    const r = await get<{ session: { enrol_only: boolean; user: Me } }>("/session");
+    me.set(r.session.user);
     phase.set(r.session.enrol_only ? "enrol" : "ready");
   } catch (e: any) {
     phase.set(e?.code === "mfa_enrolment_required" ? "enrol" : "login");
@@ -117,19 +123,20 @@ function HubDown() {
   );
 }
 
-const NAV: [string, string, string][] = [
-  ["/", "Dashboard", "monitor"],
-  ["/events", "Events", "events"],
-  ["/fleet", "Fleet", "monitor"],
-  ["/honeytokens", "Honeytokens", "deception"],
-  ["/beacons", "Beacons", "deception"],
-  ["/assets", "Assets", "context"],
-  ["/attack", "ATT&CK", "analysis"],
-  ["/attack-path", "Attack path", "analysis"],
-  ["/scans", "Scans", "analysis"],
-  ["/geo", "Geo map", "analysis"],
-  ["/report", "Report", "analysis"],
-  ["/settings", "Settings", "system"],
+const NAV: [string, string, string, Role][] = [
+  ["/", "Dashboard", "monitor", "viewer"],
+  ["/events", "Events", "events", "viewer"],
+  ["/fleet", "Fleet", "monitor", "viewer"],
+  ["/honeytokens", "Honeytokens", "deception", "analyst"],
+  ["/beacons", "Beacons", "deception", "analyst"],
+  ["/assets", "Assets", "context", "analyst"],
+  ["/attack", "ATT&CK", "analysis", "viewer"],
+  ["/attack-path", "Attack path", "analysis", "viewer"],
+  ["/scans", "Scans", "analysis", "viewer"],
+  ["/geo", "Geo map", "analysis", "viewer"],
+  ["/report", "Report", "analysis", "viewer"],
+  ["/users", "Users", "system", "admin"],
+  ["/settings", "Settings", "system", "admin"],
 ];
 
 function Shell() {
@@ -138,6 +145,9 @@ function Shell() {
   const ls = useStore(liveState);
   const st = useStore(systemStatus);
   const th = useStore(theme);
+  const user = useStore(me);
+  const nav = NAV.filter(([, , , min]) => can(user, min));
+  const minFor = (p: string) => NAV.find(([h]) => h !== "/" && (p === h || p.startsWith(h + "/")))?.[3] ?? "viewer";
 
   const sessionEnded = useCallback(() => {
     // The feed closes with 1008 when the session expires or is revoked.
@@ -177,8 +187,10 @@ function Shell() {
   else if (path === "/scans") page = <Projection page="scans" />;
   else if (path === "/geo") page = <Projection page="geo" />;
   else if (path === "/report") page = <Projection page="report" />;
+  else if (path === "/users") page = <UsersPage />;
   else if (path === "/settings") page = <SettingsPage />;
   else page = <NotFound />;
+  if (page && !(page.type === NotFound) && !can(user, minFor(path) as Role)) page = <NotAllowed />;
 
   const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/"));
   const liveLabel = ls === "open" ? "Live" : ls === "connecting" ? "Connecting" : "Offline";
@@ -192,9 +204,9 @@ function Shell() {
           <span>Doppel</span>
         </div>
         <nav aria-label="Main">
-          {NAV.map(([href, label], i) => (
+          {nav.map(([href, label], i) => (
             <Fragment key={href}>
-              {i > 0 && NAV[i - 1][2] !== NAV[i][2] ? <div class="nav-sep" /> : null}
+              {i > 0 && nav[i - 1][2] !== nav[i][2] ? <div class="nav-sep" /> : null}
               <Link href={href} class={`nav-item${active(href) ? " nav-active" : ""}`} aria-current={active(href) ? "page" : undefined}>
                 <span>{label}</span>
                 {href === "/events" && n > 0 ? <span class="badge" aria-label={`${n} unread`}>{n > 999 ? "999+" : n}</span> : null}
@@ -214,6 +226,7 @@ function Shell() {
             {st && !st.armed ? <span class="pill pill-warn" title="Webhook notifications are disarmed">Disarmed</span> : null}
           </div>
           <div class="topbar-right">
+            {user ? <span class="muted" title={`Signed in via ${user.source === "oidc" ? "SSO" : "local account"}`}>{user.username} · {user.role}</span> : null}
             <Button small variant="ghost" onClick={toggleTheme} aria-label={`Switch to ${th === "dark" ? "light" : "dark"} theme`}>
               {th === "dark" ? "Light theme" : "Dark theme"}
             </Button>
@@ -264,6 +277,15 @@ function NotFound() {
       <h1>Not found</h1>
       <p class="muted">This page does not exist.</p>
       <div><Button onClick={() => navigate("/")}>Go to the dashboard</Button></div>
+    </div>
+  );
+}
+
+function NotAllowed() {
+  return (
+    <div class="stack">
+      <h1>Not allowed</h1>
+      <p class="muted">Your role does not include this page.</p>
     </div>
   );
 }

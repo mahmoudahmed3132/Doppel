@@ -59,15 +59,15 @@ type Insights struct {
 
 // Register mounts the routes.
 func (in *Insights) Register(a *Admin) {
-	a.RouteFull("GET /api/v3/analytics/summary", "", in.summary)
-	a.RouteFull("GET /api/v3/analytics/severity", "", in.severity)
-	a.RouteFull("GET /api/v3/analytics/velocity", "", in.velocity)
-	a.RouteFull("GET /api/v3/analytics/uptime", "", in.uptime)
-	a.RouteFull("GET /api/v3/analytics/attack/navigator", "", in.navigator)
-	a.RouteFull("GET /api/v3/analytics/projections/{name}", "", in.projection)
-	a.RouteFull("GET /api/v3/system/status", "", in.status)
-	a.RouteFull("POST /api/v3/system/update-check", "system.update_check", in.updateCheck)
-	a.RouteFull("GET /api/v3/live", "", in.live)
+	a.RouteFull("GET /api/v3/analytics/summary", "", needViewer, in.summary)
+	a.RouteFull("GET /api/v3/analytics/severity", "", needViewer, in.severity)
+	a.RouteFull("GET /api/v3/analytics/velocity", "", needViewer, in.velocity)
+	a.RouteFull("GET /api/v3/analytics/uptime", "", needViewer, in.uptime)
+	a.RouteFull("GET /api/v3/analytics/attack/navigator", "", needViewer, in.navigator)
+	a.RouteFull("GET /api/v3/analytics/projections/{name}", "", needViewer, in.projection)
+	a.RouteFull("GET /api/v3/system/status", "", needViewer, in.status)
+	a.RouteFull("POST /api/v3/system/update-check", "system.update_check", needAdmin, in.updateCheck)
+	a.RouteFull("GET /api/v3/live", "", needViewer, in.live)
 }
 
 func intParam(r *http.Request, name string, def, min, max int) (int, bool) {

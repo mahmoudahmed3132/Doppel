@@ -338,6 +338,9 @@ func (r Renderer) ecsAudit(rec domain.AuditRecord) map[string]any {
 	if ip := net.ParseIP(rec.ActorIP); ip != nil {
 		doc["source"] = map[string]any{"ip": ip.String()}
 	}
+	if rec.Actor != "" {
+		doc["user"] = map[string]any{"name": rec.Actor}
+	}
 	return doc
 }
 

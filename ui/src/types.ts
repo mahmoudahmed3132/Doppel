@@ -5,7 +5,10 @@
 export type Severity = "info" | "low" | "medium" | "high" | "critical";
 export const SEVERITIES: Severity[] = ["critical", "high", "medium", "low", "info"];
 
-export interface Session { enrol_only: boolean; created_at: string; expires_at: string; idle_expires_at: string }
+export type Role = "admin" | "analyst" | "viewer";
+export interface Me { id: string; username: string; role: Role; source: "local" | "oidc" }
+export interface UserRecord { id: string; username: string; role: Role; source: "local" | "oidc"; disabled: boolean; created_at: string; last_login_at: string | null }
+export interface Session { user: Me; enrol_only: boolean; created_at: string; expires_at: string; idle_expires_at: string }
 export interface MFAState { available: boolean; enabled: boolean; enrolment_pending: boolean; required: boolean; recovery_codes_remaining: number }
 
 export interface Technique { id: string; name: string; tactics: string[] }

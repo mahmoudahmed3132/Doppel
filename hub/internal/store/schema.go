@@ -156,6 +156,33 @@ CREATE TABLE cli_audit (
 	at     INTEGER NOT NULL
 );
 `},
+	// v4: users and roles (docs/plan/ROADMAP.md U1). Users are principals
+	// (identity, role, source). The local credentials and MFA of the bootstrap
+	// administrator stay in the admin table, which keeps their sealed values
+	// bound to one row; admin exists if and only if user usr_admin does.
+	// Sessions are recreated with a user, which logs everyone out once.
+	{Version: 4, SQL: `
+CREATE TABLE users (
+	id            TEXT    PRIMARY KEY,
+	username      TEXT    NOT NULL,
+	role          TEXT    NOT NULL CHECK (role IN ('admin', 'analyst', 'viewer')),
+	source        TEXT    NOT NULL CHECK (source IN ('local', 'oidc')),
+	disabled      INTEGER NOT NULL DEFAULT 0,
+	created_at    INTEGER NOT NULL,
+	last_login_at INTEGER
+);
+CREATE UNIQUE INDEX users_username ON users (lower(username));
+INSERT INTO users (id, username, role, source, created_at)
+	SELECT 'usr_admin', 'admin', 'admin', 'local', created_at FROM admin WHERE id = 1;
+DROP TABLE sessions;
+CREATE TABLE sessions (
+	token_hash   BLOB    PRIMARY KEY,
+	user_id      TEXT    NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+	created_at   INTEGER NOT NULL,
+	last_seen_at INTEGER NOT NULL,
+	enrol_only   INTEGER NOT NULL DEFAULT 0
+);
+`},
 }
 
 // SchemaVersion is the schema version this build migrates to.

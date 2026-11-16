@@ -214,7 +214,7 @@ paths:
         '401': {$ref: '#/components/responses/Error'}
   /api/v3/session:
     get:
-      summary: Current session
+      summary: Current session, including the signed-in user (id, username, role, source)
       responses:
         '200': {description: Session info}
         '401': {$ref: '#/components/responses/Error'}
@@ -362,6 +362,40 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/NodeKeyIssued'}
         '400': {$ref: '#/components/responses/Error'}
+  /api/v3/users:
+    get:
+      summary: Users (admin only). Roles are admin, analyst and viewer; the bootstrap administrator is `usr_admin`
+      responses:
+        '200': {description: '{"users": [{id, username, role, source, disabled, created_at, last_login_at}]}'}
+        '403': {$ref: '#/components/responses/Error'}
+  /api/v3/users/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    patch:
+      summary: Change a user's role and/or disabled flag (admin only). A disabled user's sessions end at once. The bootstrap administrator and the last enabled administrator cannot be changed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                role: {enum: [admin, analyst, viewer]}
+                disabled: {type: boolean}
+      responses:
+        '200': {description: Updated}
+        '403': {description: Forbidden, or the bootstrap administrator (code protected_user)}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {description: Would remove the last enabled administrator (code last_admin)}
+        '422': {$ref: '#/components/responses/Error'}
+    delete:
+      summary: Delete a user and their sessions (admin only); same protections as PATCH
+      responses:
+        '200': {description: Deleted}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {description: Would remove the last enabled administrator (code last_admin)}
   /api/v3/nodes/{node}:
     parameters:
       - {name: node, in: path, required: true, schema: {type: string, pattern: '^node-[0-9a-f]{8}$'}}
