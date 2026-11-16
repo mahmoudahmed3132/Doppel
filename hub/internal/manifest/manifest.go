@@ -13,6 +13,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
 )
 
 // SchemaVersion is the only schema version this Hub accepts.
@@ -209,9 +212,7 @@ var AllowedNetworkModes = map[string]bool{"host": true, "bridge": true, "none": 
 
 var (
 	kebabRE     = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-	semverRE    = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$`)
 	configKeyRE = regexp.MustCompile(`^TS_[A-Z0-9]+(_[A-Z0-9]+)*$`)
-	triggerRE   = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
 	digestRE    = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	repoRE      = regexp.MustCompile(`^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)+$`)
 	tagRE       = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$`)
@@ -308,7 +309,7 @@ func (m *Manifest) Validate(opts Options) error {
 	if !kebabRE.MatchString(m.Name) || len(m.Name) > 64 {
 		add("name must be kebab-case (≤ 64)")
 	}
-	if !semverRE.MatchString(m.Version) {
+	if !semver.Valid(m.Version) {
 		add("version must be SemVer")
 	}
 	if strings.TrimSpace(m.DisplayName) == "" || len(m.DisplayName) > 128 {
@@ -507,7 +508,7 @@ func (m *Manifest) Validate(opts Options) error {
 		add("at least one trigger required")
 	}
 	for _, t := range m.Triggers {
-		if !triggerRE.MatchString(t.Name) || len(t.Name) > 64 {
+		if !domain.ValidTrigger(t.Name) {
 			add("trigger %q must be snake_case", trunc(t.Name))
 		}
 		if !severities[t.DefaultSeverity] {

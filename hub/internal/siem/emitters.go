@@ -16,7 +16,6 @@ import (
 const (
 	HeartbeatInterval = 5 * time.Minute
 	InventoryInterval = 24 * time.Hour
-	nodeOnlineWindow  = 90 * time.Second
 )
 
 // Sink receives records (the Service).
@@ -56,7 +55,7 @@ func (h *Heartbeat) Build(ctx context.Context) (domain.HubHeartbeat, error) {
 	}
 	hb.NodesTotal, hb.SensorsTotal = len(nodes), len(sensors)
 	for _, n := range nodes {
-		if n.LastSeenAt != nil && now.Sub(*n.LastSeenAt) <= nodeOnlineWindow {
+		if n.Online(now) {
 			hb.NodesOnline++
 		}
 	}

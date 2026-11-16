@@ -69,11 +69,6 @@ type Result struct {
 	Suppressed bool // whitelisted or known scanner
 }
 
-// Process runs a normalised sensor event through the pipeline.
-func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error) {
-	return p.process(ctx, ev)
-}
-
 // RaiseHubEvent creates and processes a Hub-raised event (liveness,
 // honeytoken use). Hub-raised events are never whitelisted.
 func (p *Pipeline) RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger string, sev domain.Severity, source, target string, details map[string]any) (*domain.Event, error) {
@@ -95,11 +90,12 @@ func (p *Pipeline) RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger 
 		Details:    raw,
 		HubRaised:  true,
 	}
-	_, err = p.process(ctx, ev)
+	_, err = p.Process(ctx, ev)
 	return ev, err
 }
 
-func (p *Pipeline) process(ctx context.Context, ev *domain.Event) (Result, error) {
+// Process runs a normalised sensor event through the pipeline.
+func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error) {
 	var res Result
 
 	// Step 2: beacon resolution.

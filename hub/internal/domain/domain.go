@@ -74,6 +74,15 @@ func ValidNodeID(id string) bool { return nodeIDRE.MatchString(id) }
 // ValidSensorID reports whether id has the form ts-sensor-<kebab-name>.
 func ValidSensorID(id string) bool { return len(id) <= 128 && sensorIDRE.MatchString(id) }
 
+// NodeOnlineWindow is three SDK heartbeat intervals: a node seen within it
+// counts as online, so the Hub status, the dashboard and the SIEM heartbeat agree.
+const NodeOnlineWindow = 90 * time.Second
+
+// Online reports whether the node was seen within NodeOnlineWindow of now.
+func (n Node) Online(now time.Time) bool {
+	return n.LastSeenAt != nil && now.Sub(*n.LastSeenAt) <= NodeOnlineWindow
+}
+
 // ValidTrigger reports whether t is a snake_case trigger name.
 func ValidTrigger(t string) bool { return len(t) <= 64 && triggerRE.MatchString(t) }
 

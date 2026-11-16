@@ -180,7 +180,7 @@ func (a *Admin) wrap(method, route, action string, acc access, n need, h http.Ha
 		}
 		r.Body = http.MaxBytesReader(sw, r.Body, maxAdminBody)
 
-		if !isSafeMethod(r.Method) && !sameOrigin(r, a.expectedOrigin(r)) {
+		if !isSafeMethod(r.Method) && !sameOrigin(r, a.ExpectedOrigin(r)) {
 			Fail(sw, http.StatusForbidden, "origin_mismatch", "cross-origin request refused")
 			return
 		}
@@ -212,9 +212,7 @@ func (a *Admin) wrap(method, route, action string, acc access, n need, h http.Ha
 }
 
 // ExpectedOrigin returns the Hub origin a browser request must come from.
-func (a *Admin) ExpectedOrigin(r *http.Request) string { return a.expectedOrigin(r) }
-
-func (a *Admin) expectedOrigin(r *http.Request) string {
+func (a *Admin) ExpectedOrigin(r *http.Request) string {
 	if ep, ok, err := a.Settings.Setting(r.Context(), auth.SettingEndpoint); err == nil && ok {
 		if o := endpointOrigin(ep); o != "" {
 			return o
@@ -286,14 +284,6 @@ func (a *Admin) failAuth(w http.ResponseWriter, err error) {
 	}
 }
 
-func (a *Admin) decode(w http.ResponseWriter, r *http.Request, dst any) bool {
-	if err := DecodeStrict(w, r, maxAdminBody, dst); err != nil {
-		FailDecode(w, err)
-		return false
-	}
-	return true
-}
-
 func sessionJSON(s *auth.Session) map[string]any {
 	return map[string]any{"user": map[string]any{"id": s.UserID, "username": s.Username, "role": s.Role, "source": s.Source}, "enrol_only": s.EnrolOnly, "created_at": s.CreatedAt, "expires_at": s.ExpiresAt, "idle_expires_at": s.IdleExpiry}
 }
@@ -314,7 +304,7 @@ func (a *Admin) setup(w http.ResponseWriter, r *http.Request) {
 		Password       string `json:"password"`
 		PublicEndpoint string `json:"public_endpoint"`
 	}
-	if !a.decode(w, r, &req) {
+	if !decodeInto(w, r, &req) {
 		return
 	}
 	if err := a.Auth.Setup(r.Context(), a.Network.ClientIP(r), req.SetupToken, req.Password, req.PublicEndpoint); err != nil {
@@ -329,7 +319,7 @@ func (a *Admin) login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 		Code     string `json:"code"`
 	}
-	if !a.decode(w, r, &req) {
+	if !decodeInto(w, r, &req) {
 		return
 	}
 	sess, err := a.Auth.Login(r.Context(), a.Network.ClientIP(r), req.Password, req.Code)
@@ -368,7 +358,7 @@ func (a *Admin) mfaBegin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Password string `json:"password"`
 	}
-	if !a.decode(w, r, &req) {
+	if !decodeInto(w, r, &req) {
 		return
 	}
 	secret, uri, err := a.Auth.BeginEnrolment(r.Context(), a.Network.ClientIP(r), req.Password)
@@ -383,7 +373,7 @@ func (a *Admin) mfaConfirm(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Code string `json:"code"`
 	}
-	if !a.decode(w, r, &req) {
+	if !decodeInto(w, r, &req) {
 		return
 	}
 	codes, err := a.Auth.ConfirmEnrolment(r.Context(), a.Network.ClientIP(r), req.Code)
@@ -403,7 +393,7 @@ type reauthRequest struct {
 
 func (a *Admin) mfaDisable(w http.ResponseWriter, r *http.Request) {
 	var req reauthRequest
-	if !a.decode(w, r, &req) {
+	if !decodeInto(w, r, &req) {
 		return
 	}
 	if err := a.Auth.DisableMFA(r.Context(), a.Network.ClientIP(r), req.Password, req.Code); err != nil {
@@ -416,7 +406,7 @@ func (a *Admin) mfaDisable(w http.ResponseWriter, r *http.Request) {
 
 func (a *Admin) mfaRegenerate(w http.ResponseWriter, r *http.Request) {
 	var req reauthRequest
-	if !a.decode(w, r, &req) {
+	if !decodeInto(w, r, &req) {
 		return
 	}
 	codes, err := a.Auth.RegenerateRecoveryCodes(r.Context(), a.Network.ClientIP(r), req.Password, req.Code, sessionFrom(r))
@@ -432,7 +422,7 @@ func (a *Admin) changePassword(w http.ResponseWriter, r *http.Request) {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
 	}
-	if !a.decode(w, r, &req) {
+	if !decodeInto(w, r, &req) {
 		return
 	}
 	if err := a.Auth.ChangePassword(r.Context(), a.Network.ClientIP(r), req.CurrentPassword, req.NewPassword); err != nil {

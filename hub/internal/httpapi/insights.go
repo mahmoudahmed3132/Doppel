@@ -53,7 +53,7 @@ type Insights struct {
 	Log         *slog.Logger
 	Now         func() time.Time
 	TickEvery   time.Duration
-	// Origin returns the expected Hub origin for a request (Admin.expectedOrigin).
+	// Origin returns the expected Hub origin for a request (Admin.ExpectedOrigin).
 	Origin func(*http.Request) string
 }
 
@@ -98,7 +98,7 @@ func (in *Insights) summary(w http.ResponseWriter, r *http.Request) {
 	sensors, _ := in.Store.Sensors(r.Context(), "")
 	nOnline, sOnline := 0, 0
 	for _, n := range nodes {
-		if n.LastSeenAt != nil && now.Sub(*n.LastSeenAt) <= 90*time.Second {
+		if n.Online(now) {
 			nOnline++
 		}
 	}

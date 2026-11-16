@@ -14,6 +14,7 @@ import (
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/fleet"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
 )
 
 // CLIVersionHeader carries the node agent version (§4.4).
@@ -49,14 +50,12 @@ func (n *NodeAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v3/node/applied", n.cli(n.Ingest.authenticated(n.applied)))
 }
 
-var semverMajorRE = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$`)
-
 // cli enforces the CLI/Hub major-version rule before authentication.
 func (n *NodeAPI) cli(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v := strings.TrimSpace(r.Header.Get(CLIVersionHeader))
 		major := -1
-		if semverMajorRE.MatchString(v) {
+		if semver.Valid(v) {
 			major, _ = strconv.Atoi(v[:strings.IndexByte(v, '.')])
 		}
 		if major != n.HubMajor {
@@ -87,7 +86,7 @@ func (n *NodeAPI) compose(w http.ResponseWriter, r *http.Request, nodeID string)
 		var re *fleet.RenderError
 		switch {
 		case errors.As(err, &re):
-			writeJSON(w, re.Status, map[string]any{"ok": false, "error": re.Code, "message": re.Message, "sensor_id": re.SensorID})
+			failRender(w, re)
 		case errors.Is(err, fleet.ErrCompilerUnavailable):
 			Fail(w, http.StatusServiceUnavailable, "compose_unavailable", "the Hub cannot render compose files")
 		default:
