@@ -3,7 +3,7 @@
 // Schedule: every 5m over the last 6m.
 event.module="truesignal" event.dataset="truesignal.audit" event.outcome="success"
 | in(field="event.action", values=[
-    "config.update", "system.arm", "system.password_change", "system.factory_reset", "sensor.silence", "node.delete", "sensor.delete", "events.delete_all", "events.archive_all", "beacon.delete", "assets.replace", "mfa.recovery_codes_regenerate", "siem.update", "webhook.update"])
+    "config.update", "system.arm", "system.password_change", "system.factory_reset", "sensor.silence", "node.delete", "sensor.delete", "events.delete_all", "events.archive_all", "beacon.delete", "assets.replace", "mfa.recovery_codes_regenerate", "siem.update", "webhook.update", "user.update", "user.delete"])
 | case {
     in(field="event.action", values=["events.delete_all", "system.factory_reset"]) | rule_severity := "high";
     in(field="event.action", values=["assets.replace", "system.password_change", "beacon.delete", "mfa.recovery_codes_regenerate"]) | rule_severity := "low";

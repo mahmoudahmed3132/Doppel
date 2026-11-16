@@ -38,6 +38,10 @@ func (db *DB) CreateAdmin(ctx context.Context, passwordHash string, settings map
 		if err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO users (id, username, role, source, created_at) VALUES (?, 'admin', 'admin', 'local', ?)`,
+			BootstrapUserID, now); err != nil {
+			return err
+		}
 		for k, v := range settings {
 			sv, err := db.sealSetting(k, v)
 			if err != nil {
@@ -225,6 +229,7 @@ func (db *DB) TakeMFAResetMarker(ctx context.Context) (bool, error) {
 // Session is a server-side browser session record.
 type Session struct {
 	TokenHash  []byte
+	UserID     string
 	CreatedAt  time.Time
 	LastSeenAt time.Time
 	EnrolOnly  bool
@@ -232,8 +237,8 @@ type Session struct {
 
 // CreateSession stores a session.
 func (db *DB) CreateSession(ctx context.Context, s Session) error {
-	_, err := db.sql.ExecContext(ctx, `INSERT INTO sessions (token_hash, created_at, last_seen_at, enrol_only) VALUES (?, ?, ?, ?)`,
-		s.TokenHash, ms(s.CreatedAt), ms(s.LastSeenAt), boolInt(s.EnrolOnly))
+	_, err := db.sql.ExecContext(ctx, `INSERT INTO sessions (token_hash, user_id, created_at, last_seen_at, enrol_only) VALUES (?, ?, ?, ?, ?)`,
+		s.TokenHash, s.UserID, ms(s.CreatedAt), ms(s.LastSeenAt), boolInt(s.EnrolOnly))
 	return err
 }
 
@@ -244,8 +249,8 @@ func (db *DB) SessionByHash(ctx context.Context, hash []byte) (*Session, error) 
 		created, seen int64
 		enrol         int
 	)
-	err := db.sql.QueryRowContext(ctx, `SELECT token_hash, created_at, last_seen_at, enrol_only FROM sessions WHERE token_hash = ?`, hash).
-		Scan(&s.TokenHash, &created, &seen, &enrol)
+	err := db.sql.QueryRowContext(ctx, `SELECT token_hash, user_id, created_at, last_seen_at, enrol_only FROM sessions WHERE token_hash = ?`, hash).
+		Scan(&s.TokenHash, &s.UserID, &created, &seen, &enrol)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrNotFound
 	}

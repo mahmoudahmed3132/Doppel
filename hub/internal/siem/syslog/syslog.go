@@ -75,7 +75,7 @@ func Format(rec domain.Record, pen int) ([]byte, error) {
 		sev, msgID, sdName, ts, body = 5, "AUDIT", "truesignal-audit", a.Time, a
 		params = []param{
 			{"action", a.Action}, {"route", a.Method + " " + a.Route}, {"path", a.Path},
-			{"status", strconv.Itoa(a.Status)}, {"actor_ip", a.ActorIP},
+			{"status", strconv.Itoa(a.Status)}, {"actor_ip", a.ActorIP}, {"actor", a.Actor},
 		}
 	case domain.RecordHoneytoken:
 		h := rec.Honeytoken

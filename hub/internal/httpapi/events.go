@@ -42,17 +42,17 @@ type Events struct {
 
 // Register mounts the routes.
 func (e *Events) Register(a *Admin) {
-	a.RouteFull("GET /api/v3/events", "", e.list)
-	a.RouteFull("GET /api/v3/events/unread-count", "", e.unread)
-	a.RouteFull("GET /api/v3/events/export", "events.export", e.export)
-	a.RouteFull("GET /api/v3/events/{seq}", "", e.get)
-	a.RouteFull("POST /api/v3/events/{seq}/read", "events.mark_read", e.markRead)
-	a.RouteFull("POST /api/v3/events/read-all", "events.mark_read_all", e.markReadAll)
-	a.RouteFull("POST /api/v3/events/{seq}/archive", "events.archive", e.archive)
-	a.RouteFull("POST /api/v3/events/archive-all", "events.archive_all", e.archiveAll)
-	a.RouteFull("POST /api/v3/events/delete-all", "events.delete_all", e.deleteAll)
-	a.RouteFull("GET /api/v3/honeytokens", "", e.honeytokens)
-	a.RouteFull("GET /api/v3/honeytokens/export", "honeytokens.export", e.honeytokensCSV)
+	a.RouteFull("GET /api/v3/events", "", needViewer, e.list)
+	a.RouteFull("GET /api/v3/events/unread-count", "", needViewer, e.unread)
+	a.RouteFull("GET /api/v3/events/export", "events.export", needAnalyst, e.export)
+	a.RouteFull("GET /api/v3/events/{seq}", "", needViewer, e.get)
+	a.RouteFull("POST /api/v3/events/{seq}/read", "events.mark_read", needAnalyst, e.markRead)
+	a.RouteFull("POST /api/v3/events/read-all", "events.mark_read_all", needAnalyst, e.markReadAll)
+	a.RouteFull("POST /api/v3/events/{seq}/archive", "events.archive", needAnalyst, e.archive)
+	a.RouteFull("POST /api/v3/events/archive-all", "events.archive_all", needAnalyst, e.archiveAll)
+	a.RouteFull("POST /api/v3/events/delete-all", "events.delete_all", needAdmin, e.deleteAll)
+	a.RouteFull("GET /api/v3/honeytokens", "", needAnalyst, e.honeytokens)
+	a.RouteFull("GET /api/v3/honeytokens/export", "honeytokens.export", needAnalyst, e.honeytokensCSV)
 }
 
 func badQuery(w http.ResponseWriter, msg string) { Fail(w, http.StatusBadRequest, CodeInvalid, msg) }

@@ -2,7 +2,10 @@
 
 Spec §6.10. SIEM rules depend on these names: actions may be added, never
 renamed or removed. Every record carries `time, action, method, route
-(template), path, status, outcome (success if status < 400), actor_ip`.
+(template), path, status, outcome (success if status < 400), actor_ip,
+actor`. `actor` is the user name of the signed-in user, `anonymous` before login
+and for failed logins, `local` for host commands (`mfa.reset_cli`,
+`secrets.*`); `actor_id` (the user id) is added when known. Both are additive.
 Request bodies are never included.
 
 | Action | Trigger | Route |
@@ -14,6 +17,8 @@ Request bodies are never included.
 | `mfa.enrol_confirm` | MFA enrolment confirmed | `POST /api/v3/mfa/enrolment/confirm` |
 | `mfa.disable` | MFA disabled | `POST /api/v3/mfa/disable` |
 | `mfa.recovery_codes_regenerate` | recovery codes regenerated | `POST /api/v3/mfa/recovery-codes` |
+| `user.update` | a user's role or disabled flag changed | `PATCH /api/v3/users/{id}` |
+| `user.delete` | a user deleted | `DELETE /api/v3/users/{id}` |
 | `secrets.sealed` | first start with `TS_KEK_FILE`: existing secrets sealed at rest (`method` = `CLI`, `actor_ip` = `local`, emitted on that start) | — |
 | `secrets.kek_rotate_cli` | host command `truesignal-hub kek-rotate`; emitted on the next start | — |
 | `secrets.reset_cli` | break-glass `truesignal-hub secrets-reset --destroy-secrets` (KEK lost); emitted on the next start | — |

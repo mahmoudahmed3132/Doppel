@@ -293,13 +293,13 @@ func serve(log *slog.Logger) error {
 	}
 	for _, q := range queued {
 		auditor.Record(ctx, domain.AuditRecord{Time: q.At, Action: q.Action, Method: "CLI",
-			Route: q.Route, Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
+			Route: q.Route, Path: "-", Status: 200, Outcome: "success", ActorIP: "local", Actor: "local"})
 	}
 	if pending, err := db.TakeMFAResetMarker(ctx); err != nil {
 		return err
 	} else if pending {
 		auditor.Record(ctx, domain.AuditRecord{Time: time.Now().UTC(), Action: "mfa.reset_cli", Method: "CLI",
-			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local"})
+			Route: "truesignal-hub mfa-reset", Path: "-", Status: 200, Outcome: "success", ActorIP: "local", Actor: "local"})
 	}
 
 	authSvc, err := auth.New(auth.Options{
@@ -388,7 +388,7 @@ func serve(log *slog.Logger) error {
 	go live.Run(ctx, 5*time.Second)
 
 	network := httpapi.Network{Trusted: cfg.TrustedProxies}
-	admin := &httpapi.Admin{Auth: authSvc, Settings: db, Audit: auditor, Network: network,
+	admin := &httpapi.Admin{Auth: authSvc, Settings: db, Audit: auditor, Network: network, Users: db,
 		Development: cfg.Development, Log: log, Now: time.Now}
 
 	keys := nodekey.NewAuthenticator(db) // shared: admin key rotation invalidates ingest auth

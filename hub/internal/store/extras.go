@@ -219,7 +219,7 @@ func (db *DB) EventCounts(ctx context.Context, since time.Time) (total, unread, 
 func (db *DB) FactoryReset(ctx context.Context, purgeHoneytokens bool) error {
 	return db.withTx(ctx, func(tx *sql.Tx) error {
 		stmts := []string{
-			`DELETE FROM sessions`, `DELETE FROM admin`, `DELETE FROM sensors`, `DELETE FROM nodes`,
+			`DELETE FROM sessions`, `DELETE FROM admin`, `DELETE FROM users`, `DELETE FROM sensors`, `DELETE FROM nodes`,
 			`DELETE FROM events`, `DELETE FROM sensor_status_history`, `DELETE FROM settings`, `DELETE FROM beacons`,
 		}
 		if purgeHoneytokens {

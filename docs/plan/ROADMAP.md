@@ -73,6 +73,7 @@ Pre-assigned migrations: users/roles **v4**, SSO identities **v5**. One branch p
 
 ### U1: users, roles, audit actor (prerequisite for SSO)
 
+- **As built (Q75):** `users` holds principals; the bootstrap administrator's password and MFA stay in `admin` (E1 sealing is row-bound; migrations cannot re-seal). Sessions are bound to a user and the role is read per request. The first bullet below describes the original intent.
 - Replace the single `admin` row with `users` (id, username, password_hash nullable, role, mfa fields, disabled, created_at) and bind `sessions` to a user. Migrate the existing admin to user `admin` with role `admin`. Do not hard-code singleton assumptions (`CHECK id=1` goes away).
 - Roles **[default]**: `admin` (everything), `analyst` (read events/fleet, mark read, silence/unsilence), `viewer` (read-only). Each route in `Admin.Route`/`RouteFull` gets an explicit role; add a test that fails on any registered route (including WebSocket `/api/v3/live` and routes registered by other packages) without an explicit role.
 - Audit records gain `actor` (user id/name); update `docs/audit-actions.md`, `docs/openapi.yaml`, Elastic and LogScale rules where fields are referenced.
@@ -132,6 +133,8 @@ main ───────────► E1 ──► U1 ──► S1
 - 2026-11-15: baseline `make` green on `007da6c`. Owner chose four separate clean-room sessions for the decoys (one per spec, `clean/<spec>`).
 - Not yet run in the baseline: `make ui`, validate-docs, compose-guard, selftest, Trivy, CodeQL, real-docker e2e (executors run these on their own branches).
 - 2026-11-15: **P0 done** (`sdk/go/ber`, `decoy.ServePacket`, manifest `listen_ports[].enabled_key`, Q73). The conflict rule treated every declared port as claimed, so a disabled protocol held its default port; `enabled_key` fixes that. A Hub older than this change rejects manifests that use it: release the Hub before publishing a decoy.
+- 2026-11-16: E1, P0 and the Go 1.27.3 move are merged to `main` (PRs #25, #26). Not yet exercised: the KEK compose secret's readability as uid 65532 on a real Docker host.
+- 2026-11-16: **U1 built** on `claude/gifted-davinci-o9gzdg` (schema v4, role-per-route, users API, audit actor, UI users page); gates below.
 - 2026-11-15: **E1 in progress** (implemented and tested on this branch; plaintext rollback snapshots are deleted after the first sealed start per the owner, Q74): `hub/internal/seal`, store migration **v3** (`crypto_meta`), `TS_KEK_FILE` required in production, `kek-generate` / `kek-rotate`, strict mode, VACUUM after migration, tests incl. plaintext-remnant scan, live smoke test. Q74 records the plaintext rollback snapshot, the required KEK and the scope. Users/roles therefore take schema **v4** and SSO **v5** as planned. Sensor config is not sealed (no manifest declares secret keys yet).
 - 2026-11-15: **Go 1.27.3 move done** on this branch (go.work, every go.mod, CI/publish/CodeQL workflows, README) with sigstore-go 1.4.0, which supersedes Dependabot PR #25 (its checks failed only because it needs Go >= 1.27: `digitorus/pkcs7`). Go 1.27.3 was released 2026-10-19, so Q72's 14-day rule is met; the Dockerfiles already used golang:1.27.3.
 - Still to run before E1 is merged: `make ui`, Trivy, CodeQL gate, `real-docker.sh` (CI). `make`, validate-docs, compose-guard and selftest pass locally.

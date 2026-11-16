@@ -59,6 +59,10 @@ type AuditRecord struct {
 	Status  int       `json:"status"`
 	Outcome string    `json:"outcome"`
 	ActorIP string    `json:"actor_ip"`
+	// Actor is the user name that performed the action ("anonymous" before
+	// login, "local" for host commands); ActorID is the user id when known.
+	Actor   string `json:"actor"`
+	ActorID string `json:"actor_id,omitempty"`
 }
 
 // HoneytokenInventory is the SIEM inventory record of a planted token.

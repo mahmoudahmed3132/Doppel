@@ -23,21 +23,21 @@ type Fleet struct {
 
 // Register mounts the routes on the admin API.
 func (f *Fleet) Register(a *Admin) {
-	a.RouteFull("GET /api/v3/nodes", "", f.listNodes)
-	a.RouteFull("POST /api/v3/nodes", "node.create", f.createNode)
-	a.RouteFull("GET /api/v3/nodes/{node}", "", f.getNode)
-	a.RouteFull("PATCH /api/v3/nodes/{node}", "node.update", f.updateNode)
-	a.RouteFull("DELETE /api/v3/nodes/{node}", "node.delete", f.deleteNode)
-	a.RouteFull("POST /api/v3/nodes/{node}/key", "node.rotate_key", f.rotateKey)
-	a.RouteFull("POST /api/v3/nodes/{node}/upgrade", "node.upgrade", f.upgradeNode)
-	a.RouteFull("GET /api/v3/nodes/{node}/compose", "", f.compose)
-	a.RouteFull("POST /api/v3/nodes/{node}/compose/preview", "", f.preview)
-	a.RouteFull("POST /api/v3/nodes/{node}/sensors", "sensor.create", f.addSensor)
-	a.RouteFull("PATCH /api/v3/nodes/{node}/sensors/{sensor}", "sensor.update", f.updateSensor)
-	a.RouteFull("DELETE /api/v3/nodes/{node}/sensors/{sensor}", "sensor.delete", f.deleteSensor)
-	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/upgrade", "sensor.upgrade", f.upgradeSensor)
-	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/silence", "sensor.silence", f.silence(true))
-	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/unsilence", "sensor.unsilence", f.silence(false))
+	a.RouteFull("GET /api/v3/nodes", "", needViewer, f.listNodes)
+	a.RouteFull("POST /api/v3/nodes", "node.create", needAdmin, f.createNode)
+	a.RouteFull("GET /api/v3/nodes/{node}", "", needViewer, f.getNode)
+	a.RouteFull("PATCH /api/v3/nodes/{node}", "node.update", needAdmin, f.updateNode)
+	a.RouteFull("DELETE /api/v3/nodes/{node}", "node.delete", needAdmin, f.deleteNode)
+	a.RouteFull("POST /api/v3/nodes/{node}/key", "node.rotate_key", needAdmin, f.rotateKey)
+	a.RouteFull("POST /api/v3/nodes/{node}/upgrade", "node.upgrade", needAdmin, f.upgradeNode)
+	a.RouteFull("GET /api/v3/nodes/{node}/compose", "", needAnalyst, f.compose)
+	a.RouteFull("POST /api/v3/nodes/{node}/compose/preview", "", needAnalyst, f.preview)
+	a.RouteFull("POST /api/v3/nodes/{node}/sensors", "sensor.create", needAdmin, f.addSensor)
+	a.RouteFull("PATCH /api/v3/nodes/{node}/sensors/{sensor}", "sensor.update", needAdmin, f.updateSensor)
+	a.RouteFull("DELETE /api/v3/nodes/{node}/sensors/{sensor}", "sensor.delete", needAdmin, f.deleteSensor)
+	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/upgrade", "sensor.upgrade", needAdmin, f.upgradeSensor)
+	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/silence", "sensor.silence", needAnalyst, f.silence(true))
+	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/unsilence", "sensor.unsilence", needAnalyst, f.silence(false))
 }
 
 // ids extracts and validates path ids; invalid ids are reported as 404.

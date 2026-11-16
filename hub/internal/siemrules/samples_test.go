@@ -117,7 +117,14 @@ func audit(action, method, path string, status int, ip string) *domain.AuditReco
 	if status >= 400 {
 		outcome = "failure"
 	}
-	return &domain.AuditRecord{Time: at, Action: action, Method: method, Route: method + " " + path, Path: path, Status: status, Outcome: outcome, ActorIP: ip}
+	actor := "admin"
+	switch {
+	case ip == "local":
+		actor = "local"
+	case action == "session.login" && status >= 400:
+		actor = "anonymous"
+	}
+	return &domain.AuditRecord{Time: at, Action: action, Method: method, Route: method + " " + path, Path: path, Status: status, Outcome: outcome, ActorIP: ip, Actor: actor}
 }
 
 func sampleCases() []sampleCase {

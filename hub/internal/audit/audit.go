@@ -27,7 +27,7 @@ type Recorder struct {
 func (r *Recorder) Record(_ context.Context, rec domain.AuditRecord) {
 	r.Log.Info("audit",
 		"action", rec.Action, "method", rec.Method, "route", rec.Route, "path", rec.Path,
-		"status", rec.Status, "outcome", rec.Outcome, "actor_ip", rec.ActorIP)
+		"status", rec.Status, "outcome", rec.Outcome, "actor_ip", rec.ActorIP, "actor", rec.Actor)
 	if r.SIEM != nil {
 		a := rec
 		r.SIEM.Enqueue(domain.Record{Kind: domain.RecordAudit, Audit: &a})

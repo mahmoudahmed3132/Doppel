@@ -439,7 +439,7 @@ event.dataset:"truesignal.audit" and (event.action:"mfa.reset_cli" or (event.act
 
 ### truesignal-hub-defense-change
 
-**Doppel Hub change that can blind detection.** A successful admin change on the Hub that can suppress or erase detection: SIEM/webhook/whitelist/known-scanner config, disarming, silencing a sensor, deleting nodes, sensors, beacons or events, archiving all events, replacing the asset inventory, password change, recovery-code regeneration or factory reset. Change tracking for review; high for evidence destruction (clear events, factory reset).
+**Doppel Hub change that can blind detection.** A successful admin change on the Hub that can suppress or erase detection: SIEM/webhook/whitelist/known-scanner config, disarming, silencing a sensor, deleting nodes, sensors, beacons or events, archiving all events, replacing the asset inventory, changing or deleting a user (role changes), password change, recovery-code regeneration or factory reset. Change tracking for review; high for evidence destruction (clear events, factory reset).
 
 | | |
 |---|---|
@@ -449,7 +449,7 @@ event.dataset:"truesignal.audit" and (event.action:"mfa.reset_cli" or (event.act
 | Files | `elastic/truesignal-hub-defense-change.json`, `logscale/truesignal-hub-defense-change.logscale` |
 
 ```text
-event.dataset:"truesignal.audit" and event.outcome:"success" and event.action:("config.update" or "system.arm" or "system.password_change" or "system.factory_reset" or "sensor.silence" or "node.delete" or "sensor.delete" or "events.delete_all" or "events.archive_all" or "beacon.delete" or "assets.replace" or "mfa.recovery_codes_regenerate" or "siem.update" or "webhook.update")
+event.dataset:"truesignal.audit" and event.outcome:"success" and event.action:("config.update" or "system.arm" or "system.password_change" or "system.factory_reset" or "sensor.silence" or "node.delete" or "sensor.delete" or "events.delete_all" or "events.archive_all" or "beacon.delete" or "assets.replace" or "mfa.recovery_codes_regenerate" or "siem.update" or "webhook.update" or "user.update" or "user.delete")
 ```
 
 **Triage**
