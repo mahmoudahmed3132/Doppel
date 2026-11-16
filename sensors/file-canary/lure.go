@@ -24,8 +24,9 @@ type LureGenerator interface {
 	Category(path string) string
 }
 
-// stubLures is a deliberately plain stand-in until the PORTED module is
-// imported. Its content is NOT realistic enough for production lures.
+// stubLures is the plain generator: it classifies paths for the generated
+// lures (lures_generated.go) and is the content source in tests. Its own
+// content is deliberately simple and not meant for production lures.
 type stubLures struct{}
 
 func (stubLures) Category(path string) string {

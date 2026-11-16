@@ -26,7 +26,7 @@ type RequestContext struct {
 	Username  string
 }
 
-// Skin renders the decoy's pages (§12: the PORTED web skins module).
+// Skin renders the decoy's pages (skins_builtin.go holds the built-in set).
 type Skin interface {
 	Name() string
 	// LoginPaths are paths that show the login page (GET) and accept a
@@ -38,17 +38,6 @@ type Skin interface {
 // Skins selects a skin by name (TS_SKIN).
 type Skins interface {
 	Skin(name string) (Skin, bool)
-}
-
-// stubSkins provides one plain "generic" skin until the PORTED module is
-// imported. It is functional but not convincing.
-type stubSkins struct{}
-
-func (stubSkins) Skin(name string) (Skin, bool) {
-	if name == "" || name == "generic" {
-		return genericSkin{}, true
-	}
-	return nil, false
 }
 
 type genericSkin struct{}
