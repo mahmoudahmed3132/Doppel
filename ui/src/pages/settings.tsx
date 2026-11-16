@@ -134,7 +134,6 @@ function Sources({ s, save }: { s: Settings; save: Save }) {
   return (
     <Card title="Source lists">
       <form class="stack" onSubmit={(e) => { e.preventDefault(); save({ whitelist: lines(wl), known_scanners: lines(ks) }); }}>
-        {!s.source_lists_active ? <Alert kind="warn">The source-list matcher module is not installed: lists are stored but events are not tagged.</Alert> : null}
         <div class="grid-2">
           <Field label="Whitelist" hint="One entry per line (address, CIDR). Matching events are tagged whitelisted and skip webhooks.">
             {(id) => <textarea id={id} class="input mono list-editor" spellcheck={false} value={wl} onInput={(e) => setWl(e.currentTarget.value)} />}

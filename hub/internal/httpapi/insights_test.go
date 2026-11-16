@@ -23,6 +23,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/livefeed"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported/stub"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/sourcelist"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
@@ -45,7 +46,7 @@ func newInsightHubWith(t *testing.T, mod func(*Insights)) *insightHub {
 	svc, _ := auth.New(auth.Options{Store: db, Hasher: auth.NewHasher(auth.Argon2Params{MemoryKiB: 64, Time: 1, Threads: 1}, 4),
 		TOTP: stub.TOTP{}, Log: log, Now: time.Now, SessionTTL: time.Hour, SessionIdle: time.Hour})
 	tok, _ := svc.Init(ctx)
-	settings := &hubsettings.Service{Store: db, Log: log}
+	settings := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, Assets: stub.Assets{}, Log: log}
 	broker := livefeed.NewBroker()
 	admin := &Admin{Auth: svc, Settings: db, Audit: &auditLog{}, Log: log, Now: time.Now, Development: true}
 	in := &Insights{Store: db, Settings: settings, Auth: svc, Live: broker, Armed: func() bool { return true },
@@ -109,9 +110,6 @@ func TestAnalyticsEndpoints(t *testing.T) {
 	}
 	if code, _, _ := h.c.do("GET", "/api/v3/analytics/projections/insights", nil); code != 404 {
 		t.Fatal("projection without module")
-	}
-	if code, _, _ := h.c.do("GET", "/api/v3/analytics/attack/navigator", nil); code != 503 {
-		t.Fatal("navigator without module")
 	}
 }
 

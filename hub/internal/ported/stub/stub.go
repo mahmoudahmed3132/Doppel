@@ -1,9 +1,9 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
-// Package stub provides deliberately minimal stand-ins for the PORTED
-// modules, for tests and for running the Hub before the real modules are
-// imported. They are NOT production implementations: matching is exact,
-// there is no cryptography beyond what tests need, and no GeoIP data.
+// Package stub provides deliberately minimal fakes of the ported module
+// interfaces. They are for tests only (nothing outside _test.go imports
+// this package): they are NOT production implementations, there is no
+// cryptography beyond what tests need, and no GeoIP data.
 package stub
 
 import (
@@ -20,35 +20,6 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 )
-
-// ExactSourceList matches sources by exact string equality, ignoring a
-// ":port" suffix on IPv4 sources.
-type ExactSourceList struct{}
-
-type exactMatcher map[string]bool
-
-func (m exactMatcher) Match(source string) bool {
-	if m[source] {
-		return true
-	}
-	if i := strings.LastIndexByte(source, ':'); i > 0 && strings.Count(source, ":") == 1 {
-		return m[source[:i]]
-	}
-	return false
-}
-
-// Parse implements ported.SourceListParser.
-func (ExactSourceList) Parse(entries []string) (ported.SourceMatcher, error) {
-	m := exactMatcher{}
-	for _, e := range entries {
-		e = strings.TrimSpace(e)
-		if e == "" {
-			return nil, errors.New("empty entry")
-		}
-		m[e] = true
-	}
-	return m, nil
-}
 
 // TOTP accepts the code fmt.Sprintf("%06d", step%1e6) for the current
 // 30-second step (and ±1). Recovery codes are stored as SHA-256 hex.
@@ -256,13 +227,8 @@ func (ECS) Render(rec domain.Record) (map[string]any, error) {
 type RejectAllVerifier struct{}
 
 func (RejectAllVerifier) Verify([]byte, []byte, string, string) error {
-	return errors.New("manifest verifier not installed")
+	return errors.New("manifest rejected by the test verifier")
 }
-
-// AcceptAllVerifier accepts every manifest. Tests only.
-type AcceptAllVerifier struct{}
-
-func (AcceptAllVerifier) Verify([]byte, []byte, string, string) error { return nil }
 
 // ---- GeoIP --------------------------------------------------------------------
 
@@ -402,35 +368,15 @@ func (p Projection) Build(_ context.Context, events []domain.EnrichedEvent, para
 	return map[string]any{"events": len(events), "params": params}, nil
 }
 
-// ---- HTTP SIEM transport ----------------------------------------------------------
-
-// HTTPTransport records documents and returns a scripted outcome.
-type HTTPTransport struct {
-	mu      sync.Mutex
-	Outcome ported.SendOutcome
-	Err     error
-	Sent    [][]byte
-}
-
-func (h *HTTPTransport) Send(_ context.Context, _, _, _ string, document []byte) (ported.SendOutcome, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.Sent = append(h.Sent, append([]byte(nil), document...))
-	return h.Outcome, h.Err
-}
-
-// Every PORTED seam has a stub (§15).
+// Compile-time checks that the fakes satisfy their seams.
 var (
 	_ ported.ManifestVerifier  = RejectAllVerifier{}
-	_ ported.ManifestVerifier  = AcceptAllVerifier{}
 	_ ported.GeoLocator        = Geo{}
 	_ ported.AssetInventory    = Assets{}
 	_ ported.AttackMapper      = Attack{}
-	_ ported.SourceListParser  = ExactSourceList{}
 	_ ported.TOTP              = TOTP{}
 	_ ported.BeaconService     = (*Beacons)(nil)
 	_ ported.HoneytokenService = (*Honeytokens)(nil)
 	_ ported.ECSRenderer       = ECS{}
-	_ ported.HTTPSIEMTransport = (*HTTPTransport)(nil)
 	_ ported.Projection        = Projection{}
 )

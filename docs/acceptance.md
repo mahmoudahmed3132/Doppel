@@ -41,10 +41,9 @@ TCP connections, fire drill, heartbeat (`sdk_version`), SIGTERM →
 
 ## PORTED seams (§12, §15)
 
-`docs/ported-seams.md` lists every seam, where it is wired, behaviour when
-absent and its stub. `hub/internal/ported/stub` asserts at compile time that
+`docs/ported-seams.md` lists every seam and where it is wired. `hub/internal/ported/stub` asserts at compile time that
 each stub implements its interface. Paths with a module installed are tested:
-`enrich` (GeoIP, assets, ATT&CK), `hubsettings` `TestAssetInventoryWithModule`,
+`enrich` (GeoIP, assets, ATT&CK), `hubsettings` `TestAssetInventory`,
 `httpapi` `TestProjectionsAndNavigatorWithModules`, plus the MFA, pipeline,
 SIEM, catalogue and sensor tests listed there.
 

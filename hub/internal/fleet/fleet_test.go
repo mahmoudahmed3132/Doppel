@@ -81,7 +81,7 @@ type keyCache struct{ invalidated []string }
 
 func (k *keyCache) Invalidate(id string) { k.invalidated = append(k.invalidated, id) }
 
-func newService(t *testing.T, withCompiler bool) (*Service, *store.DB, *keyCache) {
+func newService(t *testing.T) (*Service, *store.DB, *keyCache) {
 	t.Helper()
 	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "ts.db"), store.Options{})
 	if err != nil {
@@ -89,15 +89,12 @@ func newService(t *testing.T, withCompiler bool) (*Service, *store.DB, *keyCache
 	}
 	t.Cleanup(func() { db.Close() })
 	kc := &keyCache{}
-	s := &Service{Store: db, Catalogue: fakeCatalogue{}, Keys: kc, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Now: time.Now}
-	if withCompiler {
-		s.Compiler = &FakeCompiler{}
-	}
+	s := &Service{Store: db, Catalogue: fakeCatalogue{}, Compiler: &FakeCompiler{}, Keys: kc, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Now: time.Now}
 	return s, db, kc
 }
 
 func TestNodeLifecycle(t *testing.T) {
-	s, db, kc := newService(t, true)
+	s, db, kc := newService(t)
 	ctx := context.Background()
 
 	if _, _, err := s.CreateNode(ctx, "  ", nil); !errors.Is(err, ErrInvalid) {
@@ -149,7 +146,7 @@ func spec(name, port string) SensorSpec {
 }
 
 func TestSensorAddRendersBeforeSaving(t *testing.T) {
-	s, db, _ := newService(t, true)
+	s, db, _ := newService(t)
 	ctx := context.Background()
 	n, _, _ := s.CreateNode(ctx, "n1", nil)
 
@@ -197,7 +194,7 @@ func TestSensorAddRendersBeforeSaving(t *testing.T) {
 }
 
 func TestSensorEditUpgradeDelete(t *testing.T) {
-	s, db, _ := newService(t, true)
+	s, db, _ := newService(t)
 	ctx := context.Background()
 	n, _, _ := s.CreateNode(ctx, "n1", nil)
 	s.AddSensor(ctx, n.ID, spec("ssh", "22"))
@@ -260,25 +257,8 @@ func TestSensorEditUpgradeDelete(t *testing.T) {
 	}
 }
 
-func TestFailClosedWithoutCompiler(t *testing.T) {
-	s, db, _ := newService(t, false)
-	ctx := context.Background()
-	n, _, _ := s.CreateNode(ctx, "n1", nil)
-	if _, _, err := s.AddSensor(ctx, n.ID, spec("ssh", "22")); !errors.Is(err, ErrCompilerUnavailable) {
-		t.Fatalf("add without compiler: %v", err)
-	}
-	if _, err := s.Compose(ctx, n.ID); !errors.Is(err, ErrCompilerUnavailable) {
-		t.Fatal("compose without compiler")
-	}
-	// Deletion is never blocked.
-	db.ApplySensorChanges(ctx, n.ID, store.SensorChanges{Create: []domain.Sensor{{ID: "ts-sensor-x", CatalogueName: "x", Version: "1.0.0", CreatedAt: time.Now()}}})
-	if _, err := s.DeleteSensor(ctx, n.ID, "ts-sensor-x"); err != nil {
-		t.Fatalf("delete without compiler: %v", err)
-	}
-}
-
 func TestPreviewDoesNotSaveAndIsRedacted(t *testing.T) {
-	s, db, _ := newService(t, true)
+	s, db, _ := newService(t)
 	ctx := context.Background()
 	n, _, _ := s.CreateNode(ctx, "n1", nil)
 	sp := spec("ssh", "22")
@@ -297,7 +277,7 @@ func TestPreviewDoesNotSaveAndIsRedacted(t *testing.T) {
 }
 
 func TestConcurrentAddsCannotBothClaimAPort(t *testing.T) {
-	s, db, _ := newService(t, true)
+	s, db, _ := newService(t)
 	ctx := context.Background()
 	n, _, _ := s.CreateNode(ctx, "n1", nil)
 	var wg sync.WaitGroup
@@ -315,7 +295,7 @@ func TestConcurrentAddsCannotBothClaimAPort(t *testing.T) {
 }
 
 func TestHealthAndSemver(t *testing.T) {
-	s, db, _ := newService(t, true)
+	s, db, _ := newService(t)
 	ctx := context.Background()
 	n, _, _ := s.CreateNode(ctx, "n1", nil)
 	s.AddSensor(ctx, n.ID, spec("a", "1"))

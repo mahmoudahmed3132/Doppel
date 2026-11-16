@@ -45,7 +45,6 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidCode        = errors.New("invalid or already used code")
 	ErrMFARequired        = errors.New("MFA code required")
-	ErrMFAUnavailable     = errors.New("MFA module not installed")
 	ErrMFAEnabled         = errors.New("MFA is already enabled")
 	ErrMFANotEnabled      = errors.New("MFA is not enabled")
 	ErrMFAMandatory       = errors.New("MFA is required by configuration and cannot be disabled")
@@ -111,11 +110,10 @@ type Options struct {
 	SetupTokenOverride string
 }
 
-// New constructs the service. RequireMFA without a TOTP module is refused:
-// nobody could ever complete enrolment (fail closed).
+// New constructs the service. A TOTP implementation is required.
 func New(o Options) (*Service, error) {
-	if o.RequireMFA && o.TOTP == nil {
-		return nil, errors.New("TS_REQUIRE_MFA is set but the TOTP module is not installed")
+	if o.TOTP == nil {
+		return nil, errors.New("auth: TOTP is required")
 	}
 	if o.Now == nil {
 		o.Now = time.Now
@@ -328,9 +326,6 @@ func (s *Service) Login(ctx context.Context, ip, password, code string) (*Sessio
 		return nil, ErrInvalidCredentials
 	}
 	if a.MFAEnabled {
-		if s.totp == nil {
-			return nil, ErrMFAUnavailable
-		}
 		if strings.TrimSpace(code) == "" {
 			return nil, ErrMFARequired
 		}
@@ -503,16 +498,13 @@ func (s *Service) MFAStatus(ctx context.Context) (MFAStatus, error) {
 	if err != nil {
 		return MFAStatus{}, err
 	}
-	return MFAStatus{Available: s.totp != nil, Enabled: a.MFAEnabled, EnrolmentPending: a.MFAPendingSecret != "",
+	return MFAStatus{Available: true, Enabled: a.MFAEnabled, EnrolmentPending: a.MFAPendingSecret != "",
 		Required: s.requireMFA, RecoveryCodesRemaining: len(a.RecoveryCodes)}, nil
 }
 
 // BeginEnrolment re-checks the password and returns a new secret and its
 // otpauth URI. A previous unconfirmed secret is replaced.
 func (s *Service) BeginEnrolment(ctx context.Context, ip, password string) (secret, uri string, err error) {
-	if s.totp == nil {
-		return "", "", ErrMFAUnavailable
-	}
 	a, err := s.verifyPassword(ctx, ip, password)
 	if err != nil {
 		return "", "", err
@@ -533,9 +525,6 @@ func (s *Service) BeginEnrolment(ctx context.Context, ip, password string) (secr
 // ConfirmEnrolment verifies a code against the pending secret, enables MFA,
 // invalidates every session and returns the recovery codes (shown once).
 func (s *Service) ConfirmEnrolment(ctx context.Context, ip, code string) ([]string, error) {
-	if s.totp == nil {
-		return nil, ErrMFAUnavailable
-	}
 	if err := s.checkLock(ip); err != nil {
 		return nil, err
 	}
@@ -568,9 +557,6 @@ func (s *Service) ConfirmEnrolment(ctx context.Context, ip, code string) ([]stri
 }
 
 func (s *Service) reauthWithCode(ctx context.Context, ip, password, code string) (*store.Admin, error) {
-	if s.totp == nil {
-		return nil, ErrMFAUnavailable
-	}
 	a, err := s.verifyPassword(ctx, ip, password)
 	if err != nil {
 		return nil, err

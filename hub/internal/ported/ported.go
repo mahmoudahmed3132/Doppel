@@ -1,9 +1,11 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
-// Package ported declares the integration seams for the modules marked
-// PORTED in specification §12. The owner supplies the implementations; this
-// repository contains only the interfaces, minimal test stubs (package
-// ported/stub) and the wiring around them.
+// Package ported declares the interfaces between the Hub and its feature
+// modules (TOTP, source lists, assets, GeoIP, ATT&CK, beacons, honeytokens,
+// the ECS renderer, HTTP SIEM transports, projections, the manifest
+// verifier). Every module is in-tree and wired unconditionally in
+// cmd/truesignal-hub; the interfaces remain as seams so tests can substitute
+// the fakes in package ported/stub.
 //
 // Implementations must be safe for concurrent use.
 package ported

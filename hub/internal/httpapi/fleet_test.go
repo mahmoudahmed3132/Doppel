@@ -27,6 +27,13 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
+// noCatalogue reports no sensor as known: secrets cannot be told apart (all
+// masked) and no update is ever available.
+type noCatalogue struct{}
+
+func (noCatalogue) Latest(context.Context, string) (string, bool)               { return "", false }
+func (noCatalogue) SecretKeys(context.Context, string, string) ([]string, bool) { return nil, false }
+
 // portCompiler refuses duplicate TS_PORT values and emits a secret marker
 // unless redaction is requested.
 type portCompiler struct{}
@@ -72,7 +79,7 @@ func newFleetHub(t *testing.T) *fleetHub {
 	keys := nodekey.NewAuthenticator(db)
 	al := &auditLog{}
 	admin := &Admin{Auth: svc, Settings: db, Audit: al, Log: log, Now: time.Now, Development: true}
-	(&Fleet{Svc: &fleet.Service{Store: db, Compiler: portCompiler{}, Keys: keys, Log: log, Now: time.Now}, Settings: db, Log: log}).Register(admin)
+	(&Fleet{Svc: &fleet.Service{Store: db, Compiler: portCompiler{}, Catalogue: noCatalogue{}, Keys: keys, Log: log, Now: time.Now}, Settings: db, Log: log}).Register(admin)
 
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now}
 	mux := http.NewServeMux()
@@ -227,7 +234,7 @@ func TestFleetSensorAPI(t *testing.T) {
 		out["sensor"].(map[string]any)["version"] != "1.1.0" {
 		t.Fatalf("upgrade: %d %v", code, out)
 	}
-	if code, out, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/upgrade", map[string]string{}); code != 503 || out["error"] != "catalogue_unavailable" {
+	if code, out, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/upgrade", map[string]string{}); code != 400 || out["error"] != "invalid_request" {
 		t.Fatalf("upgrade to latest without catalogue: %d %v", code, out)
 	}
 	if code, _, _ := h.c.do("DELETE", base+"/sensors/ts-sensor-a", nil); code != 200 {

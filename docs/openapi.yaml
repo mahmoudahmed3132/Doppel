@@ -38,7 +38,7 @@ components:
     MFAStatus:
       type: object
       properties:
-        available: {type: boolean, description: false until the PORTED TOTP module is installed}
+        available: {type: boolean, description: always true; retained for compatibility}
         enabled: {type: boolean}
         enrolment_pending: {type: boolean}
         required: {type: boolean}
@@ -115,7 +115,7 @@ paths:
     get:
       security: [{nodeKey: []}]
       summary: Unredacted rendered compose for the calling node only (CLI apply); the node key itself is never included
-      responses: {'200': {description: '{"compose","revision"}'}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+      responses: {'200': {description: '{"compose","revision"}'}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}}
   /v3/node/applied:
     post:
       security: [{nodeKey: []}]
@@ -205,7 +205,6 @@ paths:
               schema: {$ref: '#/components/schemas/Error'}
         '409': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Locked'}
-        '503': {$ref: '#/components/responses/Error'}
   /api/v3/session/logout:
     post:
       summary: Log out (allowed for enrolment-only sessions)
@@ -258,7 +257,6 @@ paths:
         '401': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Locked'}
-        '503': {$ref: '#/components/responses/Error'}
   /api/v3/mfa/enrolment/confirm:
     post:
       summary: Confirm enrolment; returns 10 recovery codes once and invalidates all sessions
@@ -446,7 +444,6 @@ paths:
         '200': {description: '{"upgraded": [sensor ids], "render": Render}'}
         '409': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
-        '503': {$ref: '#/components/responses/Error'}
   /api/v3/nodes/{node}/compose:
     parameters:
       - {name: node, in: path, required: true, schema: {type: string}}
@@ -455,7 +452,6 @@ paths:
       responses:
         '200': {description: '{"compose": string, "render": Render, "redacted": true}'}
         '422': {$ref: '#/components/responses/Error'}
-        '503': {$ref: '#/components/responses/Error'}
   /api/v3/nodes/{node}/compose/preview:
     parameters:
       - {name: node, in: path, required: true, schema: {type: string}}
@@ -491,7 +487,6 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '409': {description: 'port_conflict or sensor_exists'}
         '422': {description: 'compose rule violation (error code names the rule)'}
-        '503': {description: compose compiler unavailable}
   /api/v3/nodes/{node}/sensors/{sensor}:
     parameters:
       - {name: node, in: path, required: true, schema: {type: string}}
@@ -534,7 +529,6 @@ paths:
       responses:
         '200': {description: '{"sensor": SensorView, "render": Render}'}
         '422': {$ref: '#/components/responses/Error'}
-        '503': {$ref: '#/components/responses/Error'}
   /api/v3/nodes/{node}/sensors/{sensor}/silence:
     parameters:
       - {name: node, in: path, required: true, schema: {type: string}}
@@ -573,7 +567,7 @@ paths:
         '502': {$ref: '#/components/responses/Error'}
   /api/v3/settings/siem:
     get:
-      summary: SIEM output (token reported only as token_set), installed capabilities, queue depth and drops
+      summary: SIEM output (token reported only as token_set), capabilities (always true; retained for compatibility), queue depth and drops
       responses:
         '200': {description: '{"siem": {protocol, address, format, token_set}, "capabilities": {ecs, http_transports}, "queue": {depth, dropped}}'}
     put:
@@ -685,11 +679,11 @@ paths:
       summary: 'Partial update: public_endpoint, registry_url ("" = default), catalogue_refresh_hours (1..168), update_check_hours (0..720, 0 = off), retention {archive_after_days, purge_archived_after_days (0 = off), history_days}, whitelist, known_scanners'
       responses: {'200': {description: '{"settings": View}'}, '400': {$ref: '#/components/responses/Error'}}
   /api/v3/assets:
-    get: {summary: Asset inventory and whether it is editable, responses: {'200': {description: '{"assets", "editable"}'}}}
-    put: {summary: 'Replace the inventory {"assets": [...]} (validated by the PORTED module; 503 until installed)', responses: {'200': {description: ok}, '503': {$ref: '#/components/responses/Error'}}}
+    get: {summary: Asset inventory (editable is always true; retained for compatibility), responses: {'200': {description: '{"assets", "editable"}'}}}
+    put: {summary: 'Replace the inventory {"assets": [...]} (validated by the Hub)', responses: {'200': {description: ok}}}
   /api/v3/beacons:
-    get: {summary: Beacons (never the token) and whether the module is installed, responses: {'200': {description: '{"beacons", "available"}'}}}
-    post: {summary: 'Create {"type","name","memo"} (PORTED; 503 until installed)', responses: {'201': {description: '{"beacon"}'}, '503': {$ref: '#/components/responses/Error'}}}
+    get: {summary: Beacons (never the token; available is always true, retained for compatibility), responses: {'200': {description: '{"beacons", "available"}'}}}
+    post: {summary: 'Create {"type","name","memo"}', responses: {'201': {description: '{"beacon"}'}}}
   /api/v3/beacons/{id}/artefact:
     parameters: [{name: id, in: path, required: true, schema: {type: string}}]
     get: {summary: Download the beacon artefact (attachment, never inline). Audited., responses: {'200': {description: attachment}}}
@@ -711,12 +705,12 @@ paths:
   /api/v3/analytics/uptime:
     get: {summary: 'Per sensor, per UTC day % online over ?days=1..90 (14); -1 = not yet created', responses: {'200': {description: '{"days","sensors":[{node_id,sensor_id,days,percent}]}'}}}
   /api/v3/analytics/attack/navigator:
-    get: {summary: 'ATT&CK Navigator layer for ?days (PORTED; 503 until installed)', responses: {'200': {description: attachment}, '503': {$ref: '#/components/responses/Error'}}}
+    get: {summary: 'ATT&CK Navigator layer for ?days', responses: {'200': {description: attachment}}}
   /api/v3/analytics/projections/{name}:
     parameters: [{name: name, in: path, required: true, schema: {type: string}}]
     get: {summary: 'PORTED projections (insights, sources, attack matrix, attack path, geo map, report) over ?days; other query parameters passed through', responses: {'200': {description: '{"projection","days","data"}'}, '404': {$ref: '#/components/responses/Error'}}}
   /api/v3/system/status:
-    get: {summary: 'Version, schema, uptime, armed, SIEM queue, update state, hub_update_available, cli_release_notice, installed modules, live clients', responses: {'200': {description: '{"status"}'}}}
+    get: {summary: 'Version, schema, uptime, armed, SIEM queue, update state, hub_update_available, cli_release_notice, modules (attack is always true; retained for compatibility), live clients', responses: {'200': {description: '{"status"}'}}}
   /api/v3/system/update-check:
     post: {summary: Check releases now. Audited., responses: {'200': {description: '{"status"}'}}}
   /api/v3/live:

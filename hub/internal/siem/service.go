@@ -28,8 +28,8 @@ const (
 
 // Service is the SIEM output. Enqueue never blocks.
 type Service struct {
-	Renderer ported.ECSRenderer       // nil: ECS unavailable
-	HTTP     ported.HTTPSIEMTransport // nil: elastic/logscale unavailable
+	Renderer ported.ECSRenderer
+	HTTP     ported.HTTPSIEMTransport
 	PEN      int
 	CABundle string
 	Log      *slog.Logger
@@ -61,11 +61,6 @@ type switchReq struct {
 	tr       Transport
 	preAudit *domain.AuditRecord
 	done     chan struct{}
-}
-
-// Capabilities reports installed PORTED modules.
-func (s *Service) Capabilities() Capabilities {
-	return Capabilities{ECS: s.Renderer != nil, HTTP: s.HTTP != nil}
 }
 
 func (s *Service) defaults() {
@@ -178,9 +173,6 @@ func (s *Service) transport(c Config) (Transport, error) {
 		}
 		return t, err
 	case ProtoElastic, ProtoLogScale:
-		if s.HTTP == nil {
-			return nil, fmt.Errorf("%s transport not installed", c.Protocol)
-		}
 		return &httpTransport{t: s.HTTP, proto: c.Protocol, addr: c.Address, token: c.Token}, nil
 	}
 	return nil, fmt.Errorf("unknown protocol %q", c.Protocol)
@@ -216,9 +208,6 @@ func (h *httpTransport) Close() error { return nil }
 func (s *Service) Render(cfg Config, rec domain.Record) ([]byte, error) {
 	if cfg.Format == FormatRFC5424 {
 		return syslog.Format(rec, s.PEN)
-	}
-	if s.Renderer == nil {
-		return nil, errors.New("ECS renderer not installed")
 	}
 	doc, err := s.Renderer.Render(rec)
 	if err != nil {

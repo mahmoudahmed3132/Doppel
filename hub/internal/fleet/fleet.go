@@ -85,10 +85,8 @@ type KeyCache interface {
 
 // Errors.
 var (
-	ErrInvalid              = errors.New("invalid request")
-	ErrCompilerUnavailable  = errors.New("compose compiler not available")
-	ErrCatalogueUnavailable = errors.New("sensor catalogue not available")
-	ErrSensorExists         = errors.New("a sensor with this id already exists on the node")
+	ErrInvalid      = errors.New("invalid request")
+	ErrSensorExists = errors.New("a sensor with this id already exists on the node")
 )
 
 // InputError carries a field-level validation message.
@@ -116,8 +114,8 @@ type Store interface {
 // Service is the fleet service.
 type Service struct {
 	Store     Store
-	Compiler  Compiler  // nil until the compose compiler is installed
-	Catalogue Catalogue // nil until the catalogue is installed
+	Compiler  Compiler
+	Catalogue Catalogue
 	Keys      KeyCache
 	Log       *slog.Logger
 	Now       func() time.Time
@@ -269,18 +267,16 @@ func (s *Service) view(ctx context.Context, sn domain.Sensor) SensorView {
 	cfg := make(map[string]string, len(sn.Config))
 	var secret map[string]bool
 	allSecret := true
-	if s.Catalogue != nil {
-		if keys, ok := s.Catalogue.SecretKeys(ctx, sn.CatalogueName, sn.Version); ok {
-			allSecret = false
-			secret = map[string]bool{}
-			for _, k := range keys {
-				secret[k] = true
-			}
+	if keys, ok := s.Catalogue.SecretKeys(ctx, sn.CatalogueName, sn.Version); ok {
+		allSecret = false
+		secret = map[string]bool{}
+		for _, k := range keys {
+			secret[k] = true
 		}
-		if latest, ok := s.Catalogue.Latest(ctx, sn.CatalogueName); ok {
-			v.LatestVersion = latest
-			v.UpdateAvailable = semver.Less(sn.Version, latest)
-		}
+	}
+	if latest, ok := s.Catalogue.Latest(ctx, sn.CatalogueName); ok {
+		v.LatestVersion = latest
+		v.UpdateAvailable = semver.Less(sn.Version, latest)
 	}
 	for k, val := range sn.Config {
 		// Without a verified manifest we cannot tell secrets apart: mask all.
@@ -399,9 +395,6 @@ type SensorSpec struct {
 }
 
 func (s *Service) render(ctx context.Context, n domain.Node, sensors []domain.Sensor) (Rendered, error) {
-	if s.Compiler == nil {
-		return Rendered{}, ErrCompilerUnavailable
-	}
 	sort.Slice(sensors, func(i, j int) bool { return sensors[i].ID < sensors[j].ID })
 	return s.Compiler.Render(ctx, n, sensors, RenderOptions{Redact: true})
 }
@@ -558,9 +551,6 @@ func (s *Service) UpgradeSensor(ctx context.Context, nodeID, sensorID, version s
 		}
 		v := version
 		if v == "" {
-			if s.Catalogue == nil {
-				return store.SensorChanges{}, ErrCatalogueUnavailable
-			}
 			latest, ok := s.Catalogue.Latest(ctx, sn.CatalogueName)
 			if !ok {
 				return store.SensorChanges{}, invalid("no available version of %s in the catalogue", sn.CatalogueName)
@@ -584,9 +574,6 @@ func (s *Service) UpgradeSensor(ctx context.Context, nodeID, sensorID, version s
 // UpgradeNode moves every sensor of a node to its latest catalogue version
 // in one rendered, atomic change. It returns the ids that changed.
 func (s *Service) UpgradeNode(ctx context.Context, nodeID string) ([]string, Rendered, error) {
-	if s.Catalogue == nil {
-		return nil, Rendered{}, ErrCatalogueUnavailable
-	}
 	var changed []string
 	r, err := s.plan(ctx, nodeID, false, func(cur map[string]domain.Sensor) (store.SensorChanges, error) {
 		var c store.SensorChanges
@@ -612,16 +599,6 @@ func (s *Service) DeleteSensor(ctx context.Context, nodeID, sensorID string) (Re
 		}
 		return store.SensorChanges{Delete: []string{sensorID}}, nil
 	})
-	if errors.Is(err, ErrCompilerUnavailable) {
-		// Removing a decoy must always be possible; the desired revision
-		// becomes unknown until the compiler can render again.
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if _, err := s.Store.Sensor(ctx, nodeID, sensorID); err != nil {
-			return Rendered{}, err
-		}
-		return Rendered{}, s.Store.ApplySensorChanges(ctx, nodeID, store.SensorChanges{Delete: []string{sensorID}})
-	}
 	return r, err
 }
 
@@ -633,9 +610,6 @@ func (s *Service) SetSilenced(ctx context.Context, nodeID, sensorID string, v bo
 // Deploy renders the node's compose file with real secrets. It is served
 // only to the node itself (node-key authenticated), never to the admin API.
 func (s *Service) Deploy(ctx context.Context, nodeID string) (Rendered, error) {
-	if s.Compiler == nil {
-		return Rendered{}, ErrCompilerUnavailable
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n, err := s.Store.Node(ctx, nodeID)

@@ -43,10 +43,9 @@ func (o *Outputs) Register(a *Admin) {
 
 func (o *Outputs) siemState() map[string]any {
 	depth, dropped := o.SIEM.Stats()
-	caps := o.SIEM.Capabilities()
 	return map[string]any{
 		"siem":         o.SIEM.Config().Public(),
-		"capabilities": map[string]bool{"ecs": caps.ECS, "http_transports": caps.HTTP},
+		"capabilities": map[string]bool{"ecs": true, "http_transports": true}, // always true; kept for API compatibility
 		"queue":        map[string]any{"depth": depth, "dropped": dropped},
 	}
 }
@@ -68,7 +67,7 @@ func (o *Outputs) putSIEM(w http.ResponseWriter, r *http.Request) {
 	if req.Token != nil {
 		next.Token = *req.Token
 	}
-	next, err := next.Normalize(o.SIEM.Capabilities())
+	next, err := next.Normalize()
 	if err != nil {
 		Fail(w, http.StatusBadRequest, "invalid_siem_config", err.Error())
 		return

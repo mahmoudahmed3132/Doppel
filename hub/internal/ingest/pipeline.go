@@ -53,8 +53,8 @@ type LiveFeed interface {
 type Pipeline struct {
 	Store       Store
 	Lists       SourceLists
-	Beacons     ported.BeaconService     // nil: every beacon is unknown
-	Honeytokens ported.HoneytokenService // nil: no honeytoken matching
+	Beacons     ported.BeaconService     // optional in tests (nil: every beacon is unknown)
+	Honeytokens ported.HoneytokenService // optional in tests (nil: no honeytoken matching)
 	Enricher    Enricher
 	SIEM        SIEMSink
 	Notifier    Notifier

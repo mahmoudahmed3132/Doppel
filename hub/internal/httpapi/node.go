@@ -87,8 +87,6 @@ func (n *NodeAPI) compose(w http.ResponseWriter, r *http.Request, nodeID string)
 		switch {
 		case errors.As(err, &re):
 			failRender(w, re)
-		case errors.Is(err, fleet.ErrCompilerUnavailable):
-			Fail(w, http.StatusServiceUnavailable, "compose_unavailable", "the Hub cannot render compose files")
 		default:
 			n.Ingest.Log.Error("deploy render failed", "node_id", nodeID, "error", err.Error())
 			Fail(w, http.StatusInternalServerError, CodeInternal, "render failed")

@@ -50,7 +50,7 @@ func TestNodeAPI(t *testing.T) {
 	defer db.Close()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	keys := nodekey.NewAuthenticator(db)
-	fs := &fleet.Service{Store: db, Compiler: jsonCompiler{}, Keys: keys, Log: log, Now: time.Now}
+	fs := &fleet.Service{Store: db, Compiler: jsonCompiler{}, Catalogue: noCatalogue{}, Keys: keys, Log: log, Now: time.Now}
 	n1, key1, _ := fs.CreateNode(ctx, "one", nil)
 	n2, key2, _ := fs.CreateNode(ctx, "two", nil)
 	fs.AddSensor(ctx, n1.ID, fleet.SensorSpec{CatalogueName: "tcp-tarpit", Version: "1.0.0", Config: map[string]string{"TS_PORT": "22"}})

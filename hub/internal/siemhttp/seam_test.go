@@ -40,10 +40,7 @@ func TestTransportThroughSIEMService(t *testing.T) {
 	}
 	tr.Client.Transport = ts.Client().Transport
 	svc := &siem.Service{HTTP: tr, Renderer: ecs.Renderer{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	if caps := svc.Capabilities(); !caps.ECS || !caps.HTTP {
-		t.Fatalf("capabilities %+v", caps)
-	}
-	cfg, err := siem.Config{Protocol: siem.ProtoElastic, Address: ts.URL + "/logs-truesignal-default", Token: "k", Format: siem.FormatECS}.Normalize(svc.Capabilities())
+	cfg, err := siem.Config{Protocol: siem.ProtoElastic, Address: ts.URL + "/logs-truesignal-default", Token: "k", Format: siem.FormatECS}.Normalize()
 	if err != nil {
 		t.Fatal(err)
 	}

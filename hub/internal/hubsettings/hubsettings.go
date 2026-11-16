@@ -44,8 +44,7 @@ const (
 
 // Errors.
 var (
-	ErrInvalid     = errors.New("invalid settings")
-	ErrUnavailable = errors.New("module not installed")
+	ErrInvalid = errors.New("invalid settings")
 )
 
 func invalid(format string, a ...any) error {
@@ -95,8 +94,8 @@ type Patch struct {
 // Service is the settings service.
 type Service struct {
 	Store           Store
-	Parser          ported.SourceListParser // nil: lists stored but not applied
-	Assets          ported.AssetInventory   // nil: inventory read-only
+	Parser          ported.SourceListParser
+	Assets          ported.AssetInventory
 	DefaultRegistry string
 	AllowHTTP       bool
 	Log             *slog.Logger
@@ -142,11 +141,9 @@ func (s *Service) Load(ctx context.Context) error {
 		s.Log.Error("stored known-scanner list is invalid; not applied", "error", err.Error())
 	}
 	var ix ported.AssetIndex
-	if s.Assets != nil {
-		if raw, ok, _ := s.Store.Setting(ctx, KeyAssets); ok {
-			if ix, err = s.Assets.Index(json.RawMessage(raw)); err != nil {
-				s.Log.Error("stored asset inventory cannot be indexed", "error", err.Error())
-			}
+	if raw, ok, _ := s.Store.Setting(ctx, KeyAssets); ok {
+		if ix, err = s.Assets.Index(json.RawMessage(raw)); err != nil {
+			s.Log.Error("stored asset inventory cannot be indexed", "error", err.Error())
 		}
 	}
 	s.mu.Lock()
@@ -170,7 +167,7 @@ func (s *Service) parseStored(entries []string) (ported.SourceMatcher, error) {
 }
 
 func (s *Service) parse(entries []string) (ported.SourceMatcher, error) {
-	if s.Parser == nil || len(entries) == 0 {
+	if len(entries) == 0 {
 		return nil, nil
 	}
 	return s.Parser.Parse(entries)
@@ -337,11 +334,8 @@ func (s *Service) AssetsRaw(ctx context.Context) json.RawMessage {
 	return json.RawMessage("[]")
 }
 
-// ReplaceAssets validates (PORTED) and stores the inventory.
+// ReplaceAssets validates and stores the inventory.
 func (s *Service) ReplaceAssets(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
-	if s.Assets == nil {
-		return nil, ErrUnavailable
-	}
 	if len(raw) > MaxAssetsBytes {
 		return nil, invalid("inventory exceeds %d bytes", MaxAssetsBytes)
 	}
