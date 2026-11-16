@@ -1,28 +1,12 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
-// Page shells for the PORTED features (§12): honeytokens, beacons, assets,
-// ATT&CK and the analytics projections. When a module is not installed the
-// page says so; when it is, its DTO is rendered generically as text, since
-// the PORTED modules own their data contracts.
-import type { ComponentChildren } from "preact";
+// Honeytokens, beacons, assets, ATT&CK and the analytics projections. The
+// projection DTOs are rendered generically as text; each module owns its
+// data contract.
 import { useState } from "preact/hooks";
 import { enc, get, del, post, put, qs } from "../api";
-import { systemStatus } from "../app";
 import { fmtTime, pretty } from "../format";
-import { useStore } from "../store";
 import { Alert, Button, Card, Confirm, Empty, ErrorBox, Field, Loading, PageHead, Pill, useAction, useAsync } from "../ui";
-
-function ModuleMissing({ name, children }: { name: string; children?: ComponentChildren }) {
-  return (
-    <Card>
-      <div class="module-missing">
-        <h2>{name} module not installed</h2>
-        <p class="muted">This feature is provided by a separately delivered module. The page, API wiring and data flow are in place and activate when the module is installed.</p>
-        {children}
-      </div>
-    </Card>
-  );
-}
 
 // ---- generic DTO rendering --------------------------------------------------
 
@@ -103,7 +87,7 @@ export function Honeytokens() {
 interface Beacon { id: string; type: string; name: string; memo: string; domain: string; created_at: string; use_count: number; last_used_at: string | null }
 
 export function Beacons() {
-  const list = useAsync(() => get<{ beacons: Beacon[] | null; available: boolean }>("/beacons"), []);
+  const list = useAsync(() => get<{ beacons: Beacon[] | null }>("/beacons"), []);
   const [type, setType] = useState("");
   const [name, setName] = useState("");
   const [memo, setMemo] = useState("");
@@ -111,7 +95,6 @@ export function Beacons() {
   const act = useAction();
   if (list.error) return <div class="stack-lg"><PageHead title="Beacons" /><ErrorBox error={list.error} retry={list.reload} /></div>;
   if (!list.data) return <Loading />;
-  if (!list.data.available) return <div class="stack-lg"><PageHead title="Beacons" /><ModuleMissing name="Beacon" /></div>;
   const beacons = list.data.beacons ?? [];
   return (
     <div class="stack-lg">
@@ -169,7 +152,7 @@ export function Beacons() {
 // ---- assets -------------------------------------------------------------------
 
 export function Assets() {
-  const data = useAsync(() => get<{ assets: unknown; editable: boolean }>("/assets"), []);
+  const data = useAsync(() => get<{ assets: unknown }>("/assets"), []);
   const [text, setText] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const act = useAction();
@@ -179,13 +162,7 @@ export function Assets() {
   return (
     <div class="stack-lg">
       <PageHead title="Assets" sub="Inventory used to tag event sources with an asset name and criticality." />
-      {!data.data.editable ? (
-        <ModuleMissing name="Asset inventory">
-          <p class="muted">The stored inventory is shown read-only.</p>
-          <pre class="code">{current}</pre>
-        </ModuleMissing>
-      ) : (
-        <Card title="Inventory (JSON)" actions={<Button small variant="primary" busy={act.busy} onClick={async () => {
+      <Card title="Inventory (JSON)" actions={<Button small variant="primary" busy={act.busy} onClick={async () => {
           let parsed: unknown;
           try { parsed = JSON.parse(current); } catch (e) { setErr(`Invalid JSON: ${(e as Error).message}`); return; }
           setErr("");
@@ -201,7 +178,6 @@ export function Assets() {
             specific range wins. Validated by the Hub on save.
           </p>
         </Card>
-      )}
     </div>
   );
 }
@@ -216,11 +192,8 @@ export const PROJECTIONS: Record<string, { name: string; title: string; sub: str
   report: { name: "report", title: "Report", sub: "Periodic summary for stakeholders." },
 };
 
-function useProjection(name: string, days: number, enabled: boolean) {
-  return useAsync(
-    () => (enabled ? get<{ data: unknown }>(`/analytics/projections/${enc(name)}${qs({ days })}`).then((r) => r.data) : Promise.resolve(undefined)),
-    [name, days, enabled],
-  );
+function useProjection(name: string, days: number) {
+  return useAsync(() => get<{ data: unknown }>(`/analytics/projections/${enc(name)}${qs({ days })}`).then((r) => r.data), [name, days]);
 }
 
 function DaysSelect({ days, onChange }: { days: number; onChange: (d: number) => void }) {
@@ -236,30 +209,22 @@ function DaysSelect({ days, onChange }: { days: number; onChange: (d: number) =>
 
 export function Projection({ page }: { page: keyof typeof PROJECTIONS }) {
   const p = PROJECTIONS[page];
-  const st = useStore(systemStatus);
   const [days, setDays] = useState(30);
-  const installed = !!st?.modules.projections.includes(p.name);
-  const data = useProjection(p.name, days, installed);
+  const data = useProjection(p.name, days);
   return (
     <div class="stack-lg">
-      <PageHead title={p.title} sub={p.sub} actions={installed ? <DaysSelect days={days} onChange={setDays} /> : undefined} />
-      {!st ? <Loading /> : !installed ? <ModuleMissing name={p.title} /> : (
-        <Card>
-          {data.error ? <ErrorBox error={data.error} retry={data.reload} /> : data.loading ? <Loading /> : <DataView value={data.data} />}
-          {p.geo ? <p class="credit"><a href="https://db-ip.com" rel="noopener noreferrer" target="_blank">IP Geolocation by DB-IP</a></p> : null}
-        </Card>
-      )}
+      <PageHead title={p.title} sub={p.sub} actions={<DaysSelect days={days} onChange={setDays} />} />
+      <Card>
+        {data.error ? <ErrorBox error={data.error} retry={data.reload} /> : data.loading ? <Loading /> : <DataView value={data.data} />}
+        {p.geo ? <p class="credit"><a href="https://db-ip.com" rel="noopener noreferrer" target="_blank">IP Geolocation by DB-IP</a></p> : null}
+      </Card>
     </div>
   );
 }
 
 export function Attack() {
-  const st = useStore(systemStatus);
   const [days, setDays] = useState(30);
-  const matrixInstalled = !!st?.modules.projections.includes("attack_matrix");
-  const matrix = useProjection("attack_matrix", days, matrixInstalled);
-  if (!st) return <Loading />;
-  if (!st.modules.attack) return <div class="stack-lg"><PageHead title="ATT&CK" /><ModuleMissing name="ATT&CK mapping" /></div>;
+  const matrix = useProjection("attack_matrix", days);
   return (
     <div class="stack-lg">
       <PageHead title="ATT&CK" sub="Techniques observed across the fleet."
@@ -268,8 +233,7 @@ export function Attack() {
           <a class="btn btn-sm" href={`/api/v3/analytics/attack/navigator${qs({ days })}`} download>Navigator layer</a>
         </>} />
       <Card title="Matrix">
-        {!matrixInstalled ? <p class="muted">The matrix projection is not installed; download the Navigator layer to view it in ATT&amp;CK Navigator.</p>
-          : matrix.error ? <ErrorBox error={matrix.error} /> : matrix.loading ? <Loading /> : <DataView value={matrix.data} />}
+        {matrix.error ? <ErrorBox error={matrix.error} /> : matrix.loading ? <Loading /> : <DataView value={matrix.data} />}
       </Card>
     </div>
   );
