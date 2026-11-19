@@ -16,12 +16,19 @@
 # Usage:
 #   ./scripts/demo/run-demo.sh           # run simulation and keep Hub alive for UI demo
 #   ./scripts/demo/run-demo.sh --smoke   # run simulation, verify all events, and exit 0
+#
+# Runs natively on Linux and macOS (bash 3.2+), or with only Docker:
+#   docker compose -f docker/demo/compose.yaml up --build
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 W=$(mktemp -d "${TMPDIR:-/tmp}/doppel-demo.XXXXXX")
 
 DEMO_HUB_PORT="${DEMO_HUB_PORT:-18080}"
+# Interface the Hub binds; 0.0.0.0 inside the demo container so Docker can
+# publish it (the compose file publishes it on host loopback only).
+DEMO_LISTEN_HOST="${DEMO_LISTEN_HOST:-127.0.0.1}"
+HOST_OS=$(uname -s)
 DEMO_REG_PORT="${DEMO_REG_PORT:-18081}"
 DEMO_TARPIT_PORTS="${DEMO_TARPIT_PORTS:-12220,12221}"
 DEMO_SSH_PORT="${DEMO_SSH_PORT:-12222}"
@@ -124,7 +131,7 @@ TS_KEK_FILE="$W/kek" \
 TS_ENV="development" \
 TS_SETUP_TOKEN="$SETUP_TOKEN" \
 TS_DB_PATH="$W/demo.db" \
-TS_LISTEN_HOST="127.0.0.1" \
+TS_LISTEN_HOST="$DEMO_LISTEN_HOST" \
 TS_LISTEN_PORT="$DEMO_HUB_PORT" \
 TS_REGISTRY_URL="http://127.0.0.1:${DEMO_REG_PORT}/" \
 TS_DEV_ALLOW_UNSIGNED_MANIFESTS="1" \
@@ -334,6 +341,12 @@ PY
 
 echo "  [5/6] Lure file theft (file-canary) + honeytoken reuse across SSH, Postgres & Web"
 cat "$W/lures/prod-db.env" >/dev/null
+if [ "$HOST_OS" != "Linux" ]; then
+	# No inotify here: file-canary polls, and read detection depends on atime
+	# (best-effort). The attacker also locks down the stolen file, which the
+	# poller always sees as tampering.
+	chmod 0600 "$W/lures/vpn-creds.txt"
+fi
 (cd "$ROOT/sensors/remote-access-decoy" && go run "$W/ssh_probe.go" "127.0.0.1:${DEMO_SSH_PORT}" "$HT_USER" "$HT_PASS")
 python3 - "$DEMO_POSTGRES_PORT" "$DEMO_WEB_PORT" "$HT_USER" "$HT_PASS" <<'PY'
 import socket, struct, sys, urllib.error, urllib.parse, urllib.request
@@ -373,15 +386,22 @@ PY
 
 step "7/7 Verify kill-chain events, honeytoken match, and analytics projections"
 WANT_TRIGGERS="tcp_connection ssh_login postgres_login web_page_view web_path_probe web_login_attempt decoy_file_accessed beacon_triggered"
+if [ "$HOST_OS" != "Linux" ]; then
+	# Either lure signal proves file-canary end to end (see step 5).
+	WANT_TRIGGERS="${WANT_TRIGGERS/decoy_file_accessed/decoy_file_accessed|decoy_file_tampered}"
+fi
 missing=""
 for _ in $(seq 30); do
 	got=$(api GET '/events?limit=200&archived=any' | jq -r '[.events[].trigger] | unique | join(" ")')
 	missing=""
 	for t in $WANT_TRIGGERS; do
-		case " $got " in
-			*" $t "*) ;;
-			*) missing="$missing $t" ;;
-		esac
+		hit=""
+		for alt in ${t//|/ }; do
+			case " $got " in
+				*" $alt "*) hit=1 ;;
+			esac
+		done
+		[ -n "$hit" ] || missing="$missing $t"
 	done
 	ht_hits=$(api GET '/events?limit=200&archived=any' | jq '[.events[] | select(.trigger == "honeytoken_used")] | length')
 	if [ -z "$missing" ] && [ "$ht_hits" -ge 1 ]; then

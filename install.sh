@@ -1,7 +1,7 @@
 #!/bin/sh
 # Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 #
-# TrueSignal node agent installer (spec §8).
+# TrueSignal node agent installer (spec §8). Linux and macOS (amd64, arm64).
 #
 #   curl -fsSL https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-releases/main/install.sh \
 #     | TS_NODE_KEY=tsk_… sh -s -- --hub https://hub.example.com
@@ -80,8 +80,9 @@ main() {
 	done
 
 	case "$(uname -s)" in
-	Linux) ;;
-	*) die "only Linux is supported" ;;
+	Linux) OS=linux ;;
+	Darwin) OS=darwin ;;
+	*) die "unsupported OS $(uname -s) (Linux and macOS are supported)" ;;
 	esac
 	case "$(uname -m)" in
 	x86_64 | amd64) ARCH=amd64 ;;
@@ -90,6 +91,9 @@ main() {
 	esac
 	if [ "$ARCH" != amd64 ]; then
 		say "note: sensor images are linux/amd64; deploying sensors on $ARCH needs TS_ALLOW_NON_AMD64=true"
+	fi
+	if [ "$OS" = darwin ]; then
+		say "note: on macOS sensors run in Docker Desktop's Linux VM (enable host networking in Docker Desktop settings)"
 	fi
 
 	if [ "$PREFIX" = /usr/local/bin ] && [ "$(id -u)" -ne 0 ]; then
@@ -112,7 +116,7 @@ main() {
 
 	[ -n "$VERSION" ] || VERSION=$(latest_version)
 	[ -n "$BASE" ] || BASE="https://github.com/$RELEASES_REPO/releases/download/cli/v$VERSION"
-	ASSET="doppel-linux-$ARCH"
+	ASSET="doppel-$OS-$ARCH"
 	say "installing doppel $VERSION ($ARCH) from $BASE"
 
 	fetch "$BASE/$ASSET" "$TMP/$ASSET"
