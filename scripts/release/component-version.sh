@@ -6,7 +6,7 @@
 set -eu
 cd "$(dirname "$0")/../.."
 case "${1:-}" in
-hub) sed -n 's/^var Version = "\([^"]*\)"$/\1/p' hub/cmd/truesignal-hub/main.go ;;
+hub) sed -n 's/^var Version = "\([^"]*\)"$/\1/p' hub/cmd/doppel-hub/main.go ;;
 cli) sed -n 's/^var Version = "\([^"]*\)"$/\1/p' cli/cmd/doppel/main.go ;;
 sensor)
 	n="${2:?sensor name}"

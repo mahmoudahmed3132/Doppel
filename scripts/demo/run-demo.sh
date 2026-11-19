@@ -103,7 +103,7 @@ if [ "$DEMO_SKIP_UI_BUILD" != "1" ] && [ ! -f "$ROOT/hub/internal/webui/dist/ind
 fi
 
 mkdir -p "$W/bin" "$W/reg" "$W/lures"
-(cd "$ROOT/hub" && CGO_ENABLED=0 go build -o "$W/bin/truesignal-hub" ./cmd/truesignal-hub && CGO_ENABLED=0 go build -o "$W/bin/ts-registry" ./cmd/ts-registry)
+(cd "$ROOT/hub" && CGO_ENABLED=0 go build -o "$W/bin/doppel-hub" ./cmd/doppel-hub && CGO_ENABLED=0 go build -o "$W/bin/ts-registry" ./cmd/ts-registry)
 
 DEMO_SENSORS=(tcp-tarpit remote-access-decoy database-decoy web-router-decoy file-canary token-receiver)
 for s in "${DEMO_SENSORS[@]}"; do
@@ -133,7 +133,7 @@ done
 curl -fsS "http://127.0.0.1:${DEMO_REG_PORT}/index.json" >/dev/null || fail "manifest server did not start on port $DEMO_REG_PORT"
 
 step "3/7 Start local Doppel Hub on $HUB"
-"$W/bin/truesignal-hub" kek-generate > "$W/kek"
+"$W/bin/doppel-hub" kek-generate > "$W/kek"
 chmod 600 "$W/kek"
 SETUP_TOKEN="demo-setup-token-0123456789abcdef"
 TS_KEK_FILE="$W/kek" \
@@ -145,7 +145,7 @@ TS_LISTEN_PORT="$DEMO_HUB_PORT" \
 TS_REGISTRY_URL="http://127.0.0.1:${DEMO_REG_PORT}/" \
 TS_DEV_ALLOW_UNSIGNED_MANIFESTS="1" \
 TS_UPDATE_CHECK_URL="https://127.0.0.1:1/none" \
-	"$W/bin/truesignal-hub" serve > "$W/hub.log" 2>&1 &
+	"$W/bin/doppel-hub" serve > "$W/hub.log" 2>&1 &
 PIDS+=($!)
 
 for _ in $(seq 50); do

@@ -25,7 +25,8 @@ ui:
 	cd ui && npm ci --ignore-scripts --no-audit --no-fund && npm run check
 
 hub-bin: ui
-	cd hub && go build -trimpath -ldflags "-s -w" -o ../bin/truesignal-hub ./cmd/truesignal-hub
+	cd hub && go build -trimpath -ldflags "-s -w" -o ../bin/doppel-hub ./cmd/doppel-hub
+	ln -sf doppel-hub bin/truesignal-hub  # compatibility symlink, one major version
 
 # Kill-chain demo natively (Linux or macOS) or fully inside Docker (any OS).
 demo:

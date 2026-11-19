@@ -16,19 +16,22 @@ COPY hub/ hub/
 WORKDIR /src/hub
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath GOWORK=off
 RUN test -f internal/webui/dist/index.html || { echo "admin UI not built: run make ui first" >&2; exit 1; }
-RUN test -n "$VERSION" && grep -q "^var Version = \"$VERSION\"$" cmd/truesignal-hub/main.go \
-	|| { echo "VERSION build arg must equal the Version in cmd/truesignal-hub/main.go" >&2; exit 1; }
-RUN mkdir -p /out/data && GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags='-s -w -buildid=' -o /out/truesignal-hub ./cmd/truesignal-hub
+RUN test -n "$VERSION" && grep -q "^var Version = \"$VERSION\"$" cmd/doppel-hub/main.go \
+	|| { echo "VERSION build arg must equal the Version in cmd/doppel-hub/main.go" >&2; exit 1; }
+RUN mkdir -p /out/data && GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags='-s -w -buildid=' -o /out/doppel-hub ./cmd/doppel-hub \
+	&& ln -s doppel-hub /out/truesignal-hub
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 ARG VERSION
 LABEL org.opencontainers.image.title="TrueSignal Hub" \
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.source="https://github.com/mahmoudahmed3132/Doppel"
+COPY --from=build /out/doppel-hub /doppel-hub
+# Compatibility symlink for one major version (F-004): old entrypoints keep working.
 COPY --from=build /out/truesignal-hub /truesignal-hub
 COPY --from=build --chown=65532:65532 /out/data /data
 USER 65532:65532
 VOLUME ["/data"]
 EXPOSE 8080
-ENTRYPOINT ["/truesignal-hub"]
+ENTRYPOINT ["/doppel-hub"]
 CMD ["serve"]
