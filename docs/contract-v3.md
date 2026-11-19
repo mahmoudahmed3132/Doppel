@@ -10,6 +10,10 @@ specification leaves open (see `QUESTIONS.md` for the open items).
 - Unknown top-level fields → `400 unknown_field`.
 - Envelope: `{"ok": true, ...}` or `{"ok": false, "error": "<code>", "message": "<text>"}`.
 - Per-node-key token bucket, 50 req/s, burst 200 → `429 rate_limited` with `Retry-After` (seconds).
+- Hub-wide ingest admission (event batches only): at most 8 batches are processed
+  at once; a batch that cannot start within 1 s → `429 overloaded` with
+  `Retry-After` (seconds). Heartbeats and stop notices are not gated. SDKs already
+  retry every `429`, so no capability check is needed (Q87).
 - Redirects are never issued on ingest paths; the SDK refuses to follow them.
 
 ## Endpoints
@@ -22,7 +26,19 @@ specification leaves open (see `QUESTIONS.md` for the open items).
 | POST | `/v3/ingest/stopping` | `{"sensor_id","reason"}` (reason ≤ 128 chars) | `{"ok":true}` |
 
 `dropped_events` (optional, integer ≥ 0): events the SDK lost since the last
-acknowledged heartbeat (queue overflow or undeliverable batches). See Q3.
+acknowledged heartbeat (queue overflow or undeliverable batches). See Q3. The
+Hub adds it to the sensor's cumulative `dropped_events` (saturating), shown on
+the node page and in the sensor view (F-603).
+
+### Durability (F-603, NFR-7)
+
+A `200` from `/v3/ingest/events` is sent only after every accepted event of the
+batch has been committed to the database with an fsync (SQLite WAL,
+`synchronous=FULL`). An acknowledged event therefore survives a Hub process
+kill, an OS crash or a power loss. Any other reply (including a dropped
+connection) acknowledges nothing: the SDK resends the whole batch, and events
+the Hub had already stored come back as `duplicates` (idempotency by
+`event_id` per node).
 
 ### Event object
 
@@ -48,6 +64,7 @@ acknowledged heartbeat (queue overflow or undeliverable batches). See Q3.
 | 413 | `body_too_large` | body > 256 KiB |
 | 426 | `version_mismatch` | CLI major ≠ Hub major (CLI only) |
 | 429 | `rate_limited` | token bucket exhausted |
+| 429 | `overloaded` | Hub-wide ingest admission full (event batches only) |
 
 ## Sensor environment (set by the Hub's compose compiler; reserved)
 
@@ -67,6 +84,10 @@ acknowledged heartbeat (queue overflow or undeliverable batches). See Q3.
 ## SDK delivery semantics
 
 - Queue: 1000 events, drop-oldest, drops counted.
+- Per-event limits applied before queueing (F-603): `details` over 64 KiB are
+  replaced with `{"details_dropped":true}` (as the Hub would), `source` and
+  `target` are truncated to 256 bytes. Queue memory is therefore bounded by
+  queue size × about 65 KiB.
 - Batching: up to 100 events or 1 s.
 - Retry: network errors, `408`, `429`, `5xx`; up to 7 attempts per batch;
   delay = min(60 s, 1 s·2^(n-1)) with jitter in [d/2, d]; `Retry-After`

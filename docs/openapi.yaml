@@ -94,12 +94,12 @@ paths:
   /v3/ingest/events:
     post:
       security: [{nodeKey: []}]
-      summary: Sensor event batch (1-100 events; per-event accept/duplicate/reject). Body and semantics in docs/contract-v3.md
+      summary: 'Sensor event batch (1-100 events; per-event accept/duplicate/reject). 200 is sent only after every accepted event is committed and fsynced. 429 rate_limited (per node key) or overloaded (Hub-wide admission), both with Retry-After. Body and semantics in docs/contract-v3.md'
       responses: {'200': {description: '{"accepted","duplicates","rejected"[]}'}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '413': {$ref: '#/components/responses/Error'}, '429': {$ref: '#/components/responses/Error'}}
   /v3/ingest/heartbeats:
     post:
       security: [{nodeKey: []}]
-      summary: Sensor heartbeat (liveness, sdk_version, dropped_events). See docs/contract-v3.md
+      summary: Sensor heartbeat (liveness, sdk_version, dropped_events; the Hub adds dropped_events to the sensor's cumulative count). See docs/contract-v3.md
       responses: {'200': {description: OK}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
   /v3/ingest/stopping:
     post:
@@ -398,7 +398,7 @@ paths:
     parameters:
       - {name: node, in: path, required: true, schema: {type: string, pattern: '^node-[0-9a-f]{8}$'}}
     get:
-      summary: Node with health and sensors (secret config values masked)
+      summary: Node with health and sensors (secret config values masked; each sensor carries its cumulative dropped_events)
       responses:
         '200': {description: '{"node": Node + health + sensors}'}
         '404': {$ref: '#/components/responses/Error'}

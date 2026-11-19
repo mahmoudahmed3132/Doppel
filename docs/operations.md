@@ -107,6 +107,31 @@ Back up the `hub-data` volume (SQLite database) with the Hub stopped, or use
 backup holds the argon2id password hash, node-key hashes and the **sealed**
 secrets; the KEK is not in it (see THREATMODEL.md R1).
 
+### Ingest durability and backpressure (F-603)
+
+- **Durability.** The Hub acknowledges an event batch only after every event
+  in it is committed with an fsync (SQLite WAL, `synchronous=FULL`). This holds
+  only if the storage honours fsync: put `hub-data` on a local disk or block
+  volume; do not use NFS/SMB or a volume mounted with write barriers disabled
+  or a non-battery-backed write cache. The cost is one fsync per stored event;
+  measure throughput on the target volume before a pilot (F-608).
+- **Overload.** When the Hub cannot start an event batch within 1 s (8 batches
+  in flight), it answers `429 overloaded` with `Retry-After`. Sensors keep the
+  events queued and retry; nothing acknowledged is lost. The Hub logs
+  `ingest overloaded, event batches refused with 429` at most every 10 s with
+  the refusal count. Persistent overload means the Hub needs faster storage or
+  fewer events (cool-downs, suppression) per node.
+- **Dropped events.** Each sensor's SDK reports events it had to drop (queue of
+  1000 full, or a batch refused/undeliverable after 7 attempts). The Hub keeps
+  a cumulative count per sensor, shown in the node page's *Dropped events*
+  column and as `dropped_events` in `GET /api/v3/nodes/{node}`, and logs
+  `sensor reported dropped events`. A non-zero, growing count means detections
+  were lost before reaching the Hub: check Hub load (`overloaded` log lines) and
+  node-to-Hub connectivity. Prometheus exposure arrives with `/metrics` (F-003a,
+  Q88).
+- Schema v5 (`sensors.dropped_events`) is applied on first start; the usual
+  `.pre-v5-…bak` snapshot is written first (§3).
+
 ## 3. Upgrade the Hub
 
 1. Read the release notes; verify the new digest (§1).
