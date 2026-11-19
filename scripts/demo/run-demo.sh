@@ -22,7 +22,11 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-W=$(mktemp -d "${TMPDIR:-/tmp}/doppel-demo.XXXXXX")
+# Normalise the work dir: macOS TMPDIR ends in "/" (the Hub rejects "//" in
+# lure paths) and lives under the /var -> /private/var alias.
+TMP_BASE="${TMPDIR:-/tmp}"
+W=$(mktemp -d "${TMP_BASE%/}/doppel-demo.XXXXXX")
+W=$(cd "$W" && pwd -P)
 
 DEMO_HUB_PORT="${DEMO_HUB_PORT:-18080}"
 # Interface the Hub binds; 0.0.0.0 inside the demo container so Docker can
