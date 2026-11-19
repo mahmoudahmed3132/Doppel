@@ -2,6 +2,7 @@
 
 **Target Repository:** `mahmoudahmed3132/Doppel` (Go 1.27.3, Preact + TypeScript, SQLite, Docker Compose)  
 **Intended Executor:** Gemini Neon (autonomous coding agent)  
+**Status (2026-11-19):** WP-1A–1D, WP-2A–2C and WP-3 merged (PRs #29–#36). WP-4A (native HTTPS, health probes, metrics), WP-4B (OIDC SSO) and WP-4C (backup/restore) are not started.  
 **Objective:** Close all product, deception, UI, and engineering gaps in Doppel—prioritized for **maximum startup/accelerator demo impact first**, followed by **codebase hygiene** and **enterprise pilot readiness**.
 
 ---

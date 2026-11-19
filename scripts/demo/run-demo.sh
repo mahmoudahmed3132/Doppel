@@ -186,10 +186,14 @@ curl -fsS -H "Authorization: Bearer $NODE_KEY" -H "X-TrueSignal-CLI-Version: 3.0
 	"$HUB/v3/node/applied" >/dev/null
 
 # Create HTTP web-bug and DNS beacons backed by token-receiver.
+# The admin API never returns a beacon token (json:"-"); it only appears in
+# the downloadable artefact, so read it from there.
 web_beacon=$(api POST /beacons -d '{"type":"web-bug","name":"Q4-Finance-Spreadsheet","memo":"Planted in finance share"}')
-WEB_BEACON_TOKEN=$(echo "$web_beacon" | jq -r .beacon.token)
+WEB_BEACON_ID=$(echo "$web_beacon" | jq -r .beacon.id)
+WEB_BEACON_TOKEN=$(api GET "/beacons/$WEB_BEACON_ID/artefact" | sed -n 's|.*/static/\([a-z0-9]*\)\.gif.*|\1|p')
 dns_beacon=$(api POST /beacons -d '{"type":"dns","name":"Prod-Kubeconfig-Lure","memo":"Planted in jumpbox ~/.kube/config"}')
-DNS_BEACON_TOKEN=$(echo "$dns_beacon" | jq -r .beacon.token)
+DNS_BEACON_ID=$(echo "$dns_beacon" | jq -r .beacon.id)
+DNS_BEACON_TOKEN=$(api GET "/beacons/$DNS_BEACON_ID/artefact" | sed -n 's|^\([a-z0-9]*\)\..*|\1|p')
 [ -n "$WEB_BEACON_TOKEN" ] && [ "$WEB_BEACON_TOKEN" != "null" ] || fail "Create web-bug beacon failed: $web_beacon"
 [ -n "$DNS_BEACON_TOKEN" ] && [ "$DNS_BEACON_TOKEN" != "null" ] || fail "Create dns beacon failed: $dns_beacon"
 
@@ -206,8 +210,8 @@ for svc_name, svc in sorted(services.items()):
     env["TS_NODE_KEY"] = node_key
     env["TS_HUB_ENDPOINT"] = hub_url
     img = svc.get("image", "")
-    # Extract catalogue name from image "demo.local/ts-sensor-<name>@sha256:..."
-    base = img.split("@")[0].rsplit("/", 1)[-1]
+    # Extract catalogue name from image "demo.local/ts-sensor-<name>:<ver>@sha256:..."
+    base = img.split("@")[0].rsplit("/", 1)[-1].split(":", 1)[0]
     bin_name = base.removeprefix("ts-sensor-")
     bin_path = os.path.join(bin_dir, bin_name)
     env_prefix = " ".join(f"{k}={shlex.quote(str(v))}" for k, v in sorted(env.items()))
@@ -238,8 +242,10 @@ echo "All 6 decoys online and heartbeating."
 
 step "6/7 Run scripted attacker kill-chain (scan -> SSH -> Postgres -> Web -> Honeytoken -> Beacon)"
 HT_RAW=$(cat "$W/honeytoken.txt")
-HT_USER="${HT_RAW%%:*}"
-HT_PASS="${HT_RAW#*:}"
+# TS_HONEYTOKEN is JSON {"id","username","secret"} (sensors/file-canary/lure.go).
+HT_USER=$(echo "$HT_RAW" | jq -r .username)
+HT_PASS=$(echo "$HT_RAW" | jq -r .secret)
+[ -n "$HT_USER" ] && [ "$HT_USER" != "null" ] || fail "Unreadable TS_HONEYTOKEN: $HT_RAW"
 
 # Helper for real SSH password auth against remote-access-decoy using the
 # already-cached golang.org/x/crypto/ssh dependency in sensors/remote-access-decoy.
@@ -377,7 +383,7 @@ for _ in $(seq 30); do
 			*) missing="$missing $t" ;;
 		esac
 	done
-	ht_hits=$(api GET '/events?limit=200&archived=any' | jq '[.events[] | select(.honeytoken_id != null and .honeytoken_id != "")] | length')
+	ht_hits=$(api GET '/events?limit=200&archived=any' | jq '[.events[] | select(.trigger == "honeytoken_used")] | length')
 	if [ -z "$missing" ] && [ "$ht_hits" -ge 1 ]; then
 		break
 	fi
@@ -390,7 +396,7 @@ done
 total_events=$(api GET '/events?limit=200&archived=any' | jq '.events | length')
 insights_json=$(api GET '/analytics/projections/insights?days=7')
 touched_ratio=$(echo "$insights_json" | jq -r '.data.touched.ratio // 0')
-attack_count=$(api GET '/analytics/projections/attack_matrix?days=7' | jq '[.data.tactics[]?.techniques[]? | select(.count > 0)] | length')
+attack_count=$(api GET '/analytics/projections/attack_matrix?days=7' | jq '.data.techniquesObserved // 0')
 
 echo ""
 echo "============================================================"

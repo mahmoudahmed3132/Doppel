@@ -1,6 +1,6 @@
 # Try Doppel locally (POC)
 
-One Linux host with Docker (compose plugin), Go 1.26.10, Node 22, `jq`,
+One Linux host with Docker (compose plugin), Go 1.27.4+, Node 22, `jq`,
 `curl` and passwordless `sudo`. From a clone of Doppel:
 
 ```bash
