@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"unicode/utf8"
 )
 
 // Severity is the event severity of contract v3.
@@ -110,6 +111,28 @@ func encodeDetails(d Details) (json.RawMessage, error) {
 		return nil, err
 	}
 	return json.RawMessage(b), nil
+}
+
+// Per-event limits of contract v3 (§4.2), applied before an event is queued.
+// The Hub enforces the same limits; applying them in the SDK also bounds the
+// queue's memory: at most QueueSize events of at most MaxDetailsBytes of
+// details plus two MaxFieldBytes fields each (about 66 MiB worst case for the
+// default 1000-event queue, a few hundred KiB for typical events).
+const (
+	MaxFieldBytes   = 256      // source and target, in bytes
+	MaxDetailsBytes = 64 << 10 // encoded details object
+)
+
+// clampField truncates s to MaxFieldBytes on a UTF-8 rune boundary.
+func clampField(s string) string {
+	if len(s) <= MaxFieldBytes {
+		return s
+	}
+	cut := MaxFieldBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }
 
 // wireEvent is the contract v3 event object (§4.2).

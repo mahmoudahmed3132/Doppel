@@ -147,6 +147,30 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(q.take_dropped(), 2)
         self.assertEqual(q.take_dropped(), 0)
 
+    def test_event_size_bounded(self):
+        # F-603: per-event limits make the bounded queue bounded in bytes too.
+        import logging
+        from doppel_sdk.events import MAX_DETAILS_BYTES, MAX_FIELD_BYTES, dumps
+        from doppel_sdk.sensor import Options as Opts, Sensor
+        cfg = Config.load({"TS_HUB_ENDPOINT": "https://hub", "TS_NODE_KEY": "k", "TS_SENSOR_ID": "ts-sensor-demo"})
+        quiet = logging.getLogger("test-quiet")
+        quiet.addHandler(logging.NullHandler())
+        quiet.propagate = False
+        s = Sensor(cfg, None, Opts(queue_size=5), quiet)
+        huge = "A" * (1 << 20)
+        ev = s._build(Severity.HIGH, "x", "\u00e9" * 400, huge, {"blob": huge})
+        self.assertEqual(ev["details"], {"details_dropped": True})
+        self.assertEqual(len(ev["source"].encode()), MAX_FIELD_BYTES)
+        self.assertEqual(len(ev["target"].encode()), MAX_FIELD_BYTES)
+        edge = {"b": "B" * (MAX_DETAILS_BYTES - len('{"b":""}'))}
+        self.assertEqual(len(dumps(s._build(Severity.HIGH, "x", "s", "t", edge)["details"])), MAX_DETAILS_BYTES)
+        for _ in range(50):
+            s.report("x", huge, huge, {"blob": huge})
+        self.assertLessEqual(len(s._q), 5)
+        self.assertEqual(s._q.take_dropped(), 45)
+        held = s._q.pop(10)
+        self.assertTrue(all(len(dumps(e["details"])) <= MAX_DETAILS_BYTES and len(e["source"].encode()) <= MAX_FIELD_BYTES for e in held))
+
     def test_limiter(self):
         t = [0.0]
         lim = SourceLimiter(10, max_sources=2, clock=lambda: t[0])

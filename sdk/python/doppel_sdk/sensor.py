@@ -21,7 +21,7 @@ from typing import Any, Callable, Mapping, Optional, Protocol
 
 from .client import PATH_EVENTS, PATH_HEARTBEATS, PATH_STOPPING, REQUEST_TIMEOUT, HubClient, HubError, ingest_response, retryable
 from .config import Config, ConfigError
-from .events import DRILL_SOURCE, Details, Severity, encode_details, now_rfc3339
+from .events import DRILL_SOURCE, MAX_DETAILS_BYTES, Details, Severity, bound_details, clamp_field, encode_details, now_rfc3339
 from .eventqueue import EventQueue
 from .uuid7 import UUID7
 
@@ -133,14 +133,22 @@ class Sensor:
         except Exception as e:  # a sensor bug must not kill the sender
             self.log(logging.WARNING, "event details not encodable, sending marker", trigger=trigger, error=str(e))
             det = {"details_encode_error": True}
+        try:
+            bounded = bound_details(det)
+        except (TypeError, ValueError) as e:
+            self.log(logging.WARNING, "event details not encodable, sending marker", trigger=trigger, error=str(e))
+            bounded = {"details_encode_error": True}
+        if bounded is not det and "details_encode_error" not in bounded:
+            self.log(logging.WARNING, "event details too large, sending marker", trigger=trigger, limit=MAX_DETAILS_BYTES)
+        det = bounded
         return {
             "event_id": self._ids.next(),
             "sensor_id": self.config.sensor_id,
             "trigger": trigger,
             "severity": sev.value,
             "occurred_at": now_rfc3339(),
-            "source": source,
-            "target": target,
+            "source": clamp_field(source),
+            "target": clamp_field(target),
             "details": det,
         }
 
