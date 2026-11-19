@@ -126,6 +126,11 @@ done
 "$W/bin/ts-registry" index -dir "$W/reg"
 (cd "$W/reg" && exec python3 -m http.server "$DEMO_REG_PORT" --bind 127.0.0.1 >/dev/null 2>&1) &
 PIDS+=($!)
+for _ in $(seq 50); do
+	curl -fsS "http://127.0.0.1:${DEMO_REG_PORT}/index.json" >/dev/null 2>&1 && break
+	sleep 0.2
+done
+curl -fsS "http://127.0.0.1:${DEMO_REG_PORT}/index.json" >/dev/null || fail "manifest server did not start on port $DEMO_REG_PORT"
 
 step "3/7 Start local Doppel Hub on $HUB"
 "$W/bin/truesignal-hub" kek-generate > "$W/kek"
