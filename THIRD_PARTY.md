@@ -18,6 +18,8 @@ must state why it is needed.
 | `golang.org/x/sys` | hub (via sqlite) | v0.49.0 | BSD-3-Clause | Transitive |
 | `golang.org/x/term` | cli | v0.47.0 | BSD-3-Clause | No-echo password prompt for `discover`; TTY detection for colour |
 | `golang.org/x/sys` | cli (via term) | v0.49.0 | BSD-3-Clause | Transitive |
+| `golang.org/x/crypto` (`ssh`) | `sensors/remote-access-decoy` | v0.58.0 | BSD-3-Clause | SSH 2.0 server transport (RFC 4251–4254); not in the standard library |
+| `golang.org/x/sys` | `sensors/remote-access-decoy` (via crypto) | v0.49.0 | BSD-3-Clause | Transitive |
 
 ### Sigstore manifest verifier (hub, PORTED step 1)
 
