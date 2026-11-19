@@ -144,15 +144,6 @@ func Covered() []Technique {
 	return out
 }
 
-// TacticIDs returns the IDs of a technique's tactics, comma-joined.
-func (t Technique) TacticIDs() string {
-	ids := make([]string, len(t.Tactics))
-	for i, tc := range t.Tactics {
-		ids[i] = tc.ID
-	}
-	return strings.Join(ids, ",")
-}
-
 // Reference is the technique's page on attack.mitre.org.
 func (t Technique) Reference() string {
 	return "https://attack.mitre.org/techniques/" + strings.ReplaceAll(t.ID, ".", "/") + "/"

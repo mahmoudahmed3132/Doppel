@@ -98,7 +98,7 @@ func (in *Insights) summary(w http.ResponseWriter, r *http.Request) {
 	sensors, _ := in.Store.Sensors(r.Context(), "")
 	nOnline, sOnline := 0, 0
 	for _, n := range nodes {
-		if n.LastSeenAt != nil && now.Sub(*n.LastSeenAt) <= 90*time.Second {
+		if n.Online(now) {
 			nOnline++
 		}
 	}
@@ -206,10 +206,6 @@ func (in *Insights) windowEvents(ctx context.Context, days int) ([]domain.Enrich
 }
 
 func (in *Insights) navigator(w http.ResponseWriter, r *http.Request) {
-	if in.Attack == nil {
-		Fail(w, http.StatusServiceUnavailable, "module_unavailable", "the ATT&CK module is not installed")
-		return
-	}
 	days, ok := intParam(r, "days", 30, 1, 365)
 	if !ok {
 		badQuery(w, "days must be 1..365")
@@ -231,13 +227,13 @@ func (in *Insights) navigator(w http.ResponseWriter, r *http.Request) {
 
 var projectionRE = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 
-// projection runs a PORTED analytics projection by name. Query parameters
+// projection runs an analytics projection by name. Query parameters
 // other than days are passed through (bounded).
 func (in *Insights) projection(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	p, ok := in.Projections[name]
 	if !projectionRE.MatchString(name) || !ok {
-		Fail(w, http.StatusNotFound, CodeNotFound, "unknown projection (module not installed?)")
+		Fail(w, http.StatusNotFound, CodeNotFound, "unknown projection")
 		return
 	}
 	days, ok := intParam(r, "days", 30, 1, 365)
@@ -287,7 +283,7 @@ func (in *Insights) statusJSON(ctx context.Context) map[string]any {
 		"hub_update_available": st.LatestHub != "" && semver.Less(in.Version, st.LatestHub),
 		"cli_release_notice":   st.LatestCLI != "" && st.LatestCLI != ack,
 		"cli_notice_ack":       ack,
-		"modules":              map[string]any{"attack": in.Attack != nil, "projections": projections},
+		"modules":              map[string]any{"attack": true, "projections": projections},
 		"live_clients":         in.Live.Clients(),
 	}
 }

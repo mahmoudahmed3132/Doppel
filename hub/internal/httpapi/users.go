@@ -51,7 +51,7 @@ func (a *Admin) updateUser(w http.ResponseWriter, r *http.Request) {
 		Role     *string `json:"role"`
 		Disabled *bool   `json:"disabled"`
 	}
-	if !a.decode(w, r, &req) {
+	if !decodeInto(w, r, &req) {
 		return
 	}
 	if req.Role == nil && req.Disabled == nil {

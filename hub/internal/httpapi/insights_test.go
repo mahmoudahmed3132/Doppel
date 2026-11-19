@@ -45,12 +45,13 @@ func newInsightHubWith(t *testing.T, mod func(*Insights)) *insightHub {
 	svc, _ := auth.New(auth.Options{Store: db, Hasher: auth.NewHasher(auth.Argon2Params{MemoryKiB: 64, Time: 1, Threads: 1}, 4),
 		TOTP: stub.TOTP{}, Log: log, Now: time.Now, SessionTTL: time.Hour, SessionIdle: time.Hour})
 	tok, _ := svc.Init(ctx)
-	settings := &hubsettings.Service{Store: db, Log: log}
+	settings := &hubsettings.Service{Store: db, Assets: stub.Assets{}, Log: log}
 	broker := livefeed.NewBroker()
 	admin := &Admin{Auth: svc, Settings: db, Audit: &auditLog{}, Log: log, Now: time.Now, Development: true}
 	in := &Insights{Store: db, Settings: settings, Auth: svc, Live: broker, Armed: func() bool { return true },
 		SIEMStats: func() (int, uint64) { return 3, 1 }, Version: "3.0.0", Schema: 2, StartedAt: time.Now(),
-		Development: true, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin, TickEvery: 50 * time.Millisecond}
+		Development: true, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin, TickEvery: 50 * time.Millisecond,
+		Attack: stub.Attack{}}
 	if mod != nil {
 		mod(in)
 	}
@@ -108,10 +109,10 @@ func TestAnalyticsEndpoints(t *testing.T) {
 		t.Fatalf("%v", st)
 	}
 	if code, _, _ := h.c.do("GET", "/api/v3/analytics/projections/insights", nil); code != 404 {
-		t.Fatal("projection without module")
+		t.Fatal("unknown projection")
 	}
-	if code, _, _ := h.c.do("GET", "/api/v3/analytics/attack/navigator", nil); code != 503 {
-		t.Fatal("navigator without module")
+	if code, _, _ := h.c.do("GET", "/api/v3/analytics/attack/navigator", nil); code != 200 {
+		t.Fatalf("navigator: %d", code)
 	}
 }
 

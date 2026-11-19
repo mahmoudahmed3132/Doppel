@@ -60,12 +60,6 @@ func (c Config) Public() Public {
 	return Public{Protocol: c.Protocol, Address: c.Address, Format: c.Format, TokenSet: c.Token != ""}
 }
 
-// Capabilities states which PORTED modules are installed.
-type Capabilities struct {
-	ECS  bool // ECS renderer
-	HTTP bool // elastic / logscale transports
-}
-
 // ErrInvalid wraps configuration errors suitable for the API.
 var ErrInvalid = errors.New("invalid SIEM configuration")
 
@@ -74,7 +68,7 @@ func invalid(format string, a ...any) error {
 }
 
 // Normalize validates c and fills defaults.
-func (c Config) Normalize(caps Capabilities) (Config, error) {
+func (c Config) Normalize() (Config, error) {
 	c.Protocol = strings.ToLower(strings.TrimSpace(c.Protocol))
 	c.Address = strings.TrimSpace(c.Address)
 	c.Format = strings.ToLower(strings.TrimSpace(c.Format))
@@ -88,9 +82,6 @@ func (c Config) Normalize(caps Capabilities) (Config, error) {
 		if c.Format != FormatRFC5424 && c.Format != FormatECS {
 			return c, invalid("format must be rfc5424 or ecs")
 		}
-		if c.Format == FormatECS && !caps.ECS {
-			return c, invalid("the ECS renderer module is not installed; use rfc5424")
-		}
 		host, port, err := net.SplitHostPort(c.Address)
 		if err != nil || host == "" || strings.ContainsAny(host, " /\\@") {
 			return c, invalid("address must be host:port")
@@ -100,9 +91,6 @@ func (c Config) Normalize(caps Capabilities) (Config, error) {
 		}
 		c.Token = "" // stream outputs take no token
 	case ProtoElastic, ProtoLogScale:
-		if !caps.HTTP || !caps.ECS {
-			return c, invalid("the %s transport module is not installed", c.Protocol)
-		}
 		u, err := url.Parse(c.Address)
 		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" {
 			return c, invalid("address must be an https:// URL without credentials")

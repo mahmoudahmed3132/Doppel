@@ -21,7 +21,6 @@ const (
 	CodeUnauthorized = "unauthorized"
 	CodeRateLimited  = "rate_limited"
 	CodeNotFound     = "not_found"
-	CodeMethod       = "method_not_allowed"
 	CodeInternal     = "internal_error"
 	CodeInvalid      = "invalid_request"
 )

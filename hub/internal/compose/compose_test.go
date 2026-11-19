@@ -389,9 +389,6 @@ func TestSecretsAndRedaction(t *testing.T) {
 	if d.Services["ts-sensor-f-init"].Environment["TS_HONEYTOKEN"] == "" {
 		t.Fatal("init container has no honeytoken for lure content")
 	}
-	c.Honeytokens = nil
-	_, _, err := render(t, c, false, s)
-	wantCode(t, err, 422, "honeytoken_unavailable")
 }
 
 func TestManifestProblems(t *testing.T) {

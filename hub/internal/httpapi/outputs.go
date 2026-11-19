@@ -17,13 +17,12 @@ import (
 // Outputs serves SIEM, webhook and armed-state settings. Secrets (SIEM
 // token, webhook URL) are write-only: responses report only "*_set".
 type Outputs struct {
-	SIEM     *siem.Service
-	Store    siem.SettingsStore
-	Webhook  *webhook.Notifier
-	Network  Network
-	Log      *slog.Logger
-	Now      func() time.Time
-	CABundle string
+	SIEM    *siem.Service
+	Store   siem.SettingsStore
+	Webhook *webhook.Notifier
+	Network Network
+	Log     *slog.Logger
+	Now     func() time.Time
 }
 
 const (
@@ -44,10 +43,9 @@ func (o *Outputs) Register(a *Admin) {
 
 func (o *Outputs) siemState() map[string]any {
 	depth, dropped := o.SIEM.Stats()
-	caps := o.SIEM.Capabilities()
 	return map[string]any{
 		"siem":         o.SIEM.Config().Public(),
-		"capabilities": map[string]bool{"ecs": caps.ECS, "http_transports": caps.HTTP},
+		"capabilities": map[string]bool{"ecs": true, "http_transports": true},
 		"queue":        map[string]any{"depth": depth, "dropped": dropped},
 	}
 }
@@ -69,7 +67,7 @@ func (o *Outputs) putSIEM(w http.ResponseWriter, r *http.Request) {
 	if req.Token != nil {
 		next.Token = *req.Token
 	}
-	next, err := next.Normalize(o.SIEM.Capabilities())
+	next, err := next.Normalize()
 	if err != nil {
 		Fail(w, http.StatusBadRequest, "invalid_siem_config", err.Error())
 		return
@@ -96,7 +94,7 @@ func (o *Outputs) putSIEM(w http.ResponseWriter, r *http.Request) {
 // testRecord is the synthetic event sent by the test buttons.
 func (o *Outputs) testRecord(trigger, target string) domain.EnrichedEvent {
 	now := o.Now().UTC()
-	return domain.EnrichedEvent{NodeAlias: "TrueSignal Hub", Event: domain.Event{
+	return domain.EnrichedEvent{NodeAlias: "Doppel Hub", Event: domain.Event{
 		EventID: "00000000-0000-7000-8000-000000000000", NodeID: "-", SensorID: "-", Trigger: trigger,
 		Severity: domain.SeverityInfo, OccurredAt: now, ReceivedAt: now, Source: domain.HubSource, Target: target,
 		Details: []byte(`{"test":true}`)}}

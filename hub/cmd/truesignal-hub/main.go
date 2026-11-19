@@ -268,7 +268,7 @@ func serve(log *slog.Logger) error {
 	siemSvc := &siem.Service{PEN: cfg.SyslogPEN, CABundle: cfg.SIEMCABundle, Log: log, Renderer: ecs.Renderer{}, HTTP: httpSIEM}
 	siemCfg, err := siem.LoadConfig(ctx, db)
 	if err == nil {
-		siemCfg, err = siemCfg.Normalize(siemSvc.Capabilities())
+		siemCfg, err = siemCfg.Normalize()
 	}
 	if err != nil {
 		log.Error("stored SIEM output is unusable; SIEM delivery is OFF until reconfigured", "error", err.Error())
@@ -366,7 +366,7 @@ func serve(log *slog.Logger) error {
 
 	// SIEM watchlist: every honeytoken at start and every 24 h, so a SIEM
 	// indicator index stays complete after its own retention.
-	go honeytokens.Run(ctx, 24*time.Hour)
+	go honeytokens.Run(ctx, siem.InventoryInterval)
 
 	// Beacons (merge import H7): tokens tagged under the receiver key the
 	// compose compiler injects; zone from the deployed Token Receiver.

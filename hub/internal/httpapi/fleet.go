@@ -70,21 +70,21 @@ func (f *Fleet) fail(w http.ResponseWriter, err error) {
 	)
 	switch {
 	case errors.As(err, &re):
-		writeJSON(w, re.Status, map[string]any{"ok": false, "error": re.Code, "message": re.Message, "sensor_id": re.SensorID})
+		failRender(w, re)
 	case errors.As(err, &ie):
 		Fail(w, http.StatusBadRequest, CodeInvalid, ie.Message)
 	case errors.Is(err, domain.ErrNotFound):
 		Fail(w, http.StatusNotFound, CodeNotFound, "not found")
 	case errors.Is(err, fleet.ErrSensorExists):
 		Fail(w, http.StatusConflict, "sensor_exists", err.Error())
-	case errors.Is(err, fleet.ErrCompilerUnavailable):
-		Fail(w, http.StatusServiceUnavailable, "compose_unavailable", "the compose compiler is not available; sensor changes are refused")
-	case errors.Is(err, fleet.ErrCatalogueUnavailable):
-		Fail(w, http.StatusServiceUnavailable, "catalogue_unavailable", "the sensor catalogue is not available")
 	default:
 		f.Log.Error("fleet operation failed", "error", err.Error())
 		Fail(w, http.StatusInternalServerError, CodeInternal, "internal error")
 	}
+}
+
+func failRender(w http.ResponseWriter, re *fleet.RenderError) {
+	writeJSON(w, re.Status, map[string]any{"ok": false, "error": re.Code, "message": re.Message, "sensor_id": re.SensorID})
 }
 
 func decodeInto(w http.ResponseWriter, r *http.Request, dst any) bool {
@@ -137,7 +137,7 @@ func (f *Fleet) keyResponse(ctx context.Context, node any, key string) map[strin
 	link := map[string]any{"key_env": "TS_NODE_KEY", "hub_url": f.hubURL(ctx)}
 	if u := f.hubURL(ctx); u != "" {
 		// The key is passed via the environment, never argv (§8).
-		link["command"] = "TS_NODE_KEY=" + shellQuote(key) + " truesignal link " + shellQuote(u)
+		link["command"] = "TS_NODE_KEY=" + shellQuote(key) + " doppel link " + shellQuote(u)
 	}
 	return map[string]any{"node": node, "node_key": key, "link": link,
 		"warning": "The node key is shown only once. Store it now; it cannot be retrieved later."}

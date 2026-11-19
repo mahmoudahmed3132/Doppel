@@ -12,7 +12,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
-const nodeCols = `id, alias, tags, key_hash, created_at, last_seen_at, desired_revision, applied_revision, upgrade_requested`
+const nodeCols = `id, alias, tags, key_hash, created_at, last_seen_at, desired_revision, applied_revision`
 
 func scanNode(row interface{ Scan(...any) error }) (*domain.Node, error) {
 	var (
@@ -20,9 +20,8 @@ func scanNode(row interface{ Scan(...any) error }) (*domain.Node, error) {
 		tags     string
 		created  int64
 		lastSeen sql.NullInt64
-		upgrade  int
 	)
-	if err := row.Scan(&n.ID, &n.Alias, &tags, &n.KeyHash, &created, &lastSeen, &n.DesiredRevision, &n.AppliedRevision, &upgrade); err != nil {
+	if err := row.Scan(&n.ID, &n.Alias, &tags, &n.KeyHash, &created, &lastSeen, &n.DesiredRevision, &n.AppliedRevision); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
@@ -33,7 +32,6 @@ func scanNode(row interface{ Scan(...any) error }) (*domain.Node, error) {
 	}
 	n.CreatedAt = fromMS(created)
 	n.LastSeenAt = fromNullMS(lastSeen)
-	n.UpgradeRequested = upgrade != 0
 	return &n, nil
 }
 
@@ -118,11 +116,6 @@ func (db *DB) SetNodeRevisions(ctx context.Context, id, desired, applied string)
 		desired_revision = CASE WHEN ? = '' THEN desired_revision ELSE ? END,
 		applied_revision = CASE WHEN ? = '' THEN applied_revision ELSE ? END
 		WHERE id = ?`, desired, desired, applied, applied, id))
-}
-
-// SetNodeUpgradeRequested flags or clears a pending "upgrade all sensors".
-func (db *DB) SetNodeUpgradeRequested(ctx context.Context, id string, v bool) error {
-	return affectedOne(db.sql.ExecContext(ctx, `UPDATE nodes SET upgrade_requested = ? WHERE id = ?`, boolInt(v), id))
 }
 
 func affectedOne(res sql.Result, err error) error {

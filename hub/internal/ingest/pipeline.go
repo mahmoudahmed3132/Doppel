@@ -50,11 +50,12 @@ type LiveFeed interface {
 }
 
 // Pipeline processes accepted events in the order defined by §6.5.
+// Collaborators other than Store, Log and Now may be nil in tests.
 type Pipeline struct {
 	Store       Store
 	Lists       SourceLists
-	Beacons     ported.BeaconService     // nil: every beacon is unknown
-	Honeytokens ported.HoneytokenService // nil: no honeytoken matching
+	Beacons     ported.BeaconService
+	Honeytokens ported.HoneytokenService
 	Enricher    Enricher
 	SIEM        SIEMSink
 	Notifier    Notifier
@@ -67,11 +68,6 @@ type Pipeline struct {
 type Result struct {
 	Stored     bool // false: duplicate
 	Suppressed bool // whitelisted or known scanner
-}
-
-// Process runs a normalised sensor event through the pipeline.
-func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error) {
-	return p.process(ctx, ev)
 }
 
 // RaiseHubEvent creates and processes a Hub-raised event (liveness,
@@ -95,11 +91,12 @@ func (p *Pipeline) RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger 
 		Details:    raw,
 		HubRaised:  true,
 	}
-	_, err = p.process(ctx, ev)
+	_, err = p.Process(ctx, ev)
 	return ev, err
 }
 
-func (p *Pipeline) process(ctx context.Context, ev *domain.Event) (Result, error) {
+// Process runs a normalised sensor event through the pipeline.
+func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error) {
 	var res Result
 
 	// Step 2: beacon resolution.

@@ -6,13 +6,11 @@
 // and mandatory DB-IP attribution.
 import { useMemo, useState } from "preact/hooks";
 import { enc } from "../../api";
-import { systemStatus } from "../../app";
 import { fmtNum, fmtTime } from "../../format";
 import { WORLD_COUNTRIES, WORLD_HEIGHT, WORLD_VIEWBOX, WORLD_WIDTH } from "../../generated/world-paths";
 import { Link } from "../../router";
-import { useStore } from "../../store";
 import { Alert, Card, Empty, ErrorBox, KV, Loading, Modal, PageHead, Pill, SeverityBadge } from "../../ui";
-import { DaysSelect, ModuleMissing, useProjection } from "./common";
+import { DaysSelect, useProjection } from "./common";
 
 interface GeoIPStatus {
   enabled: boolean;
@@ -81,14 +79,12 @@ function placeLabel(p: GeoPoint): string {
 }
 
 export function GeoMapPage() {
-  const st = useStore(systemStatus);
   const [days, setDays] = useState(30);
   const [selected, setSelected] = useState<GeoPoint | null>(null);
   const [sortKey, setSortKey] = useState<CountrySortKey>("events");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const installed = !!st?.modules.projections.includes("geo_map");
-  const data = useProjection<GeoDTO>("geo_map", { days }, installed);
+  const data = useProjection<GeoDTO>("geo_map", { days });
 
   const maxPointEvents = useMemo(
     () => Math.max(1, ...(data.data?.points ?? []).map((p) => p.events)),
@@ -114,16 +110,6 @@ export function GeoMapPage() {
       setSortDir(key === "country" ? "asc" : "desc");
     }
   };
-
-  if (!st) return <Loading />;
-  if (!installed) {
-    return (
-      <div class="stack-lg">
-        <PageHead title="Geo map" sub="Event sources by location." />
-        <ModuleMissing name="Geo map" />
-      </div>
-    );
-  }
 
   const dto = data.data;
   const creditText = dto?.geoip?.attribution || "IP Geolocation by DB-IP";

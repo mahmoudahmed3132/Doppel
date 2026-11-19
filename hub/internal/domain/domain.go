@@ -99,15 +99,22 @@ type Event struct {
 
 // Node is a managed host.
 type Node struct {
-	ID               string     `json:"id"`
-	Alias            string     `json:"alias"`
-	Tags             []string   `json:"tags"`
-	KeyHash          []byte     `json:"-"`
-	CreatedAt        time.Time  `json:"created_at"`
-	LastSeenAt       *time.Time `json:"last_seen_at"`
-	DesiredRevision  string     `json:"desired_revision"`
-	AppliedRevision  string     `json:"applied_revision"`
-	UpgradeRequested bool       `json:"-"` // unused: node upgrades apply immediately (Q21)
+	ID              string     `json:"id"`
+	Alias           string     `json:"alias"`
+	Tags            []string   `json:"tags"`
+	KeyHash         []byte     `json:"-"`
+	CreatedAt       time.Time  `json:"created_at"`
+	LastSeenAt      *time.Time `json:"last_seen_at"`
+	DesiredRevision string     `json:"desired_revision"`
+	AppliedRevision string     `json:"applied_revision"`
+}
+
+// NodeOnlineWindow is three SDK heartbeat intervals.
+const NodeOnlineWindow = 90 * time.Second
+
+// Online reports whether the node was seen within NodeOnlineWindow of now.
+func (n Node) Online(now time.Time) bool {
+	return n.LastSeenAt != nil && now.Sub(*n.LastSeenAt) <= NodeOnlineWindow
 }
 
 // SensorStatus is the liveness state of a sensor instance.

@@ -63,11 +63,6 @@ type switchReq struct {
 	done     chan struct{}
 }
 
-// Capabilities reports installed PORTED modules.
-func (s *Service) Capabilities() Capabilities {
-	return Capabilities{ECS: s.Renderer != nil, HTTP: s.HTTP != nil}
-}
-
 func (s *Service) defaults() {
 	if s.QueueSize <= 0 {
 		s.QueueSize = DefaultQueueSize
@@ -178,15 +173,12 @@ func (s *Service) transport(c Config) (Transport, error) {
 		}
 		return t, err
 	case ProtoElastic, ProtoLogScale:
-		if s.HTTP == nil {
-			return nil, fmt.Errorf("%s transport not installed", c.Protocol)
-		}
 		return &httpTransport{t: s.HTTP, proto: c.Protocol, addr: c.Address, token: c.Token}, nil
 	}
 	return nil, fmt.Errorf("unknown protocol %q", c.Protocol)
 }
 
-// httpTransport adapts the PORTED HTTP transport.
+// httpTransport adapts the HTTP SIEM transport.
 type httpTransport struct {
 	t                  ported.HTTPSIEMTransport
 	proto, addr, token string
@@ -216,9 +208,6 @@ func (h *httpTransport) Close() error { return nil }
 func (s *Service) Render(cfg Config, rec domain.Record) ([]byte, error) {
 	if cfg.Format == FormatRFC5424 {
 		return syslog.Format(rec, s.PEN)
-	}
-	if s.Renderer == nil {
-		return nil, errors.New("ECS renderer not installed")
 	}
 	doc, err := s.Renderer.Render(rec)
 	if err != nil {

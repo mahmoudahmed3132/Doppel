@@ -19,6 +19,7 @@ import (
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
@@ -259,23 +260,6 @@ func TestSensorEditUpgradeDelete(t *testing.T) {
 	}
 }
 
-func TestFailClosedWithoutCompiler(t *testing.T) {
-	s, db, _ := newService(t, false)
-	ctx := context.Background()
-	n, _, _ := s.CreateNode(ctx, "n1", nil)
-	if _, _, err := s.AddSensor(ctx, n.ID, spec("ssh", "22")); !errors.Is(err, ErrCompilerUnavailable) {
-		t.Fatalf("add without compiler: %v", err)
-	}
-	if _, err := s.Compose(ctx, n.ID); !errors.Is(err, ErrCompilerUnavailable) {
-		t.Fatal("compose without compiler")
-	}
-	// Deletion is never blocked.
-	db.ApplySensorChanges(ctx, n.ID, store.SensorChanges{Create: []domain.Sensor{{ID: "ts-sensor-x", CatalogueName: "x", Version: "1.0.0", CreatedAt: time.Now()}}})
-	if _, err := s.DeleteSensor(ctx, n.ID, "ts-sensor-x"); err != nil {
-		t.Fatalf("delete without compiler: %v", err)
-	}
-}
-
 func TestPreviewDoesNotSaveAndIsRedacted(t *testing.T) {
 	s, db, _ := newService(t, true)
 	ctx := context.Background()
@@ -331,7 +315,7 @@ func TestHealthAndSemver(t *testing.T) {
 		a, b string
 		less bool
 	}{{"1.0.0", "1.0.1", true}, {"1.10.0", "1.9.0", false}, {"2.0.0-rc.1", "2.0.0", true}, {"2.0.0", "2.0.0-rc.1", false}, {"1.0.0", "1.0.0", false}} {
-		if semverLess(c.a, c.b) != c.less {
+		if semver.Less(c.a, c.b) != c.less {
 			t.Errorf("%s < %s", c.a, c.b)
 		}
 	}

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
 )
 
 // Registry limits (§6.7).
@@ -47,9 +49,8 @@ type IndexVersion struct {
 }
 
 var (
-	kebabRE  = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-	semverRE = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$`)
-	relRE    = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$`)
+	kebabRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	relRE   = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$`)
 )
 
 // ParseIndex strictly decodes and validates an index.
@@ -79,11 +80,11 @@ func ParseIndex(b []byte) (*Index, error) {
 		if len(e.Versions) == 0 || len(e.Versions) > MaxVersions {
 			return nil, fmt.Errorf("index: %s must list 1..%d versions", name, MaxVersions)
 		}
-		if e.Latest != "" && !semverRE.MatchString(e.Latest) {
+		if e.Latest != "" && !semver.Valid(e.Latest) {
 			return nil, fmt.Errorf("index: %s latest is not SemVer", name)
 		}
 		for v, iv := range e.Versions {
-			if !semverRE.MatchString(v) {
+			if !semver.Valid(v) {
 				return nil, fmt.Errorf("index: %s has a non-SemVer version", name)
 			}
 			if !safeRelPath(iv.Manifest) {

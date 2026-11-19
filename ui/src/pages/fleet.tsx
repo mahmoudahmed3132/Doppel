@@ -29,7 +29,7 @@ function KeyOnce({ result, onClose }: { result: KeyResult | null; onClose: () =>
           {result.link.command ? (
             <Secret label="Link the node (run as root on the node; the key is passed in the environment, not argv)" value={result.link.command} />
           ) : (
-            <Alert kind="info">No Hub endpoint is configured. Set it in Settings, then link with {result.link.key_env}=&lt;key&gt; truesignal link &lt;hub-url&gt;.</Alert>
+            <Alert kind="info">No Hub endpoint is configured. Set it in Settings, then link with {result.link.key_env}=&lt;key&gt; doppel link &lt;hub-url&gt;.</Alert>
           )}
           <p class="muted">Install the CLI first with the verified installer (see the operations guide); it checks SHA256SUMS and the release signature.</p>
           <label class="check"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.currentTarget.checked)} /> I have stored the key</label>
@@ -51,7 +51,7 @@ export function FleetList() {
 
   return (
     <div class="stack-lg">
-      <PageHead title="Fleet" sub="Nodes run the truesignal CLI and the sensors deployed to them."
+      <PageHead title="Fleet" sub="Nodes run the doppel CLI and the sensors deployed to them."
         actions={<Button variant="primary" onClick={() => { setAlias(""); setTags(""); setCreating(true); }}>Create node</Button>} />
       <ErrorBox error={nodes.error} retry={nodes.reload} />
       {nodes.data ? (
@@ -79,7 +79,7 @@ export function FleetList() {
               </tbody>
             </table>
           </div>
-        ) : <Empty>No nodes yet. Create one, then link it with the truesignal CLI.</Empty>
+        ) : <Empty>No nodes yet. Create one, then link it with the doppel CLI.</Empty>
       ) : nodes.loading ? <Loading /> : null}
 
       <Modal title="Create node" open={creating} onClose={() => setCreating(false)}
@@ -157,7 +157,7 @@ export function NodePage({ id }: { id: string }) {
             ["Desired revision", <span class="mono">{n.desired_revision}</span>],
             ["Applied revision", <span class="mono">{n.applied_revision}</span>],
           ]} />
-          {!n.health.in_sync ? <p class="muted">Run <code>truesignal apply</code> on the node (or wait for its timer) to apply the change.</p> : null}
+          {!n.health.in_sync ? <p class="muted">Run <code>doppel apply</code> on the node (or wait for its timer) to apply the change.</p> : null}
         </Card>
       </div>
 
@@ -239,7 +239,7 @@ export function NodePage({ id }: { id: string }) {
           if (r) { toast(`${r.upgraded.length} sensor(s) upgraded; the node applies it on its next apply.`, "ok"); node.reload(); }
         }} />
       <Confirm open={confirm === "delete"} title="Delete node?" confirmLabel="Delete node" danger busy={act.busy} phrase={n.id}
-        body={<>The node, its sensors and its key are removed; the key stops working immediately. Events already received are kept. Run <code>truesignal uninstall</code> on the host to remove the containers.</>}
+        body={<>The node, its sensors and its key are removed; the key stops working immediately. Events already received are kept. Run <code>doppel uninstall</code> on the host to remove the containers.</>}
         onClose={() => setConfirm("")}
         onConfirm={async () => {
           if (await act.run(() => del(`/nodes/${enc(id)}`), "Node deleted")) navigate("/fleet");

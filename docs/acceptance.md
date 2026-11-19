@@ -39,11 +39,12 @@ SIGUSR1/SIGTERM in a child process. Live run against the real Hub: test mode,
 TCP connections, fire drill, heartbeat (`sdk_version`), SIGTERM →
 `sensor_stopped` and sensor offline.
 
-## PORTED seams (§12, §15)
+## Module seams (§12, §15)
 
-`docs/ported-seams.md` lists every seam, where it is wired, behaviour when
-absent and its stub. `hub/internal/ported/stub` asserts at compile time that
-each stub implements its interface. Paths with a module installed are tested:
+`docs/ported-seams.md` lists every module interface, its in-tree
+implementation and where it is wired. All modules are in-tree and required;
+the interfaces remain as test seams (`hub/internal/ported/stub` holds the
+test fakes). Paths with modules are tested:
 `enrich` (GeoIP, assets, ATT&CK), `hubsettings` `TestAssetInventoryWithModule`,
 `httpapi` `TestProjectionsAndNavigatorWithModules`, plus the MFA, pipeline,
 SIEM, catalogue and sensor tests listed there.

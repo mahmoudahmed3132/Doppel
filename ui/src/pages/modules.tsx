@@ -6,7 +6,6 @@ import { useState } from "preact/hooks";
 import { enc, get, del, post } from "../api";
 import { fmtTime } from "../format";
 import { Button, Card, Confirm, Empty, ErrorBox, Field, Loading, PageHead, Pill, useAction, useAsync } from "../ui";
-import { ModuleMissing } from "./analytics/common";
 
 export { Assets } from "./assets";
 export { AttackMatrixPage as Attack } from "./analytics/attack-matrix";
@@ -46,7 +45,7 @@ export function Honeytokens() {
               </tbody>
             </table>
           </div>
-        ) : <Empty>No honeytokens. They are generated when a sensor that plants credential lures is deployed (requires the honeytoken module).</Empty>
+        ) : <Empty>No honeytokens. They are generated when a sensor that plants credential lures is deployed.</Empty>
       ) : list.loading ? <Loading /> : null}
     </div>
   );
@@ -65,7 +64,6 @@ export function Beacons() {
   const act = useAction();
   if (list.error) return <div class="stack-lg"><PageHead title="Beacons" /><ErrorBox error={list.error} retry={list.reload} /></div>;
   if (!list.data) return <Loading />;
-  if (!list.data.available) return <div class="stack-lg"><PageHead title="Beacons" /><ModuleMissing name="Beacon" /></div>;
   const beacons = list.data.beacons ?? [];
   return (
     <div class="stack-lg">

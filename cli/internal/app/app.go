@@ -239,7 +239,7 @@ func (a *App) firedrill(ctx context.Context, _ []string) int {
 		return a.fail(err)
 	}
 	if len(names) == 0 {
-		return a.fail(errors.New("no running TrueSignal sensors"))
+		return a.fail(errors.New("no running Doppel sensors"))
 	}
 	failed := 0
 	for _, n := range names {
@@ -372,7 +372,7 @@ func (a *App) uninstall(ctx context.Context, args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if !*yes && !a.confirm("Remove all TrueSignal sensors, configuration and the CLI from this node?") {
+	if !*yes && !a.confirm("Remove all Doppel sensors, configuration and the CLI from this node?") {
 		a.info("aborted")
 		return 1
 	}

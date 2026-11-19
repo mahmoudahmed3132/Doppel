@@ -5,12 +5,10 @@
 // detail drawer, and ATT&CK Navigator JSON layer download.
 import { useMemo, useState } from "preact/hooks";
 import { qs } from "../../api";
-import { systemStatus } from "../../app";
 import { fmtNum, fmtTime } from "../../format";
 import { Link } from "../../router";
-import { useStore } from "../../store";
 import { Card, Empty, ErrorBox, KV, Loading, Modal, PageHead, Pill } from "../../ui";
-import { DaysSelect, ModuleMissing, useProjection } from "./common";
+import { DaysSelect, useProjection } from "./common";
 import type { AttackTactic, TechniqueStat } from "./common";
 
 interface AttackMatrixDTO {
@@ -32,13 +30,11 @@ function matrixHeatClass(primary: number, maxPrimary: number): string {
 }
 
 export function AttackMatrixPage() {
-  const st = useStore(systemStatus);
   const [days, setDays] = useState(30);
   const [observedOnly, setObservedOnly] = useState(false);
   const [selected, setSelected] = useState<TechniqueStat | null>(null);
 
-  const matrixInstalled = !!st?.modules.projections.includes("attack_matrix");
-  const matrix = useProjection<AttackMatrixDTO>("attack_matrix", { days }, !!st?.modules.attack && matrixInstalled);
+  const matrix = useProjection<AttackMatrixDTO>("attack_matrix", { days });
 
   const tacticNames = useMemo(() => {
     const map = new Map<string, string>();
@@ -63,16 +59,6 @@ export function AttackMatrixPage() {
     return { columns: cols, maxPrimary: maxP };
   }, [matrix.data, observedOnly]);
 
-  if (!st) return <Loading />;
-  if (!st.modules.attack) {
-    return (
-      <div class="stack-lg">
-        <PageHead title="ATT&CK" />
-        <ModuleMissing name="ATT&CK mapping" />
-      </div>
-    );
-  }
-
   const dto = matrix.data;
   const coveragePct = dto && dto.techniquesCovered > 0 ? Math.round((dto.techniquesObserved / dto.techniquesCovered) * 100) : 0;
 
@@ -90,13 +76,7 @@ export function AttackMatrixPage() {
           </>
         }
       />
-      {!matrixInstalled ? (
-        <Card title="Matrix">
-          <p class="muted">
-            The matrix projection is not installed; download the Navigator layer to view it in ATT&amp;CK Navigator.
-          </p>
-        </Card>
-      ) : matrix.error ? (
+      {matrix.error ? (
         <ErrorBox error={matrix.error} retry={matrix.reload} />
       ) : matrix.loading && !dto ? (
         <Loading />

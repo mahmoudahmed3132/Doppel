@@ -478,9 +478,6 @@ func (c *Compiler) secret(ctx context.Context, node domain.Node, sn domain.Senso
 		}
 		return BeaconReceiverKey(mk), nil
 	case manifest.EnvHoneytoken:
-		if c.Honeytokens == nil {
-			return "", reject(sn.ID, "honeytoken_unavailable", "the honeytoken module is not installed")
-		}
 		ht, err := c.Honeytokens.Ensure(ctx, node.ID, sn.ID)
 		if err != nil {
 			return "", err

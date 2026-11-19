@@ -5,12 +5,10 @@
 // the Attack path view.
 import { useMemo, useState } from "preact/hooks";
 import { enc } from "../../api";
-import { systemStatus } from "../../app";
 import { fmtNum, fmtTime } from "../../format";
 import { Link } from "../../router";
-import { useStore } from "../../store";
 import { Card, Empty, ErrorBox, Loading, PageHead, Pill } from "../../ui";
-import { criticalityKind, DaysSelect, ModuleMissing, useProjection } from "./common";
+import { criticalityKind, DaysSelect, useProjection } from "./common";
 import type { SourceProfile } from "./common";
 
 type FilterChip = "all" | "internal" | "external" | "multi-decoy" | "repeat" | "known-scanner" | "whitelisted";
@@ -39,15 +37,13 @@ function matchesFilter(s: SourceProfile, filter: FilterChip): boolean {
 }
 
 export function SourcesPage() {
-  const st = useStore(systemStatus);
   const [days, setDays] = useState(30);
   const [filter, setFilter] = useState<FilterChip>("all");
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("events");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const installed = !!st?.modules.projections.includes("sources");
-  const data = useProjection<{ sources: SourceProfile[] }>("sources", { days }, installed);
+  const data = useProjection<{ sources: SourceProfile[] }>("sources", { days });
 
   const allSources = data.data?.sources ?? [];
 
@@ -102,16 +98,6 @@ export function SourcesPage() {
       setSortDir(key === "source" ? "asc" : "desc");
     }
   };
-
-  if (!st) return <Loading />;
-  if (!installed) {
-    return (
-      <div class="stack-lg">
-        <PageHead title="Scans" sub="Sources, scan patterns and their activity." />
-        <ModuleMissing name="Scans" />
-      </div>
-    );
-  }
 
   return (
     <div class="stack-lg">

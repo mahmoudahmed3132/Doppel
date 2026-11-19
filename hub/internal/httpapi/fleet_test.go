@@ -50,6 +50,11 @@ func (portCompiler) Render(_ context.Context, n domain.Node, sensors []domain.Se
 	return fleet.Rendered{Compose: []byte(b.String()), Revision: fmt.Sprintf("rev_%08x", len(b.String()))}, nil
 }
 
+type emptyCatalogue struct{}
+
+func (emptyCatalogue) Latest(context.Context, string) (string, bool)               { return "", false }
+func (emptyCatalogue) SecretKeys(context.Context, string, string) ([]string, bool) { return nil, false }
+
 type fleetHub struct {
 	srv   *httptest.Server
 	audit *auditLog
@@ -72,7 +77,7 @@ func newFleetHub(t *testing.T) *fleetHub {
 	keys := nodekey.NewAuthenticator(db)
 	al := &auditLog{}
 	admin := &Admin{Auth: svc, Settings: db, Audit: al, Log: log, Now: time.Now, Development: true}
-	(&Fleet{Svc: &fleet.Service{Store: db, Compiler: portCompiler{}, Keys: keys, Log: log, Now: time.Now}, Settings: db, Log: log}).Register(admin)
+	(&Fleet{Svc: &fleet.Service{Store: db, Compiler: portCompiler{}, Catalogue: emptyCatalogue{}, Keys: keys, Log: log, Now: time.Now}, Settings: db, Log: log}).Register(admin)
 
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now}
 	mux := http.NewServeMux()
@@ -115,7 +120,7 @@ func TestFleetNodeKeyLifecycleEndToEnd(t *testing.T) {
 	key := out["node_key"].(string)
 	nodeID := out["node"].(map[string]any)["id"].(string)
 	link := out["link"].(map[string]any)
-	if !strings.Contains(link["command"].(string), "TS_NODE_KEY='"+key+"' truesignal link '"+h.srv.URL+"'") {
+	if !strings.Contains(link["command"].(string), "TS_NODE_KEY='"+key+"' doppel link '"+h.srv.URL+"'") {
 		t.Fatalf("link command %v", link["command"])
 	}
 	if _, has := out["node"].(map[string]any)["key_hash"]; has {
@@ -227,8 +232,8 @@ func TestFleetSensorAPI(t *testing.T) {
 		out["sensor"].(map[string]any)["version"] != "1.1.0" {
 		t.Fatalf("upgrade: %d %v", code, out)
 	}
-	if code, out, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/upgrade", map[string]string{}); code != 503 || out["error"] != "catalogue_unavailable" {
-		t.Fatalf("upgrade to latest without catalogue: %d %v", code, out)
+	if code, out, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/upgrade", map[string]string{}); code != 400 || out["error"] != CodeInvalid {
+		t.Fatalf("upgrade to latest with empty catalogue: %d %v", code, out)
 	}
 	if code, _, _ := h.c.do("DELETE", base+"/sensors/ts-sensor-a", nil); code != 200 {
 		t.Fatal("delete sensor")
