@@ -26,6 +26,7 @@ uid and effective capability mask at start (`running with privileges`).
 | `remote-access-decoy` | 0 | `NET_BIND_SERVICE` | host | SSH 22, Telnet 23 and FTP 21 (ports below 1024 in host networking) |
 | `database-decoy` | 65532 | none | host | MySQL 3306, PostgreSQL 5432 and MS SQL Server 1433 (all default ports ≥ 1024) |
 | `identity-decoy` | 0 | `NET_BIND_SERVICE` | host | LDAP 389 and LDAPS 636 (ports below 1024 in host networking), plus RDP 3389 |
+| `network-service-decoy` | 0 | `NET_BIND_SERVICE` | host | SNMP UDP 161 and DNS UDP/TCP 53 (ports below 1024 in host networking) |
 | `template` | 65532 | none | host | reference |
 
 ## Triggers
@@ -63,6 +64,8 @@ uid and effective capability mask at start (`running with privileges`).
 | `identity-decoy` | `ldaps_connection` | medium | `protocol=ldaps, dst_port, suppressed_since_last` |
 | `identity-decoy` | `rdp_login` | high | `protocol=rdp, dst_port, auth=credssp_ntlm, username, domain, workstation, cookie_user, ntlm_challenge, ntlm_response_hmac`/`ntlm_response_length`, `suppressed_since_last` |
 | `identity-decoy` | `rdp_connection` | medium | `protocol=rdp, dst_port, nla_offered, username`/`cookie_user` (when `mstshash=` cookie sent), `suppressed_since_last` |
+| `network-service-decoy` | `snmp_query` | medium (`high` for `SetRequest`) | `protocol=snmp, dst_port, version` (`1`, `2c`, `3`), `pdu_type`, `oids` (≤ 16), `community_hmac`/`community_length` (v1/v2c), `username`, `security_level`, `engine_discovery` (v3), `suppressed_since_last` |
+| `network-service-decoy` | `dns_query` | medium (`high` for TCP `AXFR`/`IXFR`) | `protocol=dns, transport` (`udp`, `tcp`), `dst_port, qname, qtype, qclass, suppressed_since_last` |
 
 ## Honeytoken matching contract (for the PORTED matcher)
 
@@ -131,6 +134,18 @@ the honeytoken secret with the event's node id.
   X.224 + `mstshash=` cookie + TLS upgrade + CredSSP `TSRequest` NTLM and
   fails with `STATUS_LOGON_FAILURE`. Per-protocol `enabled_key` flags ensure
   disabled protocols do not hold ports.
+* **network-service-decoy** — emulates SNMP v1/v2c/v3 (UDP 161, parsed and
+  encoded strictly via `sdk/go/ber`) and log-only DNS (UDP/TCP 53, RFC 1035)
+  using `sdk/go/decoy.ServePacket` for UDP listeners. SNMP v1/v2c answers only
+  `GetRequest`/`GetNextRequest` for the system group (`1.3.6.1.2.1.1.{1..6}`)
+  when `TS_SNMP_COMMUNITY` is set and matches in constant time (silent drop
+  otherwise); `SetRequest` is reported at `high` severity and never applied;
+  SNMP v3 replies only with a USM `Report` PDU (`usmStatsUnknownEngineIDs`)
+  carrying a deterministic engine ID for engine discovery. DNS never resolves,
+  recurses or forwards, replying `REFUSED` echoing only the question (`AXFR`/
+  `IXFR` over TCP at `high` severity). Strict anti-amplification guards enforce
+  a per-source UDP reply rate limiter (`TS_REPLY_RATE_PER_SEC`), DNS reply
+  size ≤ request size, and SNMP reply size ≤ request size + 64 bytes.
 
 ## Helpers for service decoys (clean specs)
 
