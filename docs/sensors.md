@@ -23,6 +23,7 @@ uid and effective capability mask at start (`running with privileges`).
 | `file-canary` (init) | 0 | `DAC_OVERRIDE` | none | create lures in directories owned by other users |
 | `web-router-decoy` | 65532 | none | bridge | listens on 8080 in the container; the Hub publishes host port `TS_PORT` (e.g. 80) to it |
 | `token-receiver` | 0 | `NET_BIND_SERVICE` | host | DNS on 53 (UDP+TCP) and web bugs on 80, internet-facing |
+| `remote-access-decoy` | 0 | `NET_BIND_SERVICE` | host | SSH 22, Telnet 23 and FTP 21 (ports below 1024 in host networking) |
 | `template` | 65532 | none | host | reference |
 
 ## Triggers
@@ -40,6 +41,12 @@ uid and effective capability mask at start (`running with privileges`).
 | web-router-decoy | `web_login_attempt` | critical | `username`, `password_hmac` (default) or `password`, `auth` (form, basic), `skin`, `form_<field>` (≤ 20), `path, method, user_agent, dst_port` |
 | `token-receiver` | `beacon_triggered` | critical (Hub: medium if unknown) | `token`, `channel` (dns/http), `query_name`, `query_type`, `transport`, `resolver`, `client_subnet`, `method`, `host`, `path`, `user_agent`, `referer`, `proxy`, `repeats_since_last` |
 | `token-receiver` | `receiver_saturated` | medium | `listener`, `refused_per_source`, `refused_total_cap`, `distinct_sources`, `top_source_refusals` |
+| `remote-access-decoy` | `ssh_login` | high | `protocol=ssh, dst_port, username, method` (`password`, `keyboard-interactive`, `publickey`), `client_version`, `password_hmac`/`password_length` (or `key_type`/`key_fingerprint`), `suppressed_since_last` |
+| `remote-access-decoy` | `ssh_connection` | medium | `protocol=ssh, dst_port, client_version` (when sent), `suppressed_since_last` |
+| `remote-access-decoy` | `telnet_login` | high | `protocol=telnet, dst_port, username, env_user` (when sent via RFC 1572), `password_hmac`/`password_length`, `suppressed_since_last` |
+| `remote-access-decoy` | `telnet_connection` | medium | `protocol=telnet, dst_port, env_user` (when sent), `suppressed_since_last` |
+| `remote-access-decoy` | `ftp_login` | high | `protocol=ftp, dst_port, username, anonymous, password_hmac`/`password_length`, `suppressed_since_last` |
+| `remote-access-decoy` | `ftp_connection` | medium | `protocol=ftp, dst_port, username` (when `USER` sent without `PASS`), `suppressed_since_last` |
 
 ## Honeytoken matching contract (for the PORTED matcher)
 
@@ -84,6 +91,12 @@ the honeytoken secret with the event's node id.
   at most every 5 minutes per listener. The Hub resolves the token to its
   beacon; the zone must be the only deployed receiver zone for the Beacons
   page to create beacons.
+* **remote-access-decoy** — emulates SSH 2.0 (`golang.org/x/crypto/ssh`),
+  Telnet (RFC 854/1572 IAC state machine) and FTP (RFC 959). Every login fails
+  with wire-accurate rejection responses; no shells, data channels or
+  forwarding exist. The SSH Ed25519 host key is derived deterministically in
+  memory from `TS_CAPTURE_KEY` and `TS_SENSOR_ID` (never written to disk).
+  Per-protocol `enabled_key` flags ensure disabled protocols do not hold ports.
 
 ## Helpers for service decoys (clean specs)
 

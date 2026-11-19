@@ -9,6 +9,7 @@ use (
 	./sensors/file-canary
 	./sensors/icmp-canary
 	./sensors/network-scan-detector
+	./sensors/remote-access-decoy
 	./sensors/tcp-tarpit
 	./sensors/template
 	./sensors/token-receiver
