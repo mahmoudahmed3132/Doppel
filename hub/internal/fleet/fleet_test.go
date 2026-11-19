@@ -19,6 +19,7 @@ import (
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/semver"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
@@ -331,7 +332,7 @@ func TestHealthAndSemver(t *testing.T) {
 		a, b string
 		less bool
 	}{{"1.0.0", "1.0.1", true}, {"1.10.0", "1.9.0", false}, {"2.0.0-rc.1", "2.0.0", true}, {"2.0.0", "2.0.0-rc.1", false}, {"1.0.0", "1.0.0", false}} {
-		if semverLess(c.a, c.b) != c.less {
+		if semver.Less(c.a, c.b) != c.less {
 			t.Errorf("%s < %s", c.a, c.b)
 		}
 	}

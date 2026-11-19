@@ -70,7 +70,7 @@ func (f *Fleet) fail(w http.ResponseWriter, err error) {
 	)
 	switch {
 	case errors.As(err, &re):
-		writeJSON(w, re.Status, map[string]any{"ok": false, "error": re.Code, "message": re.Message, "sensor_id": re.SensorID})
+		failRender(w, re)
 	case errors.As(err, &ie):
 		Fail(w, http.StatusBadRequest, CodeInvalid, ie.Message)
 	case errors.Is(err, domain.ErrNotFound):
@@ -85,6 +85,10 @@ func (f *Fleet) fail(w http.ResponseWriter, err error) {
 		f.Log.Error("fleet operation failed", "error", err.Error())
 		Fail(w, http.StatusInternalServerError, CodeInternal, "internal error")
 	}
+}
+
+func failRender(w http.ResponseWriter, re *fleet.RenderError) {
+	writeJSON(w, re.Status, map[string]any{"ok": false, "error": re.Code, "message": re.Message, "sensor_id": re.SensorID})
 }
 
 func decodeInto(w http.ResponseWriter, r *http.Request, dst any) bool {

@@ -109,6 +109,14 @@ type Node struct {
 	AppliedRevision string     `json:"applied_revision"`
 }
 
+// NodeOnlineWindow is three SDK heartbeat intervals.
+const NodeOnlineWindow = 90 * time.Second
+
+// Online reports whether the node was seen within NodeOnlineWindow of now.
+func (n Node) Online(now time.Time) bool {
+	return n.LastSeenAt != nil && now.Sub(*n.LastSeenAt) <= NodeOnlineWindow
+}
+
 // SensorStatus is the liveness state of a sensor instance.
 type SensorStatus string
 

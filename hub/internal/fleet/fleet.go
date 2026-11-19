@@ -29,12 +29,11 @@ import (
 
 // Limits on admin input.
 const (
-	MaxAliasRunes   = 64
-	MaxTags         = 32
-	MaxTagBytes     = 32
-	MaxConfigKeys   = 64
-	MaxConfigValue  = 4096
-	NodeOnlineAfter = 90 * time.Second // three SDK heartbeat intervals
+	MaxAliasRunes  = 64
+	MaxTags        = 32
+	MaxTagBytes    = 32
+	MaxConfigKeys  = 64
+	MaxConfigValue = 4096
 )
 
 // Rendered is the compose compiler's output for one node.
@@ -215,7 +214,7 @@ type NodeSummary struct {
 
 func (s *Service) health(n domain.Node, sensors []domain.Sensor) NodeHealth {
 	h := NodeHealth{
-		Online:       n.LastSeenAt != nil && s.Now().Sub(*n.LastSeenAt) <= NodeOnlineAfter,
+		Online:       n.Online(s.Now()),
 		InSync:       n.DesiredRevision != "" && n.DesiredRevision == n.AppliedRevision,
 		SensorsTotal: len(sensors),
 	}
@@ -280,7 +279,7 @@ func (s *Service) view(ctx context.Context, sn domain.Sensor) SensorView {
 		}
 		if latest, ok := s.Catalogue.Latest(ctx, sn.CatalogueName); ok {
 			v.LatestVersion = latest
-			v.UpdateAvailable = semverLess(sn.Version, latest)
+			v.UpdateAvailable = semver.Less(sn.Version, latest)
 		}
 	}
 	for k, val := range sn.Config {
@@ -593,7 +592,7 @@ func (s *Service) UpgradeNode(ctx context.Context, nodeID string) ([]string, Ren
 		var c store.SensorChanges
 		for _, sn := range cur {
 			latest, ok := s.Catalogue.Latest(ctx, sn.CatalogueName)
-			if ok && semverLess(sn.Version, latest) {
+			if ok && semver.Less(sn.Version, latest) {
 				sn.Version = latest
 				c.Update = append(c.Update, sn)
 				changed = append(changed, sn.ID)
@@ -687,5 +686,3 @@ func (s *Service) PreviewChange(ctx context.Context, nodeID string, add *SensorS
 		return store.SensorChanges{}, invalid("preview needs either a sensor to add or a sensor edit")
 	})
 }
-
-func semverLess(a, b string) bool { return semver.Less(a, b) }
