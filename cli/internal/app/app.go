@@ -48,8 +48,9 @@ type App struct {
 
 // New returns an App for the real environment.
 func New(version string) *App {
+	genv := config.OSGetenv() // DOPPEL_* wins; TS_* still accepted with a warning (F-004)
 	a := &App{
-		Version: version, Paths: config.PathsFromEnv(os.Getenv), Getenv: os.Getenv,
+		Version: version, Paths: config.PathsFromEnv(genv), Getenv: genv,
 		Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Runner: docker.Exec{},
 		Arch: runtime.GOARCH, ProcRoot: "/proc", Exe: os.Executable,
 		Color: term.IsTerminal(int(os.Stdout.Fd())) && os.Getenv("NO_COLOR") == "",
