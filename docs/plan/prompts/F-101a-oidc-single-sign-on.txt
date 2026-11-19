@@ -1,0 +1,73 @@
+You are implementing feature F-101a "OIDC single sign-on (S1 / WP-4B + extra OIDC requirements)" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-101a-oidc-single-sign-on origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-101a-oidc-single-sign-on && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+- docs/plan/ROADMAP.md section 4 (U1, S1, H1, B1) and docs/plan/EXECUTION-PLAN.md section 5 (WP-4A..C)
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P0 (OIDC), P1 (SAML, SCIM) · **Edition:** Core (OIDC), Enterprise (SAML, SCIM) · **Effort:** M + M + M · **Schema:** v5 (S1, reserved), v8 (SAML/SCIM).
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- THIS SESSION: Implement only the OIDC part: S1 in docs/plan/ROADMAP.md, WP-4B in docs/plan/EXECUTION-PLAN.md, plus the three extra OIDC requirements in this section and the SSO settings UI. Do NOT implement SAML or SCIM.
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-101 SSO: OIDC (S1 / WP-4B) + SAML 2.0 + SCIM
+- **Priority:** P0 (OIDC), P1 (SAML, SCIM) · **Edition:** Core (OIDC), Enterprise (SAML, SCIM) · **Effort:** M + M + M · **Schema:** v5 (S1, reserved), v8 (SAML/SCIM).
+- **OIDC:** implement exactly as S1 / WP-4B. Additional requirements:
+  1. Test against Entra ID, Okta, Keycloak and Google Workspace. Document each in `docs/operations.md`.
+  2. Map an `amr`/`acr` claim requirement (require MFA at the IdP; reject logins without an MFA `amr` value when the setting is on).
+  3. Back-channel logout and session revocation on IdP logout (OIDC Back-Channel Logout 1.0) when supported.
+- **SAML 2.0 (SP-initiated and IdP-initiated off by default):**
+  1. Signed assertions required. Encrypted assertions supported. Allowed signature algs: RSA-SHA256+ and ECDSA.
+  2. Metadata import (URL with SSRF guard, or file upload). SP metadata export at `/api/v3/sso/saml/metadata`.
+  3. Attribute → role mapping identical to OIDC group mapping.
+  4. Replay protection (assertion ID cache until `NotOnOrAfter`), clock skew ≤ 2 min.
+  5. Library: a maintained permissive Go SAML library. Record it in `THIRD_PARTY.md`, and fuzz the XML parsing path. Never use an XML parser without a size limit.
+- **SCIM 2.0** (`/scim/v2/Users`, `/scim/v2/Groups`, bearer token per IdP):
+  1. Create, update and deactivate users. Deactivation revokes all sessions within 60 s.
+  2. Group membership drives roles and scopes (F-102).
+- **Data model (v8):** `sso_providers(id, kind, name, config_sealed, enabled, created_at)`, `scim_tokens(id, provider_id, token_hash, created_at, last_used_at, expires_at)`, and `users.external_id`, `users.provider_id`.
+- **UI:** Settings → "Single sign-on" tab: providers list, test login button, mapping table, "Restrict break-glass login to CIDRs".
+- **Audit:** `sso.provider.create|update|delete`, `sso.login.success|failure`, `scim.user.provision|deprovision`, `user.role.change`.
+- **Acceptance:**
+  - An Entra ID user in group `doppel-analysts` signs in as analyst.
+  - Removing them from the group demotes or denies them at the next login, or within 60 s via SCIM.
+  - Every audit record names the person.
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-101a: OIDC single sign-on (S1 / WP-4B + extra OIDC requirements)". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.

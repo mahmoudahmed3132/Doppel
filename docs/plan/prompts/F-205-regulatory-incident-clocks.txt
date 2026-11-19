@@ -1,0 +1,69 @@
+You are implementing feature F-205 "Regulatory incident clocks (DORA, NIS2, CBE, SAMA, NCA, UAE, custom)" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-205-regulatory-incident-clocks origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-205-regulatory-incident-clocks && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P2 · **Edition:** Enterprise · **Effort:** M · **Schema:** v15 · **Depends on:** F-201.
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-205 Regulatory incident clocks (DORA, NIS2, CBE, SAMA, NCA, UAE, custom)
+- **Priority:** P2 · **Edition:** Enterprise · **Effort:** M · **Schema:** v15 · **Depends on:** F-201.
+- **Why:** EMEA regulators impose hard reporting clocks. SOCs track them in spreadsheets today. No deception vendor helps with this.
+- **Requirements:**
+  1. Regime profiles, shipped as versioned JSON in `hub/internal/regimes/`, are editable by admins and each carries a `source` URL and `verified_on` date. Shipped defaults:
+
+     | Regime | Clock starts | Deadlines |
+     |---|---|---|
+     | DORA | classification as major | initial: min(classification + 4 h, awareness + 24 h); intermediate: initial + 72 h; final: per adopted RTS (configurable, default 1 month) |
+     | NIS2 | awareness of a significant incident | early warning + 24 h; notification + 72 h; final + 1 month (national variants editable) |
+     | CBE PSP | awareness | breach report within 2 **working** days, with an Egyptian working-week calendar. Flag "verify against the primary CBE text". |
+     | SAMA / NCA / UAE IA | — | placeholders with editable deadlines and a "not verified" banner until the owner confirms |
+     | Custom | — | — |
+
+  2. Incidents get an `awareness_at` timestamp (defaults to the first member event's `received_at`, editable with an audit record) and a `classification` (none / significant / major) with `classified_at` and `classified_by`.
+  3. When classified, every applicable regime's deadlines appear as countdowns on the incident, in the incidents list and on the dashboard. Alerts go out at T-50 % and T-1 h and on breach (F-301 routes).
+  4. A "Prepare notification" action produces a pre-filled draft (Markdown and PDF via F-801) with the fields regulators ask for: timeline, affected services and assets, indicators, actions taken, classification rationale. The draft is labelled "draft — not submitted". Doppel never submits to a regulator.
+  5. Working-day calendars per regime, with public holidays loaded from an admin-uploaded ICS or JSON. No calendar → calendar days with a warning.
+- **Tests:** deadline arithmetic (DORA's dual rule, working days across a weekend and a holiday, DST transitions in Europe/Cairo/Riyadh time zones).
+- **Acceptance:** classifying an incident as DORA-major at 10:00, with awareness at 08:00 the previous day, shows "initial notification overdue". Classifying at awareness + 2 h shows "due in 4 h".
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-205: Regulatory incident clocks (DORA, NIS2, CBE, SAMA, NCA, UAE, custom)". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.

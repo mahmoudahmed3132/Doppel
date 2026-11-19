@@ -1,0 +1,73 @@
+You are implementing feature F-003b "Backup, restore and verify (B1 / WP-4C + F-003 item 3)" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-003b-backup-restore-and-verify origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-003b-backup-restore-and-verify && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+- docs/plan/ROADMAP.md section 4 (U1, S1, H1, B1) and docs/plan/EXECUTION-PLAN.md section 5 (WP-4A..C)
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P0 · **Edition:** all · **Effort:** M · **Schema:** none · **Depends on:** existing plans H1/B1.
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- THIS SESSION: Implement B1 from docs/plan/ROADMAP.md and WP-4C from docs/plan/EXECUTION-PLAN.md, plus F-003 requirement 3 (scheduling docs, --encrypt-to age recipient, verify subcommand). Do NOT touch TLS/health/metrics here.
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-003 Hub listen address, TLS, health, metrics, backup (extends H1, B1, WP-4A, WP-4C)
+- **Priority:** P0 · **Edition:** all · **Effort:** M · **Schema:** none · **Depends on:** existing plans H1/B1.
+- **Additional requirements beyond H1/B1:**
+  1. `TS_LISTEN_ADDR` (default `127.0.0.1`). The binary currently binds `net.JoinHostPort("", port)`, which exposes a bare-binary Hub on every interface. Production with a non-loopback address requires native TLS or `TS_TRUSTED_PROXIES`.
+  2. `/metrics` (Prometheus text). Listener on `TS_METRICS_ADDR`, default `127.0.0.1:9090`, never on the public port. Metrics:
+     - `doppel_events_ingested_total{node,sensor,severity,drill}`
+     - `doppel_ingest_rejected_total{code}`
+     - `doppel_siem_queue_depth{output}`
+     - `doppel_siem_sent_total{output}`
+     - `doppel_siem_dropped_total{output}`
+     - `doppel_notify_sent_total{route}`
+     - `doppel_notify_failed_total{route}`
+     - `doppel_nodes{state}`
+     - `doppel_sensors{state}`
+     - `doppel_heartbeat_lag_seconds` (histogram)
+     - `doppel_http_requests_total{route,code}`
+     - `doppel_http_request_seconds` (histogram)
+     - `doppel_db_query_seconds` (histogram)
+     - `doppel_build_info{version,schema}`
+  3. Backup: in addition to B1, add `backup --schedule` documentation (systemd timer and Kubernetes CronJob examples), `--encrypt-to <age-recipient>` (age, permissive licence) so the snapshot is encrypted at rest, and a `verify --from <dir>` subcommand that checks integrity without restoring.
+  4. Ship a Grafana dashboard JSON in `deploy/observability/`, plus Elastic and LogScale dashboards for Hub self-health.
+- **Acceptance:** Prometheus scrape works. A restore drill runs in CI. A Hub started without `TS_LISTEN_ADDR` isn't reachable from another host.
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-003b: Backup, restore and verify (B1 / WP-4C + F-003 item 3)". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.

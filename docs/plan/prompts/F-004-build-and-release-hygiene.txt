@@ -1,0 +1,58 @@
+You are implementing feature F-004 "Build and release hygiene" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-004-build-and-release-hygiene origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-004-build-and-release-hygiene && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P0 · **Edition:** n/a · **Effort:** S · **Depends on:** none.
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-004 Build and release hygiene
+- **Priority:** P0 · **Edition:** n/a · **Effort:** S · **Depends on:** none.
+- **Requirements:**
+  1. Commit the macOS e2e fix (CLI at `$W/bin/doppel`, KEEP-mode Try/Stop lines carry the `TS_*` env). With `KEEP=1`, the e2e builds the UI (`make ui`) before `go build`, or fails with a clear message if Node 22+ is missing.
+  2. CI asserts the local Go version against `go.mod` with `GOTOOLCHAIN=local` and doesn't rely on silent toolchain download.
+  3. Finish the rebrand. Binaries: `doppel-hub` with a `truesignal-hub` symlink for one major version. Env vars: accept `DOPPEL_*` and `TS_*`, with `DOPPEL_*` winning and a warning on `TS_*`. Images: `ghcr.io/<org>/doppel-sensor-<name>`, with aliases. Move the signing identity to an organisation (ROADMAP §6 item 2).
+  4. Cut a signed `3.0.0` GA and run one registry rollback drill (ROADMAP §6 item 3).
+  5. Publish an SBOM (CycloneDX) per image and binary, and SLSA v1 provenance (`slsa-github-generator`). Gate releases on Trivy with no unwaived critical vulnerabilities.
+- **Acceptance:** `real-docker.sh` passes on macOS and Linux. `KEEP=1` shows the real UI. Release artifacts verify with cosign and carry SBOM and provenance.
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-004: Build and release hygiene". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.

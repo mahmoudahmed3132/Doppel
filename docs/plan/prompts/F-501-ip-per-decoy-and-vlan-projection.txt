@@ -1,0 +1,62 @@
+You are implementing feature F-501 "IP-per-decoy and VLAN projection" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-501-ip-per-decoy-and-vlan-projection origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-501-ip-per-decoy-and-vlan-projection && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P1 · **Edition:** Enterprise · **Effort:** L · **Schema:** v21 · **Depends on:** manifest v3 extension.
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-501 IP-per-decoy and VLAN projection
+- **Priority:** P1 · **Edition:** Enterprise · **Effort:** L · **Schema:** v21 · **Depends on:** manifest v3 extension.
+- **Why:** today every decoy uses `network_mode: host`, so all decoys on a node share one IP. An attacker sees one host with SSH, PostgreSQL, LDAP, SNMP and a router login together, which is both implausible and easy to fingerprint. Enterprises need "a fake DB server in VLAN 30 and a fake DC in VLAN 10" from one appliance.
+- **Requirements:**
+  1. Manifest v3: add an optional `runtime.network` block: `mode: host | macvlan | ipvlan_l2`, `parent_interface` (may be an 802.1Q sub-interface the CLI creates, e.g. `eth1.30`), `address: dhcp | static`, `ip`, `prefix`, `gateway`, `mac: random_oui(<vendor OUI list>) | fixed`.
+  2. The compose compiler (`hub/internal/compose`) emits a per-sensor macvlan/ipvlan network. `compose-guard.sh` is updated so hardening rules still hold: no privileged containers, and only `NET_BIND_SERVICE` where needed.
+  3. CLI: `doppel net plan|apply` creates and removes VLAN sub-interfaces with idempotent, reversible changes. It needs root only for interface creation, and shows a dry-run first.
+  4. DHCP: a lease client per decoy MAC (a sidecar or the CLI agent), with a hostname option set from the persona, so decoys show up in IPAM and DNS like real hosts.
+  5. Multiple sensors can share one decoy "host" (one IP) to build coherent personas, e.g. a fake DB server = SSH + PostgreSQL + SMB.
+  6. UI: a "Decoy hosts" concept on the node page (IP, MAC, VLAN, persona, sensors).
+  7. Docker Desktop / macOS: unsupported. The CLI refuses with a clear message.
+- **Security:** document in `THREATMODEL.md` that the node is multi-homed into sensitive VLANs. The node itself MUST NOT route between VLANs (`ip_forward=0` asserted by the CLI). Host firewall rules are shipped.
+- **Acceptance:** one node projects 3 decoy hosts in 3 VLANs with distinct IPs and MACs obtained by DHCP. An nmap from each VLAN sees only that VLAN's decoy host.
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-501: IP-per-decoy and VLAN projection". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.

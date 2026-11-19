@@ -1,0 +1,65 @@
+You are implementing feature F-002 "Source identity normalisation and correlation" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-002-source-identity-normalisation-and-correlation origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-002-source-identity-normalisation-and-correlation && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P0 · **Edition:** all · **Effort:** M · **Schema:** v7 · **Depends on:** none.
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-002 Source identity normalisation and correlation
+- **Priority:** P0 · **Edition:** all · **Effort:** M · **Schema:** v7 · **Depends on:** none.
+- **Why:** ephemeral source ports split one attacker into many "sources". Lateral-movement detection, which is the product's core value, depends on per-IP correlation.
+- **Requirements:**
+  1. At ingest, parse `source` into `source_ip` (canonical text form; IPv4-mapped IPv6 → IPv4; zone stripped), `source_port` (nullable), and `source_kind` (`ip` | `local` | `drill` | `other`). The existing `source` string stays as the raw display value.
+  2. All projections in `hub/internal/projections` (`sources.go`, `path.go`, `insights.go`, `report.go`, `geomap.go`) MUST key on `source_ip` when it's set, and on `source` otherwise.
+  3. Optional rollups, behind a projection parameter `group_by=ip|subnet24|subnet64|asn`. ASN comes from the GeoIP ASN DB when one is loaded.
+  4. Loopback and Docker Desktop NAT (`192.168.65.0/24`, `[::1]`) sources get a `labels: ["host_local"]` tag. When the node reports `docker_desktop=true` in host facts (F-505), the node page shows a banner: "source IPs on this node are not real client addresses".
+  5. ECS: always set `source.ip` and `source.port` separately (already partly done in `hub/internal/ecs/ecs.go`).
+  6. Scans labels (`multi-decoy`, `repeat`) are recomputed on `source_ip`.
+- **Data model:** `ALTER TABLE events ADD COLUMN source_ip TEXT; ADD COLUMN source_port INTEGER; ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'other';` plus `CREATE INDEX events_source_ip ON events(source_ip, received_at)`. Backfill in the migration with a Go migration hook (parse existing rows in batches of 5,000). If the migration framework is SQL-only, add a post-migration Go step and document it in `docs/ported-seams.md`.
+- **Tests:**
+  - Table-driven parser tests: IPv4:port, `[v6]:port`, bare IPs, hostnames, `Fire drill`, `local`, garbage.
+  - A projection test where one IP hits 3 decoys from 3 ports gives 1 source labelled `multi-decoy`.
+  - e2e: run `nc` against two decoys and assert 1 source in `/api/v3/analytics/projections/sources`.
+- **Acceptance:** "Distinct sources" in the walk-through scenario drops from 5 to 2 (192.168.65.1 and ::1), with drills excluded.
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-002: Source identity normalisation and correlation". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.
