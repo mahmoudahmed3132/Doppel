@@ -9,6 +9,7 @@ use (
 	./sensors/database-decoy
 	./sensors/file-canary
 	./sensors/icmp-canary
+	./sensors/identity-decoy
 	./sensors/network-scan-detector
 	./sensors/remote-access-decoy
 	./sensors/tcp-tarpit
