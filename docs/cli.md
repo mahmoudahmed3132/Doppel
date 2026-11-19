@@ -6,8 +6,16 @@ The command is `doppel`. For one release the installer also creates a
 links use `/etc/doppel/config.json` and `/opt/doppel`. `TS_CONFIG_FILE` and
 `TS_WORK_DIR` override both (QUESTIONS Q66).
 
-Spec §8. Runs on each node as root, on demand (not a daemon). Linux amd64 and
-arm64 builds; sensors are deployed only on amd64 unless `TS_ALLOW_NON_AMD64=true`.
+Spec §8. Runs on each node as root, on demand (not a daemon). Linux and macOS
+(darwin) amd64 and arm64 builds; sensors are deployed only on amd64 unless
+`TS_ALLOW_NON_AMD64=true` (needed on Apple Silicon, where Docker Desktop runs
+the `linux/amd64` sensor images under Rosetta).
+
+On macOS the sensors run inside Docker Desktop's Linux VM: enable host
+networking (Docker Desktop 4.34+, *Settings → Resources → Network*) so decoy
+ports are reachable from the Mac's interfaces. `doppel discover` reads `/proc`
+on Linux and falls back to `lsof` and `ps` where `/proc` is absent; run it
+with `sudo` so `lsof` sees every process's sockets.
 
 ## Install
 
@@ -16,9 +24,9 @@ curl -fsSL https://raw.githubusercontent.com/mahmoudahmed3132/truesignal-release
   | sudo TS_NODE_KEY='tsk_…' sh -s -- --hub https://hub.example.com
 ```
 
-`install.sh` downloads `doppel-linux-<arch>` from the `cli/vX.Y.Z` release,
+`install.sh` downloads `doppel-<os>-<arch>` (`os` is `linux` or `darwin`) from the `cli/vX.Y.Z` release,
 verifies it against `SHA256SUMS`, optionally against `--sha256 <hex>`, and —
-when `cosign` is installed — against `doppel-linux-<arch>.sigstore.json`
+when `cosign` is installed — against `doppel-<os>-<arch>.sigstore.json`
 (identity: `https://github.com/mahmoudahmed3132/Doppel/.github/workflows/publish-cli.yml@refs/tags/cli/vX.Y.Z`;
 releases before the move to Doppel name `mahmoudahmed3132/TrueSignal-Rewrite`, operations §9.2). Only
 `https://` (or `file://` for mirrors) is fetched. The script body runs from

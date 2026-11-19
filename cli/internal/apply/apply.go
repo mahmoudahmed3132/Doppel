@@ -178,7 +178,12 @@ func (a *Applier) prepare(raw json.RawMessage) (document, []string, []string, er
 
 // checkHostPath requires a bind source to exist, to be a directory or file
 // reached without symbolic links, and to resolve outside forbidden trees.
-func checkHostPath(src string) error {
+func checkHostPath(src string) error { return checkHostPathWith(systemAliases, src) }
+
+// checkHostPathWith is checkHostPath with an explicit system alias table.
+// Only the alias itself may be a symbolic link; the forbidden trees are
+// checked on both the alias and the /private form of the path.
+func checkHostPathWith(aliases map[string]string, src string) error {
 	if !filepath.IsAbs(src) || filepath.Clean(src) != src {
 		return fmt.Errorf("bind source %q is not an absolute clean path", src)
 	}
@@ -189,10 +194,10 @@ func checkHostPath(src string) error {
 	if err != nil {
 		return fmt.Errorf("host path %s: %v", src, err)
 	}
-	if resolved != src {
+	if resolved != realiasPath(aliases, src, true) {
 		return fmt.Errorf("host path %s resolves through a symbolic link to %s; refusing", src, resolved)
 	}
-	if forbiddenPath(resolved) {
+	if forbiddenPath(src) || forbiddenPath(resolved) || forbiddenPath(realiasPath(aliases, resolved, false)) {
 		return fmt.Errorf("host path %s is not allowed", resolved)
 	}
 	return nil

@@ -65,13 +65,43 @@ All sensors also support Hub-raised `honeytoken_used` (critical) correlation whe
 
 ---
 
+## Platform Support
+
+| Component | Linux | macOS (Intel & Apple Silicon) | Docker (any host) |
+|---|---|---|---|
+| Hub (`truesignal-hub`) | Native binary | Native binary | `deploy/compose.yaml` (multi-arch image) |
+| `doppel` CLI | Native (`doppel-linux-{amd64,arm64}`) | Native (`doppel-darwin-{amd64,arm64}`); `discover` uses `lsof`/`ps` instead of `/proc` | — |
+| Decoy sensors | Containers or native binaries | Containers via Docker Desktop, or native binaries (demo) | Yes (`linux/amd64` images) |
+| Kill-chain demo | `./scripts/demo/run-demo.sh` | `./scripts/demo/run-demo.sh` | `make demo-docker` |
+
+macOS caveats:
+- **Sensors run in Docker Desktop's Linux VM.** Decoys use host networking, so enable *Settings → Resources → Network → Enable host networking* (Docker Desktop 4.34+). Images are `linux/amd64`; on Apple Silicon they run under Rosetta and the CLI needs `TS_ALLOW_NON_AMD64=true`.
+- **`network-scan-detector` and `icmp-canary`** sniff the host NIC (`AF_PACKET` / raw ICMP). Inside Docker Desktop they see the VM's interface, not the Mac's, so treat them as Linux-only for real detection. The native `network-scan-detector` binary refuses to start on macOS.
+- **`file-canary` container on macOS:** inotify inside the Docker Desktop VM does not see reads/writes made on the Mac side of a bind mount, so lures planted in macOS paths are not monitored by the container. Use the native binary (below) for lab work on a Mac.
+- **`file-canary` native on macOS** has no `inotify`; it stat-polls lures (1 s). Tampering (modify/chmod/rename/delete) is reliable; read detection is atime-based and best-effort (first read after a change on APFS; never on `noatime` mounts).
+
+---
+
 ## 60-Second Local Demo
 
-Experience a full attacker kill-chain end-to-end on your machine (port scan → SSH brute-force → PostgreSQL login → web router login → lure file theft & honeytoken reuse → DNS/HTTP beacon callbacks) with no root privileges or external infrastructure required:
+Experience a full attacker kill-chain end-to-end on your machine (port scan → SSH brute-force → PostgreSQL login → web router login → lure file theft & honeytoken reuse → DNS/HTTP beacon callbacks) with no root privileges or external infrastructure required.
+
+**Natively on Linux or macOS:**
 
 ```sh
 ./scripts/demo/run-demo.sh
 ```
+
+**With only Docker** (macOS, Windows, or Linux; no Go/Node/Python on the host):
+
+```sh
+make demo-docker
+# or, without make:
+docker build -f docker/demo/Dockerfile -t doppel-demo .
+docker run --rm -it -p 127.0.0.1:18080:18080 doppel-demo
+```
+
+Open `http://127.0.0.1:18080` (use `127.0.0.1`, not `localhost`: the Hub enforces its configured origin). Append `--smoke` to the `docker run` line for the assert-and-exit mode.
 
 The script builds the Hub and UI, starts a local Hub on `http://127.0.0.1:18080`, deploys 6 decoys on high non-privileged ports, runs the scripted kill-chain, and leaves the Hub running with a populated **Dashboard**, **ATT&CK Matrix**, **Geo Map**, **Attack Path**, **Scans**, and **Executive Report**.
 
@@ -81,7 +111,7 @@ To run in automated verification mode (verifies all expected events and exits):
 ./scripts/demo/run-demo.sh --smoke
 ```
 
-Prerequisites for the demo script: `go` (1.27.4+), `node` (22+, or pass `--skip-ui-build`), `python3`, `curl`, and `jq`.
+Prerequisites for the native demo: `go` (1.27.4+), `node` (22+, or pass `--skip-ui-build`), `python3`, `curl`, and `jq`. On macOS: `brew install go node jq` (`python3` and `curl` ship with the Xcode Command Line Tools). The demo works with the stock macOS bash 3.2.
 
 ---
 
@@ -95,7 +125,7 @@ Prerequisites for the demo script: `go` (1.27.4+), `node` (22+, or pass `--skip-
 
 2. **Create a node** in the Hub UI (**Fleet → Create node**). Copy the one-time `TS_NODE_KEY` and link command.
 
-3. **Install the `doppel` CLI and link the host** (as root on a Linux node with Docker):
+3. **Install the `doppel` CLI and link the host** (as root on a Linux node with Docker, or with `sudo` on macOS with Docker Desktop; see [Platform Support](#platform-support)):
    ```sh
    TS_NODE_KEY='tsk_...' doppel link https://hub.example.com
    ```
@@ -133,7 +163,7 @@ Governance & provenance records: [`PROVENANCE.md`](PROVENANCE.md), [`QUESTIONS.m
 
 ## Development & Verification
 
-Requires Go 1.27.4+ and Node 22+.
+Requires Go 1.27.4+ and Node 22+. All `make` targets work on Linux and macOS.
 
 ```sh
 make                              # check-headers, gofmt, go vet, go test -race across all go.work modules
@@ -152,9 +182,9 @@ A Hub built without `make ui` runs normally and serves a placeholder page instea
 
 ### Current Scope & Limits
 - **Single-node Hub database:** The Hub uses embedded SQLite (WAL mode) with application-layer AEAD sealing for secrets. Multi-replica HA Hub deployments are not yet supported.
-- **Linux / Docker nodes:** Managed nodes require Linux with Docker Engine and Compose v2.
+- **Docker nodes:** Managed nodes require Docker with Compose v2: Docker Engine on Linux (production), or Docker Desktop on macOS (lab/dev; see [Platform Support](#platform-support)).
 - **TLS termination:** Production deployments currently terminate HTTPS at a reverse proxy (`TS_TRUSTED_PROXIES`); native Hub TLS is next on the roadmap.
-- **`file-canary` attribution:** Uses Linux `inotify`, which reports `source: "local"` without PID/process attribution (correlate with EDR/auditd until eBPF lands).
+- **`file-canary` attribution:** Uses Linux `inotify` (stat polling when run natively on macOS), which reports `source: "local"` without PID/process attribution (correlate with EDR/auditd until eBPF lands).
 
 ### Planned Roadmap
 - **Enterprise Pilot Hardening:** Native Hub HTTPS with `SIGHUP` cert reload, `/healthz` / `/readyz` / Prometheus `/metrics`, OIDC SSO with group-to-role mapping, and offline `backup` / `restore` CLI commands.

@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -110,12 +112,12 @@ func (a *App) discover(ctx context.Context, args []string) int {
 	if err != nil {
 		return a.fail(err)
 	}
-	host, err := discover.Scan(a.ProcRoot)
+	host, err := a.scanHost(ctx)
 	if err != nil {
 		return a.fail(err)
 	}
 	if !*jsonOut {
-		a.info("Host: %d listening sockets, %d process names (read from %s; no network probing)", len(host.Sockets), len(host.Processes), a.ProcRoot)
+		a.info("Host: %d listening sockets, %d process names (read from %s; no network probing)", len(host.Sockets), len(host.Processes), host.Source())
 	}
 
 	c, err := a.client(cfg)
@@ -221,4 +223,13 @@ func (a *App) discover(ctx context.Context, args []string) int {
 		return 0
 	}
 	return a.apply(ctx, nil)
+}
+
+// scanHost reads /proc where it exists (Linux) and falls back to lsof and ps
+// elsewhere (macOS, BSD).
+func (a *App) scanHost(ctx context.Context) (*discover.Host, error) {
+	if fi, err := os.Stat(filepath.Join(a.ProcRoot, "net")); err == nil && fi.IsDir() {
+		return discover.Scan(a.ProcRoot)
+	}
+	return discover.ScanCommands(ctx, a.Runner)
 }
