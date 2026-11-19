@@ -6,13 +6,11 @@
 // ATT&CK techniques, and honeytoken uses.
 import { useState } from "preact/hooks";
 import { enc } from "../../api";
-import { systemStatus } from "../../app";
 import { SeverityBars } from "../../charts";
 import { fmtNum, fmtTime } from "../../format";
 import { Link } from "../../router";
-import { useStore } from "../../store";
 import { Button, Card, Empty, ErrorBox, Loading, PageHead, Pill } from "../../ui";
-import { criticalityKind, ModuleMissing, useProjection } from "./common";
+import { criticalityKind, useProjection } from "./common";
 import type { AssetMatch, TechniqueStat } from "./common";
 
 interface ReportDay {
@@ -128,17 +126,14 @@ function DailyChart({ daily }: { daily: ReportDay[] }) {
 }
 
 export function ReportPage() {
-  const st = useStore(systemStatus);
   const [fromInput, setFromInput] = useState(() => isoDateOffset(-30));
   const [toInput, setToInput] = useState(() => isoDateOffset(1));
   const [applied, setApplied] = useState(() => ({ from: isoDateOffset(-30), to: isoDateOffset(1) }));
 
-  const installed = !!st?.modules.projections.includes("report");
   const days = windowDaysForRange(applied.from);
   const data = useProjection<ReportDTO>(
     "report",
     { days, from: applied.from || undefined, to: applied.to || undefined },
-    installed,
   );
 
   const applyPreset = (d: number) => {
@@ -148,16 +143,6 @@ export function ReportPage() {
     setToInput(t);
     setApplied({ from: f, to: t });
   };
-
-  if (!st) return <Loading />;
-  if (!installed) {
-    return (
-      <div class="stack-lg">
-        <PageHead title="Report" sub="Periodic summary for stakeholders." />
-        <ModuleMissing name="Report" />
-      </div>
-    );
-  }
 
   const dto = data.data;
 

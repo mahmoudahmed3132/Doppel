@@ -242,7 +242,7 @@ function EventDrawer({ seq, known, onClose, onChange }: { seq: number; known?: E
                 <li key={t.id + i}><span class="mono">{t.id}</span> {t.name} <span class="muted">({(t.tactics ?? []).join(", ")})</span>{i === 0 ? <Pill kind="info">primary</Pill> : null}</li>
               ))}
             </ul>
-          ) : <p class="muted">No mapping (the ATT&amp;CK module is not installed or has no mapping for this trigger).</p>}
+          ) : <p class="muted">No ATT&amp;CK mapping for this trigger.</p>}
           <h3>Source asset</h3>
           {asset ? <KV rows={[["Name", asset.name], ["Criticality", asset.criticality]]} /> : <p class="muted">Not in the asset inventory.</p>}
           <h3>Location</h3>
@@ -256,7 +256,7 @@ function EventDrawer({ seq, known, onClose, onChange }: { seq: number; known?: E
               ]} />
               <p class="credit"><a href="https://db-ip.com" rel="noopener noreferrer" target="_blank">IP Geolocation by DB-IP</a></p>
             </>
-          ) : <p class="muted">No location (private address or geolocation not installed).</p>}
+          ) : <p class="muted">No location (private address or GeoIP database not loaded).</p>}
           <h3>Details</h3>
           <pre class="code">{details}</pre>
         </div>

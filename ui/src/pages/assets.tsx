@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { get, put } from "../api";
 import { pretty } from "../format";
 import { Alert, Button, Card, Empty, ErrorBox, Field, Loading, Modal, PageHead, Pill, Tabs, toast, useAction, useAsync } from "../ui";
-import { criticalityKind, ModuleMissing } from "./analytics/common";
+import { criticalityKind } from "./analytics/common";
 
 export interface AssetRow {
   name: string;
@@ -350,18 +350,6 @@ export function Assets() {
 
   if (data.error) return <div class="stack-lg"><PageHead title="Assets" /><ErrorBox error={data.error} retry={data.reload} /></div>;
   if (!data.data) return <Loading />;
-
-  if (!data.data.editable) {
-    return (
-      <div class="stack-lg">
-        <PageHead title="Assets" sub="Inventory used to tag event sources with an asset name and criticality." />
-        <ModuleMissing name="Asset inventory">
-          <p class="muted">The stored inventory is shown read-only.</p>
-          <pre class="code">{pretty(data.data.assets)}</pre>
-        </ModuleMissing>
-      </div>
-    );
-  }
 
   return (
     <div class="stack-lg">

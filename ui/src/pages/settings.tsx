@@ -134,7 +134,6 @@ function Sources({ s, save }: { s: Settings; save: Save }) {
   return (
     <Card title="Source lists">
       <form class="stack" onSubmit={(e) => { e.preventDefault(); save({ whitelist: lines(wl), known_scanners: lines(ks) }); }}>
-        {!s.source_lists_active ? <Alert kind="warn">The source-list matcher module is not installed: lists are stored but events are not tagged.</Alert> : null}
         <div class="grid-2">
           <Field label="Whitelist" hint="One entry per line (address, CIDR). Matching events are tagged whitelisted and skip webhooks.">
             {(id) => <textarea id={id} class="input mono list-editor" spellcheck={false} value={wl} onInput={(e) => setWl(e.currentTarget.value)} />}
@@ -171,7 +170,7 @@ function Retention({ s, save }: { s: Settings; save: Save }) {
   );
 }
 
-interface SIEMState { siem: { protocol: string; address: string; format: string; token_set: boolean }; capabilities: { ecs: boolean; http_transports: boolean }; queue: { depth: number; dropped: number } }
+interface SIEMState { siem: { protocol: string; address: string; format: string; token_set: boolean }; queue: { depth: number; dropped: number } }
 
 function SIEM() {
   const data = useAsync(() => get<SIEMState>("/settings/siem"), []);
@@ -191,7 +190,6 @@ function SIEM() {
   }, [data.data]);
   if (data.error) return <ErrorBox error={data.error} retry={data.reload} />;
   if (!data.data) return <Loading />;
-  const caps = data.data.capabilities;
   const http = proto === "elastic" || proto === "logscale";
   const stream = proto === "tcp" || proto === "udp" || proto === "tls";
   return (
@@ -212,8 +210,8 @@ function SIEM() {
                 <option value="tls">Syslog over TLS (recommended)</option>
                 <option value="tcp">Syslog over TCP</option>
                 <option value="udp">Syslog over UDP</option>
-                <option value="elastic" disabled={!caps.http_transports}>Elastic (HTTPS){caps.http_transports ? "" : " — module not installed"}</option>
-                <option value="logscale" disabled={!caps.http_transports}>Falcon LogScale (HTTPS){caps.http_transports ? "" : " — module not installed"}</option>
+                <option value="elastic">Elastic (HTTPS)</option>
+                <option value="logscale">Falcon LogScale (HTTPS)</option>
               </select>
             )}
           </Field>
@@ -227,7 +225,7 @@ function SIEM() {
               {(id) => (
                 <select id={id} class="input" value={format} onChange={(e) => setFormat(e.currentTarget.value)}>
                   <option value="rfc5424">RFC 5424 syslog</option>
-                  <option value="ecs" disabled={!caps.ecs}>ECS JSON{caps.ecs ? "" : " — module not installed"}</option>
+                  <option value="ecs">ECS JSON</option>
                 </select>
               )}
             </Field>
@@ -349,7 +347,6 @@ function MfaCard({ mfa, error, reload }: { mfa?: MFAState; error: unknown; reloa
   return (
     <Card title="Two-factor authentication">
       <div class="stack">
-        {!mfa.available ? <Alert kind="warn">The TOTP module is not installed on this Hub; MFA cannot be enabled.</Alert> : null}
         <KV rows={[
           ["Status", mfa.enabled ? <Pill kind="ok">enabled</Pill> : <Pill kind="warn">disabled</Pill>],
           ["Required by policy", mfa.required ? "yes" : "no"],
@@ -377,7 +374,7 @@ function MfaCard({ mfa, error, reload }: { mfa?: MFAState; error: unknown; reloa
               <Button variant="ghost" onClick={reset}>Cancel</Button>
             </div>
           </form>
-        ) : mfa.available && !codes ? (
+        ) : !codes ? (
           <div class="row">
             {!mfa.enabled ? <Button variant="primary" onClick={() => setMode("enrol")}>Enable MFA</Button> : (
               <>

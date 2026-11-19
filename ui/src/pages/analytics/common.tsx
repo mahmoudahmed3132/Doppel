@@ -1,9 +1,8 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
 // Shared helpers and DTO interfaces for the dedicated analytics pages.
-import type { ComponentChildren } from "preact";
 import { enc, get, qs } from "../../api";
-import { Card, useAsync } from "../../ui";
+import { useAsync } from "../../ui";
 
 export interface AssetMatch {
   name: string;
@@ -39,20 +38,6 @@ export interface SourceProfile {
   asset: AssetMatch | null;
 }
 
-export function ModuleMissing({ name, children }: { name: string; children?: ComponentChildren }) {
-  return (
-    <Card>
-      <div class="module-missing">
-        <h2>{name} module not installed</h2>
-        <p class="muted">
-          This feature is provided by a separately delivered module. The page, API wiring and data flow are in place and activate when the module is installed.
-        </p>
-        {children}
-      </div>
-    </Card>
-  );
-}
-
 export function DaysSelect({ days, onChange }: { days: number; onChange: (d: number) => void }) {
   return (
     <label class="inline-field">
@@ -69,12 +54,11 @@ export function DaysSelect({ days, onChange }: { days: number; onChange: (d: num
 export function useProjection<T>(
   name: string,
   params: Record<string, string | number | boolean | undefined | null>,
-  enabled: boolean,
 ) {
   const query = qs(params);
   return useAsync<T | undefined>(
-    () => (enabled ? get<{ data: T }>(`/analytics/projections/${enc(name)}${query}`).then((r) => r.data) : Promise.resolve(undefined)),
-    [name, query, enabled],
+    () => get<{ data: T }>(`/analytics/projections/${enc(name)}${query}`).then((r) => r.data),
+    [name, query],
   );
 }
 

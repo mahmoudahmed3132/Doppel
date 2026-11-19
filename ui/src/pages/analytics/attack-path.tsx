@@ -7,13 +7,11 @@
 import { Fragment } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { enc, qs } from "../../api";
-import { systemStatus } from "../../app";
 import { fmtNum, fmtTime } from "../../format";
 import { Link, navigate, useLocation } from "../../router";
-import { useStore } from "../../store";
 import type { EventRecord } from "../../types";
 import { Alert, Button, Card, Empty, ErrorBox, Loading, PageHead, Pill, SeverityBadge } from "../../ui";
-import { criticalityKind, DaysSelect, ModuleMissing, useProjection } from "./common";
+import { criticalityKind, DaysSelect, useProjection } from "./common";
 import type { AssetMatch, AttackTactic, SourceProfile } from "./common";
 
 interface PathStep {
@@ -47,7 +45,6 @@ interface PathDTO {
 }
 
 export function AttackPathPage() {
-  const st = useStore(systemStatus);
   const { query } = useLocation();
   const urlSource = (query.get("source") ?? "").trim();
 
@@ -58,27 +55,14 @@ export function AttackPathPage() {
     setInputSource(urlSource);
   }, [urlSource]);
 
-  const installed = !!st?.modules.projections.includes("attack_path");
-  const sourcesInstalled = !!st?.modules.projections.includes("sources");
-
-  const sourcesList = useProjection<{ sources: SourceProfile[] }>("sources", { days }, installed && sourcesInstalled);
-  const pathData = useProjection<PathDTO>("attack_path", { days, source: urlSource || undefined }, installed);
+  const sourcesList = useProjection<{ sources: SourceProfile[] }>("sources", { days });
+  const pathData = useProjection<PathDTO>("attack_path", { days, source: urlSource || undefined });
 
   const selectSource = (src: string) => {
     const clean = src.trim();
     setInputSource(clean);
     navigate(`/attack-path${qs({ source: clean || undefined })}`, true);
   };
-
-  if (!st) return <Loading />;
-  if (!installed) {
-    return (
-      <div class="stack-lg">
-        <PageHead title="Attack path" sub="Per-source progression across nodes and techniques." />
-        <ModuleMissing name="Attack path" />
-      </div>
-    );
-  }
 
   const topSources = (sourcesList.data?.sources ?? []).slice(0, 50);
   const dto = pathData.data;
@@ -99,23 +83,21 @@ export function AttackPathPage() {
             selectSource(inputSource);
           }}
         >
-          {sourcesInstalled ? (
-            <label class="filter">
-              <span>Top sources</span>
-              <select
-                class="input mono"
-                value={topSources.some((s) => s.source === (urlSource || dto?.source)) ? (urlSource || dto?.source || "") : ""}
-                onChange={(e) => selectSource(e.currentTarget.value)}
-              >
-                <option value="">Busiest source (auto)</option>
-                {topSources.map((s) => (
-                  <option key={s.source} value={s.source}>
-                    {s.source} ({s.events} events · {s.decoys} {s.decoys === 1 ? "decoy" : "decoys"})
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
+          <label class="filter">
+            <span>Top sources</span>
+            <select
+              class="input mono"
+              value={topSources.some((s) => s.source === (urlSource || dto?.source)) ? (urlSource || dto?.source || "") : ""}
+              onChange={(e) => selectSource(e.currentTarget.value)}
+            >
+              <option value="">Busiest source (auto)</option>
+              {topSources.map((s) => (
+                <option key={s.source} value={s.source}>
+                  {s.source} ({s.events} events · {s.decoys} {s.decoys === 1 ? "decoy" : "decoys"})
+                </option>
+              ))}
+            </select>
+          </label>
           <label class="filter path-picker-input">
             <span>Source IP or identifier</span>
             <input
