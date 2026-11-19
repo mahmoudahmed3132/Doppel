@@ -120,7 +120,7 @@ func TestFleetNodeKeyLifecycleEndToEnd(t *testing.T) {
 	key := out["node_key"].(string)
 	nodeID := out["node"].(map[string]any)["id"].(string)
 	link := out["link"].(map[string]any)
-	if !strings.Contains(link["command"].(string), "TS_NODE_KEY='"+key+"' truesignal link '"+h.srv.URL+"'") {
+	if !strings.Contains(link["command"].(string), "TS_NODE_KEY='"+key+"' doppel link '"+h.srv.URL+"'") {
 		t.Fatalf("link command %v", link["command"])
 	}
 	if _, has := out["node"].(map[string]any)["key_hash"]; has {

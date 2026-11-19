@@ -137,7 +137,7 @@ func (f *Fleet) keyResponse(ctx context.Context, node any, key string) map[strin
 	link := map[string]any{"key_env": "TS_NODE_KEY", "hub_url": f.hubURL(ctx)}
 	if u := f.hubURL(ctx); u != "" {
 		// The key is passed via the environment, never argv (§8).
-		link["command"] = "TS_NODE_KEY=" + shellQuote(key) + " truesignal link " + shellQuote(u)
+		link["command"] = "TS_NODE_KEY=" + shellQuote(key) + " doppel link " + shellQuote(u)
 	}
 	return map[string]any{"node": node, "node_key": key, "link": link,
 		"warning": "The node key is shown only once. Store it now; it cannot be retrieved later."}

@@ -61,7 +61,7 @@ func (n *NodeAPI) cli(next http.HandlerFunc) http.HandlerFunc {
 		if major != n.HubMajor {
 			writeJSON(w, http.StatusUpgradeRequired, map[string]any{
 				"ok": false, "error": "version_mismatch", "required_major": n.HubMajor,
-				"message": "this Hub requires a truesignal CLI with major version " + strconv.Itoa(n.HubMajor),
+				"message": "this Hub requires a doppel CLI with major version " + strconv.Itoa(n.HubMajor),
 			})
 			return
 		}

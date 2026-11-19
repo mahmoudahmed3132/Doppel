@@ -94,7 +94,7 @@ func (o *Outputs) putSIEM(w http.ResponseWriter, r *http.Request) {
 // testRecord is the synthetic event sent by the test buttons.
 func (o *Outputs) testRecord(trigger, target string) domain.EnrichedEvent {
 	now := o.Now().UTC()
-	return domain.EnrichedEvent{NodeAlias: "TrueSignal Hub", Event: domain.Event{
+	return domain.EnrichedEvent{NodeAlias: "Doppel Hub", Event: domain.Event{
 		EventID: "00000000-0000-7000-8000-000000000000", NodeID: "-", SensorID: "-", Trigger: trigger,
 		Severity: domain.SeverityInfo, OccurredAt: now, ReceivedAt: now, Source: domain.HubSource, Target: target,
 		Details: []byte(`{"test":true}`)}}

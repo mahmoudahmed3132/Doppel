@@ -201,7 +201,7 @@ export function Dashboard() {
                   </li>
                 ))}
               </ul>
-            ) : <Empty>No events yet. Deploy a sensor and run a fire drill (<code>truesignal firedrill</code>).</Empty>
+            ) : <Empty>No events yet. Deploy a sensor and run a fire drill (<code>doppel firedrill</code>).</Empty>
           ) : latest.error ? <ErrorBox error={latest.error} /> : <Loading />}
         </Card>
         <Card title="Fleet health" actions={<Link href="/fleet" class="btn btn-ghost btn-sm">Fleet</Link>}>

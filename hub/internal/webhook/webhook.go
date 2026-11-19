@@ -277,7 +277,7 @@ func (n *Notifier) Test(ctx context.Context) error {
 		return errors.New("no webhook configured")
 	}
 	now := n.Now().UTC()
-	ev := domain.EnrichedEvent{NodeAlias: "TrueSignal Hub", Event: domain.Event{EventID: "test", NodeID: "-", SensorID: "-",
+	ev := domain.EnrichedEvent{NodeAlias: "Doppel Hub", Event: domain.Event{EventID: "test", NodeID: "-", SensorID: "-",
 		Trigger: "webhook_test", Severity: domain.SeverityInfo, OccurredAt: now, ReceivedAt: now, Source: domain.HubSource, Target: "Webhook test"}}
 	return n.deliver(ctx, c, ev)
 }

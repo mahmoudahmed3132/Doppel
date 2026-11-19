@@ -57,7 +57,7 @@ const PW = 'correct-horse-battery-staple-42';
     key = (await page.locator('.secret-value').first().textContent()).trim();
     if (!/^tsk_[0-9a-f]{64}$/.test(key)) throw new Error('bad key ' + key);
     const cmd = await page.locator('.secret-value').nth(1).textContent();
-    if (!cmd.includes('truesignal link') || !cmd.startsWith('TS_NODE_KEY=')) throw new Error('bad command ' + cmd);
+    if (!cmd.includes('doppel link') || !cmd.startsWith('TS_NODE_KEY=')) throw new Error('bad command ' + cmd);
     await shot('02-node-key');
     if (await page.getByRole('button', { name: 'Done' }).isEnabled()) throw new Error('Done enabled before ack');
     await page.getByLabel('I have stored the key').check();
