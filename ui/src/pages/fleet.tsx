@@ -168,7 +168,7 @@ export function NodePage({ id }: { id: string }) {
         {n.sensors.length ? (
           <div class="table-wrap">
             <table class="table">
-              <thead><tr><th>Sensor</th><th>Type</th><th>Version</th><th>Status</th><th>Last heartbeat</th><th>Last activity</th><th title="Silenced sensors still record events but send no webhook notifications">Silenced</th><th><span class="sr-only">Actions</span></th></tr></thead>
+              <thead><tr><th>Sensor</th><th>Type</th><th>Version</th><th>Status</th><th>Last heartbeat</th><th>Last activity</th><th title="Events the sensor reported as lost before reaching the Hub (SDK queue overflow or undeliverable batches), since it was added">Dropped events</th><th title="Silenced sensors still record events but send no webhook notifications">Silenced</th><th><span class="sr-only">Actions</span></th></tr></thead>
               <tbody>
                 {n.sensors.map((s) => (
                   <tr key={s.id}>
@@ -181,6 +181,9 @@ export function NodePage({ id }: { id: string }) {
                     <td>{statusPill(s)}</td>
                     <td title={fmtTime(s.last_heartbeat_at)}>{fmtAgo(s.last_heartbeat_at)}</td>
                     <td title={fmtTime(s.last_activity_at)}>{fmtAgo(s.last_activity_at)}</td>
+                    <td class="num">{s.dropped_events > 0
+                      ? <Pill kind="warn" title="Events lost in the sensor's queue; check Hub load and node connectivity">{s.dropped_events.toLocaleString()}</Pill>
+                      : "0"}</td>
                     <td>
                       <Toggle label={s.silenced ? "on" : "off"} checked={s.silenced} disabled={act.busy} onChange={async (v) => {
                         if (await act.run(() => post(`/nodes/${enc(id)}/sensors/${enc(s.id)}/${v ? "silence" : "unsilence"}`), v ? "Sensor silenced" : "Sensor unsilenced")) node.reload();
