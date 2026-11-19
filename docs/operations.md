@@ -325,3 +325,59 @@ Owner steps, in order (the owner pushes every tag):
 expires within an hour, is limited to one repository and one permission, and
 is not tied to a person's account. A fine-grained PAT would be long-lived and
 belong to a user.
+
+### 9.3 Environment variables and binary names (F-004)
+
+* **Env vars:** every `TS_*` setting also accepts `DOPPEL_*` (`DOPPEL_KEK_FILE`
+  for `TS_KEK_FILE`, and so on) in the Hub, the CLI and the SDK. `DOPPEL_*`
+  wins when both are set. A value that is read only from `TS_*` logs one
+  deprecation warning naming the variable (never the value). `TS_*` is
+  supported for one major version (until 4.0). Sensor settings written by the
+  Hub into compose (`TS_PORTS`, ...) are unchanged: they are manifest keys, not
+  process configuration.
+* **Binaries:** the Hub binary is `doppel-hub`; images and `make hub-bin` also
+  carry a `truesignal-hub` symlink, so old entrypoints and runbooks keep
+  working for one major version. The image entrypoint is `/doppel-hub`.
+* **Images:** the Hub is published as `ghcr.io/<org>/doppel-hub` with the alias
+  `ghcr.io/<org>/ts-hub` (same digest, both signed). Sensors are published
+  under the name their signed manifest declares (`doppel-sensor-<name>` or the
+  legacy `ts-sensor-<name>`), and the other name is pushed as an alias. New
+  sensor versions should declare `doppel-sensor-<name>` (Q83).
+
+### 9.4 Verifying SBOM and provenance (F-004)
+
+Every release publishes a CycloneDX SBOM per image and per binary and SLSA v1
+provenance from `slsa-github-generator`. A release is refused when Trivy finds a
+critical vulnerability that has no valid waiver (`.github/trivy-waivers.json`:
+`id`, a written `statement`, `expired_at` at most 90 days ahead;
+`scripts/release/check-waivers.sh` rejects anything else).
+
+```sh
+IMG=ghcr.io/<org>/doppel-hub@sha256:<digest>
+cosign verify "$IMG" --certificate-identity "https://github.com/<org>/<repo>/.github/workflows/publish-hub.yml@refs/tags/hub/v<ver>" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+cosign verify-attestation --type cyclonedx "$IMG" --certificate-identity ... --certificate-oidc-issuer ...   # SBOM
+slsa-verifier verify-image "$IMG" --source-uri github.com/<org>/<repo> --source-tag hub/v<ver>             # provenance
+slsa-verifier verify-artifact doppel-linux-amd64 --provenance-path doppel-cli-<ver>.intoto.jsonl \
+  --source-uri github.com/<org>/<repo> --source-tag cli/v<ver>                                             # CLI binary
+```
+
+### 9.5 GA cut and registry rollback drill (owner runbook, F-004)
+
+Done by the owner, never by an executor session (it tags and publishes).
+
+1. **Signing identity.** Create the organisation, transfer or recreate the
+   repository and `<org>/truesignal-releases` there, install the releases App,
+   set `RELEASES_APP_CLIENT_ID` / `RELEASES_APP_PRIVATE_KEY`, then update
+   `ReleasesRepo` (`hub/internal/config`), `signing.DefaultSignerRepo`,
+   `install.sh` and the URLs in section 9.1 in one PR. As in 9.2, artefacts signed
+   before the move verify only under the old identity: republish what must
+   stay installable, and keep `TS_MANIFEST_SIGNER_REPO` as the escape hatch.
+2. **Version.** One PR bumps `Version` in `hub/cmd/doppel-hub/main.go` to
+   `3.0.0`. After merge: `make tag-hub`. Check that the release lists the image
+   (primary and alias), two SBOMs, and that section 9.4 verifies.
+3. **Drill.** Publish a throwaway sensor patch version, run the
+   `registry-rollback` workflow for that sensor, and confirm (a) the registry
+   index marks it deprecated, (b) a Hub refresh stops offering it for new
+   deployments, (c) the previous version is `latest`. Record the date and run
+   URL in the status log. Nothing is deleted; versions are immutable.

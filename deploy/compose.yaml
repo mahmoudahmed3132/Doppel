@@ -9,7 +9,7 @@
 name: truesignal-hub
 services:
   hub:
-    image: ghcr.io/mahmoudahmed3132/ts-hub:3.0.0@sha256:<digest>
+    image: ghcr.io/mahmoudahmed3132/doppel-hub:3.0.0@sha256:<digest>   # alias, same digest: ghcr.io/mahmoudahmed3132/ts-hub
     restart: unless-stopped
     read_only: true
     user: "65532:65532"

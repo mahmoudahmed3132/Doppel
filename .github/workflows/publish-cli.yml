@@ -55,8 +55,10 @@ jobs:
     needs: guard
     runs-on: ubuntu-24.04
     permissions:
-      contents: read    # the release is created in the releases repository with the App token
+      contents: read
       id-token: write   # Sigstore keyless signing
+    outputs:
+      hashes: ${{ steps.hash.outputs.hashes }}
     env:
       VERSION: ${{ needs.guard.outputs.version }}
       IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/publish-cli.yml@${{ github.ref }}
@@ -94,10 +96,70 @@ jobs:
             cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
             cosign verify-blob --bundle "$f.sigstore.json" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$f"
           done
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0
+      - name: gate - no unwaived critical vulnerability in any binary (scripts/release/trivy-gate.sh)
+        run: |
+          for f in dist/doppel-*-*; do
+            case "$f" in *.sigstore.json) continue ;; esac
+            d=$(mktemp -d); cp "$f" "$d/"; scripts/release/trivy-gate.sh rootfs "$d"
+          done
+      - name: CycloneDX SBOM per binary
+        run: |
+          for f in dist/doppel-linux-amd64 dist/doppel-linux-arm64 dist/doppel-darwin-amd64 dist/doppel-darwin-arm64; do
+            scripts/release/sbom.sh binary "$f" "$f.cdx.json"
+            cosign sign-blob --yes --bundle "$f.cdx.json.sigstore.json" "$f.cdx.json"
+          done
+      - id: hash
+        name: subjects for the SLSA provenance
+        run: echo "hashes=$(cd dist && sha256sum doppel-linux-amd64 doppel-linux-arm64 doppel-darwin-amd64 doppel-darwin-arm64 | base64 -w0)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
       - name: the installer accepts these assets (checksum + signature)
         run: |
           sh install.sh --version "$VERSION" --base-url "file://$PWD/dist" --prefix "$RUNNER_TEMP/bin"
           "$RUNNER_TEMP/bin/truesignal" version | grep -F "$VERSION"
+
+  provenance:
+    # SLSA v1 provenance (slsa-github-generator; referenced by tag as the generator requires).
+    needs: [guard, publish]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.publish.outputs.hashes }}
+      upload-assets: false
+      provenance-name: doppel-cli-${{ needs.guard.outputs.version }}.intoto.jsonl
+
+  release:
+    needs: [guard, publish, provenance]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read    # the release is created in the releases repository with the App token
+    env:
+      VERSION: ${{ needs.guard.outputs.version }}
+      IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/publish-cli.yml@${{ github.ref }}
+      ISSUER: https://token.actions.githubusercontent.com
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.provenance.outputs.provenance-name }}
+          path: dist
+      - run: chmod +x dist/doppel-*-* 2>/dev/null || true
       - id: releases-token
         name: token for the public releases repository (GitHub App, contents:write on that repository only)
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -123,9 +185,16 @@ jobs:
           cosign verify-blob --bundle doppel-linux-amd64.sigstore.json \\
             --certificate-identity $IDENTITY \\
             --certificate-oidc-issuer $ISSUER doppel-linux-amd64
+          # SBOM (CycloneDX) is signed too; SLSA v1 provenance:
+          slsa-verifier verify-artifact doppel-linux-amd64 --provenance-path doppel-cli-$VERSION.intoto.jsonl \\
+            --source-uri github.com/$GITHUB_REPOSITORY --source-tag $GITHUB_REF_NAME
           \`\`\`
           NOTES
           scripts/release/publish-release.sh --install-sh install.sh "$GITHUB_REF_NAME" "CLI v$VERSION" notes.md \
             dist/doppel-linux-amd64 dist/doppel-linux-arm64 dist/doppel-darwin-amd64 dist/doppel-darwin-arm64 dist/SHA256SUMS \
             dist/doppel-linux-amd64.sigstore.json dist/doppel-linux-arm64.sigstore.json \
-            dist/doppel-darwin-amd64.sigstore.json dist/doppel-darwin-arm64.sigstore.json
+            dist/doppel-darwin-amd64.sigstore.json dist/doppel-darwin-arm64.sigstore.json \
+            dist/doppel-linux-amd64.cdx.json dist/doppel-linux-arm64.cdx.json dist/doppel-darwin-amd64.cdx.json dist/doppel-darwin-arm64.cdx.json \
+            dist/doppel-linux-amd64.cdx.json.sigstore.json dist/doppel-linux-arm64.cdx.json.sigstore.json \
+            dist/doppel-darwin-amd64.cdx.json.sigstore.json dist/doppel-darwin-arm64.cdx.json.sigstore.json \
+            "dist/doppel-cli-$VERSION.intoto.jsonl"

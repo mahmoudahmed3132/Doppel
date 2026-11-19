@@ -135,6 +135,10 @@ jobs:
           load: true
           push: false
           tags: ci/ts-hub:scan
+      - name: hub image ships doppel-hub and the truesignal-hub compatibility symlink
+        run: |
+          docker run --rm ci/ts-hub:scan version | grep -F "3."
+          docker run --rm --entrypoint /truesignal-hub ci/ts-hub:scan version | grep -F "3."
       - name: build sensor images
         run: |
           for d in sensors/*/; do

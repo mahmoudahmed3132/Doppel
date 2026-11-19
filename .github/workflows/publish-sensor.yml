@@ -37,6 +37,7 @@ jobs:
       name: ${{ steps.tag.outputs.name }}
       version: ${{ steps.tag.outputs.version }}
       image: ${{ steps.image.outputs.image }}
+      alias: ${{ steps.image.outputs.alias }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -51,10 +52,18 @@ jobs:
         env:
           NAME: ${{ steps.tag.outputs.name }}
         run: |
-          image="ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')/ts-sensor-$NAME"
-          [ "$(jq -r .image.repository "sensors/$NAME/manifest.json")" = "$image" ] ||
-            { echo "::error::manifest image.repository must be $image"; exit 1; }
-          echo "image=$image" >> "$GITHUB_OUTPUT"
+          # F-004: doppel-sensor-<name> is the product name; ts-sensor-<name> stays a
+          # compatibility alias (same digest) for one major version. The signed manifest
+          # names exactly one of them as its image.repository; the other is the alias.
+          o=ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')
+          declared=$(jq -r .image.repository "sensors/$NAME/manifest.json")
+          case "$declared" in
+            "$o/doppel-sensor-$NAME") alias="$o/ts-sensor-$NAME" ;;
+            "$o/ts-sensor-$NAME") alias="$o/doppel-sensor-$NAME" ;;
+            *) echo "::error::manifest image.repository must be $o/doppel-sensor-$NAME or the legacy $o/ts-sensor-$NAME"; exit 1 ;;
+          esac
+          echo "image=$declared" >> "$GITHUB_OUTPUT"
+          echo "alias=$alias" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -83,13 +92,17 @@ jobs:
           password: ${{ github.token }}
       - name: refuse an existing image tag (immutable; never overwritten)
         env:
-          REF: ${{ steps.image.outputs.image }}:${{ steps.tag.outputs.version }}
+          VER: ${{ steps.tag.outputs.version }}
+          IMG: ${{ steps.image.outputs.image }}
+          ALIAS: ${{ steps.image.outputs.alias }}
         run: |
-          if docker buildx imagetools inspect "$REF" >/dev/null 2>err.txt; then
-            echo "::error::$REF exists but the version is not in the registry: a previous run failed after pushing. Investigate; delete the package version deliberately before re-running."
-            exit 1
-          fi
-          grep -qiE 'not found|manifest unknown|name unknown' err.txt || { cat err.txt; echo "::error::cannot determine whether $REF exists"; exit 1; }
+          for REF in "$IMG:$VER" "$ALIAS:$VER"; do
+            if docker buildx imagetools inspect "$REF" >/dev/null 2>err.txt; then
+              echo "::error::$REF exists but the version is not in the registry: a previous run failed after pushing. Investigate; delete the package version deliberately before re-running."
+              exit 1
+            fi
+            grep -qiE 'not found|manifest unknown|name unknown' err.txt || { cat err.txt; echo "::error::cannot determine whether $REF exists"; exit 1; }
+          done
 
   publish:
     needs: guard
@@ -98,7 +111,10 @@ jobs:
       contents: read    # the registry is pushed to the releases repository with the App token
       packages: write
       id-token: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     env:
+      ALIAS: ${{ needs.guard.outputs.alias }}
       NAME: ${{ needs.guard.outputs.name }}
       VERSION: ${{ needs.guard.outputs.version }}
       IMAGE: ${{ needs.guard.outputs.image }}
@@ -137,8 +153,13 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0
+      - name: gate - no unwaived critical vulnerability, fixable or not (scripts/release/trivy-gate.sh)
+        run: scripts/release/trivy-gate.sh image "scan/ts-sensor:$VERSION"
       - id: push
-        name: build and push (linux/amd64, as declared in the manifest)
+        name: build and push (linux/amd64, as declared in the manifest; primary and alias, same digest)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -147,7 +168,9 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
-          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          tags: |
+            ${{ env.IMAGE }}:${{ env.VERSION }}
+            ${{ env.ALIAS }}:${{ env.VERSION }}
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.0.6
@@ -156,8 +179,16 @@ jobs:
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           echo "$DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "::error::no digest from the push"; exit 1; }
-          cosign sign --yes "$IMAGE@$DIGEST"
-          cosign verify "$IMAGE@$DIGEST" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" >/dev/null
+          for R in "$IMAGE" "$ALIAS"; do
+            cosign sign --yes "$R@$DIGEST"
+            cosign verify "$R@$DIGEST" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" >/dev/null
+          done
+          # CycloneDX SBOM of the image (covers the sensor binary), attested on both names.
+          scripts/release/sbom.sh image "$IMAGE@$DIGEST" "$RUNNER_TEMP/sbom.cdx.json"
+          for R in "$IMAGE" "$ALIAS"; do
+            cosign attest --yes --type cyclonedx --predicate "$RUNNER_TEMP/sbom.cdx.json" "$R@$DIGEST"
+            cosign verify-attestation --type cyclonedx "$R@$DIGEST" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" >/dev/null
+          done
           out="$RUNNER_TEMP/out"; mkdir -p "$out"
           "$RUNNER_TEMP/ts-registry" fill -in "sensors/$NAME/manifest.json" -out "$out/manifest.json" \
             -name "$NAME" -version "$VERSION" -repository "$IMAGE" -tag "$VERSION" -digest "$DIGEST"
@@ -180,3 +211,19 @@ jobs:
           . scripts/release/releases-auth.sh
           REGISTRY_REMOTE="$RELEASES_URL" scripts/release/registry-commit.sh "registry: $NAME $VERSION" \
             "$GITHUB_WORKSPACE/scripts/release/registry-add.sh" "$RUNNER_TEMP/ts-registry" "$NAME" "$VERSION" "$RUNNER_TEMP/out"
+
+  provenance:
+    # SLSA v1 build provenance (slsa-github-generator; referenced by tag as the generator requires).
+    # Runs after the registry commit so a failed publish never leaves provenance for an unlisted version.
+    needs: [guard, publish]
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.guard.outputs.image }}
+      digest: ${{ needs.publish.outputs.digest }}
+    secrets:
+      registry-username: ${{ github.actor }}
+      registry-password: ${{ secrets.GITHUB_TOKEN }}

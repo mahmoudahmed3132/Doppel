@@ -596,3 +596,18 @@ Three minor details in WP-2C admit choices:
 
 
 
+
+### Q82 — F-004 — Signing-identity move and GA cut need the owner
+Requirement 3 (move the signing identity to an organisation) and 4 (cut a signed `3.0.0` and run a rollback drill) need a real GitHub organisation, App credentials and a tag push. **Meanwhile:** no repository constants were changed (the organisation name is not known), `Version` stays `3.0.0-rc.1`, and `docs/operations.md` §9.5 is the owner runbook. The workflows already derive owner names from `github.repository_owner`, so the move does not need workflow edits.
+
+### Q83 — F-004 — Image names and aliases for already-signed manifests
+Released sensor manifests are signed and pin `image.repository = ghcr.io/<owner>/ts-sensor-<name>`. Renaming it would invalidate them. **Meanwhile:** `publish-sensor.yml` accepts either `doppel-sensor-<name>` or the legacy `ts-sensor-<name>` in the manifest, publishes under the declared name and pushes the other as a signed alias (same digest). The Hub publishes `doppel-hub` with the `ts-hub` alias. Sensor manifests move to `doppel-sensor-*` at their next version bump (not done here: it needs a version bump per sensor and a republish).
+
+### Q84 — F-004 — SLSA generator is referenced by tag, not commit SHA
+`slsa-github-generator` reusable workflows refuse to run when referenced by a commit SHA (they verify their own tag ref). **Meanwhile:** they are pinned to the immutable-by-convention tag `v2.1.0`; every other action stays SHA-pinned. Dependabot's `github_actions` ecosystem proposes bumps.
+
+### Q85 — F-004 — Trivy gate scope and waivers
+The release gate fails on any CRITICAL vulnerability, fixable or not (the existing PR-time scans stay HIGH/CRITICAL with `ignore-unfixed`). Waivers are JSON in `.github/trivy-waivers.json` (`id`, `statement`, `expired_at` ≤ 90 days, validated by `scripts/release/check-waivers.sh`). **Meanwhile:** the file ships empty. Binary SBOMs and the gate for CLI binaries use `trivy rootfs` on the binary's Go build info; the Hub also gets a binary SBOM extracted from the image. Sensor binaries are covered by the image SBOM only.
+
+### Q86 — F-004 — `DOPPEL_*` scope and wire names
+`DOPPEL_*` is accepted wherever the Hub, CLI and SDK read process configuration. Hub-rendered sensor keys stay `TS_*` (they are manifest keys, part of the signed contract). Wire and audit strings (`product: "truesignal-hub"`, audit route names, ECS module names, the version banner) are unchanged because SIEM rules and contract v3 consumers match on them. **Meanwhile:** rename them only with a contract bump.
