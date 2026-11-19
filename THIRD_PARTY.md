@@ -113,6 +113,7 @@ v1.83.2 for CVE-2026-84304 and CVE-2026-84445.
 | `preact` | yes (bundled into the Hub binary) | 11.1.0 | MIT | 4 kB component/rendering library; escapes text by default (no HTML injection path) |
 | `esbuild` (+ its `@esbuild/<platform>` binary) | no, build time only | 0.28.2 | MIT | Bundles and minifies the UI into one script + one stylesheet (CSP-compatible output) |
 | `typescript` | no, build time only | 7.0.2 | Apache-2.0 | Type-checking (`tsc --noEmit`) in CI |
+| `world-atlas` | no, build time only | 2.0.2 | ISC | Natural Earth 1:110m country outlines (`countries-110m.json`) compiled by `ui/build.mjs` into static SVG paths (`ui/src/generated/world-paths.ts`) for the offline Geo map |
 
 No runtime CDN, font or analytics dependency: everything is embedded and served
 by the Hub (§7). Charts are hand-written SVG. `npm ci --ignore-scripts` is used
@@ -161,4 +162,4 @@ Debian packages under their own licences, build stage only) and
 **Data, not code:** the operator supplies DB-IP IP to City Lite
 (<https://db-ip.com>, CC BY 4.0). It is not distributed with Doppel. The UI
 credits DB-IP wherever it shows a location, as the licence requires
-(`ui/src/pages/events.tsx`, `ui/src/pages/modules.tsx`).
+(`ui/src/pages/events.tsx`, `ui/src/pages/analytics/geo-map.tsx`).

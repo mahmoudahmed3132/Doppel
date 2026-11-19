@@ -5,10 +5,12 @@
 // feed's debounced "refresh" hint.
 import { useEffect, useState } from "preact/hooks";
 import { get } from "../api";
+import { systemStatus } from "../app";
 import { SeverityBars, UptimeHeatmap, VelocityChart } from "../charts";
 import { fmtAgo, fmtNum, fmtTime } from "../format";
 import { onLive } from "../live";
 import { Link, navigate } from "../router";
+import { useStore } from "../store";
 import type { EventRecord, NodeSummary } from "../types";
 import { Card, Empty, ErrorBox, Loading, PageHead, Pill, SeverityBadge, useAsync } from "../ui";
 
@@ -17,14 +19,49 @@ interface Summary {
   nodes_total: number; nodes_online: number; sensors_total: number; sensors_online: number;
 }
 
+interface InsightsCoverage {
+  decoys_deployed: number;
+  nodes_with_decoy: number;
+  nodes_without_decoy: number;
+  sensors_online: number;
+  honeytokens_planted: number;
+  beacons_active: number;
+}
+
+interface InsightsByType {
+  sensor_type: string;
+  instances_deployed: number;
+  instances_online: number;
+  events: number;
+  distinct_sources: number;
+  highest_severity: string;
+  last_event_at: string;
+}
+
+interface InsightsDTO {
+  window: number;
+  coverage: InsightsCoverage;
+  by_type: InsightsByType[];
+  touched: { instances: number; total: number; ratio: number };
+  top_triggers: { trigger: string; count: number }[];
+  allowed_events: number;
+}
+
 export function Dashboard() {
+  const st = useStore(systemStatus);
   const [tick, setTick] = useState(0);
+  const hasInsights = !!st?.modules.projections.includes("insights");
+
   const summary = useAsync(() => get<{ summary: Summary }>("/analytics/summary").then((r) => r.summary), [tick]);
   const sev = useAsync(() => get<{ severity: Record<string, number> }>("/analytics/severity?days=7").then((r) => r.severity), [tick]);
   const vel = useAsync(() => get<{ bucket_seconds: number; series: { t: string; count: number }[] }>("/analytics/velocity?hours=24&bucket=3600"), [tick]);
   const nodes = useAsync(() => get<{ nodes: NodeSummary[] }>("/nodes").then((r) => r.nodes), [tick]);
   const uptime = useAsync(() => get<{ sensors: { node_id: string; sensor_id: string; days: string[]; percent: number[] }[] }>("/analytics/uptime?days=14"), [tick]);
   const latest = useAsync(() => get<{ events: EventRecord[] }>("/events?limit=12").then((r) => r.events), []);
+  const insights = useAsync<InsightsDTO | undefined>(
+    () => (hasInsights ? get<{ data: InsightsDTO }>("/analytics/projections/insights?days=7").then((r) => r.data) : Promise.resolve(undefined)),
+    [hasInsights, tick],
+  );
 
   useEffect(() => onLive((m) => {
     if (m.type === "refresh") setTick((t) => t + 1);
@@ -32,9 +69,12 @@ export function Dashboard() {
   }), [latest.data]);
 
   const s = summary.data;
+  const ins = insights.data;
   const alias = new Map((nodes.data ?? []).map((n) => [n.id, n.alias]));
   const upRows = (uptime.data?.sensors ?? []).map((r) => ({ label: `${alias.get(r.node_id) || r.node_id} / ${r.sensor_id}`, percent: r.percent }));
   const upDays = uptime.data?.sensors[0]?.days ?? [];
+  const totalNodesInCoverage = ins ? ins.coverage.nodes_with_decoy + ins.coverage.nodes_without_decoy : 0;
+  const maxTypeEvents = Math.max(1, ...(ins?.by_type ?? []).map((r) => r.events));
 
   return (
     <div class="stack-lg">
@@ -48,6 +88,92 @@ export function Dashboard() {
         <Counter label="Sensors online" value={s ? `${s.sensors_online} / ${s.sensors_total}` : undefined} tone={s && s.sensors_online < s.sensors_total ? "warn" : undefined} />
         <Counter label="Events (all time)" value={s?.events_total} />
       </div>
+
+      {hasInsights ? (
+        <div class="stack-lg">
+          <ErrorBox error={insights.error} retry={insights.reload} />
+          {ins ? (
+            <>
+              <div class="counters counters-5" aria-label="Deception coverage">
+                <Counter label="Decoys deployed" value={ins.coverage.decoys_deployed} href="/fleet" />
+                <Counter
+                  label="Nodes covered"
+                  value={`${ins.coverage.nodes_with_decoy} / ${totalNodesInCoverage}`}
+                  tone={ins.coverage.nodes_without_decoy > 0 ? "warn" : undefined}
+                  href="/fleet"
+                />
+                <Counter
+                  label={`Touched decoys (${ins.touched.instances}/${ins.touched.total})`}
+                  value={`${Math.round(ins.touched.ratio * 100)}%`}
+                />
+                <Counter label="Honeytokens planted" value={ins.coverage.honeytokens_planted} href="/honeytokens" />
+                <Counter label="Active beacons" value={ins.coverage.beacons_active} href="/beacons" />
+              </div>
+
+              <Card
+                title={`Per-decoy-type activity — last ${ins.window} days`}
+                actions={
+                  ins.allowed_events > 0 ? (
+                    <span class="muted">{fmtNum(ins.allowed_events)} allowed/scanner events excluded</span>
+                  ) : undefined
+                }
+              >
+                {ins.by_type?.length ? (
+                  <div class="table-wrap">
+                    <table class="table table-compact">
+                      <thead>
+                        <tr>
+                          <th>Decoy type</th>
+                          <th>Online / Deployed</th>
+                          <th>Activity</th>
+                          <th>Events</th>
+                          <th>Sources</th>
+                          <th>Highest severity</th>
+                          <th>Last seen</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ins.by_type.map((row) => (
+                          <tr key={row.sensor_type}>
+                            <td class="mono strong">{row.sensor_type}</td>
+                            <td class="num">
+                              {row.instances_online} / {row.instances_deployed}
+                            </td>
+                            <td class="type-bar-cell">
+                              <svg class="sevbar-svg" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">
+                                <rect class="sevbar-bg" x="0" y="0" width="100" height="10" rx="2" />
+                                <rect
+                                  class={`sevbar-fill fill-${row.highest_severity || "info"}`}
+                                  x="0"
+                                  y="0"
+                                  width={row.events > 0 ? Math.max(3, (row.events / maxTypeEvents) * 100) : 0}
+                                  height="10"
+                                  rx="2"
+                                />
+                              </svg>
+                            </td>
+                            <td class="num strong">{fmtNum(row.events)}</td>
+                            <td class="num">{fmtNum(row.distinct_sources)}</td>
+                            <td>
+                              {row.highest_severity ? <SeverityBadge sev={row.highest_severity} /> : <span class="muted">—</span>}
+                            </td>
+                            <td class="nowrap" title={fmtTime(row.last_event_at)}>{fmtAgo(row.last_event_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <Empty>No decoys deployed yet.</Empty>
+                )}
+              </Card>
+            </>
+          ) : insights.loading ? (
+            <Loading />
+          ) : null}
+        </div>
+      ) : null}
+
       <div class="grid-2">
         <Card title="Event velocity — last 24 h">
           {vel.data ? <VelocityChart series={vel.data.series} bucketSeconds={vel.data.bucket_seconds} /> : vel.error ? <ErrorBox error={vel.error} /> : <Loading />}

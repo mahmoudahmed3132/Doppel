@@ -5,13 +5,91 @@
 // static index.html: no inline script or style, so the Hub's strict CSP
 // applies unchanged.
 import { build } from "esbuild";
-import { mkdir, readdir, rm, writeFile, copyFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile, copyFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.resolve(here, "../hub/internal/webui/dist");
 const keep = new Set([".placeholder"]);
+
+// Compile world-atlas Natural Earth 1:110m TopoJSON into static equirectangular
+// SVG path strings (viewBox="0 0 1000 500") so the Geo map renders offline
+// with zero runtime TopoJSON library and zero runtime network fetches.
+async function generateWorldPaths() {
+  const topoPath = path.join(here, "node_modules/world-atlas/countries-110m.json");
+  const topo = JSON.parse(await readFile(topoPath, "utf8"));
+  const { scale, translate } = topo.transform;
+  const decodedArcs = topo.arcs.map((arc) => {
+    let x = 0, y = 0;
+    return arc.map(([dx, dy]) => {
+      x += dx;
+      y += dy;
+      const lon = x * scale[0] + translate[0];
+      const lat = y * scale[1] + translate[1];
+      return [
+        Math.round(((lon + 180) * (1000 / 360)) * 10) / 10,
+        Math.round(((90 - lat) * (500 / 180)) * 10) / 10,
+      ];
+    });
+  });
+
+  const ringToPath = (ring) => {
+    const pts = [];
+    for (const idx of ring) {
+      const arc = idx >= 0 ? decodedArcs[idx] : decodedArcs[~idx].slice().reverse();
+      for (let i = pts.length ? 1 : 0; i < arc.length; i++) pts.push(arc[i]);
+    }
+    if (pts.length < 3) return "";
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) d += `L${pts[i][0]},${pts[i][1]}`;
+    return d + "Z";
+  };
+
+  const countries = [];
+  for (const g of topo.objects.countries.geometries) {
+    const polys = g.type === "Polygon" ? [g.arcs] : g.type === "MultiPolygon" ? g.arcs : [];
+    const parts = [];
+    for (const poly of polys) {
+      for (const ring of poly) {
+        const seg = ringToPath(ring);
+        if (seg) parts.push(seg);
+      }
+    }
+    if (!parts.length) continue;
+    countries.push({
+      id: String(g.id ?? ""),
+      name: String(g.properties?.name ?? ""),
+      d: parts.join(""),
+    });
+  }
+  countries.sort((a, b) => a.id.localeCompare(b.id) || a.name.localeCompare(b.name));
+
+  const genDir = path.join(here, "src/generated");
+  await mkdir(genDir, { recursive: true });
+  const ts = [
+    "// Copyright (c) 2026 TrueSignal Deception. All rights reserved.",
+    "//",
+    "// Generated at build time by ui/build.mjs from world-atlas/countries-110m.json",
+    "// (Natural Earth 1:110m, ISC). Do not edit by hand.",
+    "",
+    'export const WORLD_VIEWBOX = "0 0 1000 500";',
+    "export const WORLD_WIDTH = 1000;",
+    "export const WORLD_HEIGHT = 500;",
+    "",
+    "export interface WorldCountryPath {",
+    "  readonly id: string;",
+    "  readonly name: string;",
+    "  readonly d: string;",
+    "}",
+    "",
+    `export const WORLD_COUNTRIES: readonly WorldCountryPath[] = ${JSON.stringify(countries)};`,
+    "",
+  ].join("\n");
+  await writeFile(path.join(genDir, "world-paths.ts"), ts);
+}
+
+await generateWorldPaths();
 
 await mkdir(out, { recursive: true });
 for (const f of await readdir(out)) {

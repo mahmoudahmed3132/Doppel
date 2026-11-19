@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "world-atlas": "2.0.2"
   }
 }
