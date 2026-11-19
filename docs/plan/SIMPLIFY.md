@@ -2,6 +2,8 @@
 
 Owner: Mahmoud. Auditor: Fable 5.2. Executor: Sonnet 5.5.
 Written 2026-11-16 against `main` at `b6ecbbd` (schema v3, Go 1.27.3).
+**Status (2026-11-19):** S1–S5 executed (PR #36). §3 items 1 and 7 are resolved (the CLI command is `doppel`; the four decoys now call `sdk/go/ber` and `decoy.*`); items 2–6 and 8 are still open.
+
 Baseline on that commit: `go build ./...` and `go test -count=1 ./...` in `hub/` are green.
 
 This file is self-contained. Do the packages in order, one commit each. Every

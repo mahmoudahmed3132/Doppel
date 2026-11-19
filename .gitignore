@@ -18,3 +18,8 @@ __pycache__/
 /sensors/tcp-tarpit/tcp-tarpit
 /sensors/template/template
 /sensors/web-router-decoy/web-router-decoy
+/sensors/database-decoy/database-decoy
+/sensors/identity-decoy/identity-decoy
+/sensors/network-service-decoy/network-service-decoy
+/sensors/remote-access-decoy/remote-access-decoy
+/sensors/token-receiver/token-receiver
