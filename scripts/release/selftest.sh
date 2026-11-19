@@ -133,5 +133,24 @@ git tag -l 'hub/v*' | grep -E '^hub/v[0-9]+\.[0-9]+\.[0-9]+$' | xargs -r git tag
 PATH="$T/bin:$PATH" scripts/release/hub-latest.sh ghcr.io/x/ts-hub o/r >/dev/null 2>&1 && [ ! -f "$T/reg/latest" ] &&
 	pass "only pre-release tags: :latest left unset, job succeeds" || fail "pre-release-only :latest handling"
 
+# --- supply-chain gates (F-004) ---------------------------------------------
+w="$T/waivers"; mkdir -p "$w"
+today=$(date -u +%Y-%m-%d); soon=$(date -u -d '+30 days' +%Y-%m-%d 2>/dev/null || date -u -v+30d +%Y-%m-%d)
+past=$(date -u -d '-1 day' +%Y-%m-%d 2>/dev/null || date -u -v-1d +%Y-%m-%d)
+far=$(date -u -d '+400 days' +%Y-%m-%d 2>/dev/null || date -u -v+400d +%Y-%m-%d)
+wv() { printf '{"vulnerabilities":[{"id":"%s","statement":"%s","expired_at":"%s"}]}' "$1" "$2" "$3" > "$w/$4"; }
+scripts/release/check-waivers.sh .github/trivy-waivers.json >/dev/null && pass "shipped waiver file is valid" || fail "shipped waiver file"
+wv CVE-2099-0001 "no fix upstream, compensating control documented" "$soon" good.json
+scripts/release/check-waivers.sh "$w/good.json" >/dev/null && pass "unexpired waiver with statement accepted" || fail "valid waiver"
+wv CVE-2099-0001 "no fix upstream, compensating control documented" "$past" expired.json; expect_fail "expired waiver" scripts/release/check-waivers.sh "$w/expired.json"
+wv CVE-2099-0001 "no fix upstream, compensating control documented" "$far" long.json; expect_fail "waiver longer than 90 days" scripts/release/check-waivers.sh "$w/long.json"
+wv CVE-2099-0001 "short" "$soon" nostmt.json; expect_fail "waiver without a real statement" scripts/release/check-waivers.sh "$w/nostmt.json"
+wv "not-an-id" "no fix upstream, compensating control documented" "$soon" badid.json; expect_fail "waiver with a malformed id" scripts/release/check-waivers.sh "$w/badid.json"
+echo '{"bomFormat":"CycloneDX","specVersion":"1.6","components":[{"type":"library","name":"x"}]}' > "$w/ok.cdx.json"
+scripts/release/sbom.sh verify "$w/ok.cdx.json" && pass "CycloneDX SBOM accepted" || fail "CycloneDX SBOM"
+echo '{"bomFormat":"SPDX","components":[{"name":"x"}]}' > "$w/spdx.json"; expect_fail "non-CycloneDX SBOM" scripts/release/sbom.sh verify "$w/spdx.json"
+echo '{"bomFormat":"CycloneDX","specVersion":"1.6","components":[]}' > "$w/empty.cdx.json"; expect_fail "empty SBOM" scripts/release/sbom.sh verify "$w/empty.cdx.json"
+GOTOOLCHAIN=local scripts/check-go-version.sh "99.0.0" >/dev/null 2>&1 && fail "Go version pin mismatch accepted" || pass "Go version pin mismatch refused"
+
 echo
 [ "$fails" -eq 0 ] && echo "release selftest: all passed" || { echo "release selftest: $fails failed"; exit 1; }

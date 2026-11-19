@@ -1,13 +1,13 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
-// Command truesignal-hub is the TrueSignal Hub.
+// Command doppel-hub is the Doppel Hub (installed with a truesignal-hub symlink for one major version).
 //
-//	truesignal-hub [serve]   run the Hub (default)
-//	truesignal-hub mfa-reset remove MFA from the admin account (Hub stopped)
-//	truesignal-hub kek-generate        print a new key-encryption key (64 hex characters)
-//	truesignal-hub kek-rotate OLD NEW  re-wrap the data key under a new KEK file (Hub stopped)
-//	truesignal-hub secrets-reset --destroy-secrets   KEK lost: drop every sealed secret (Hub stopped)
-//	truesignal-hub version   print the version
+//	doppel-hub [serve]   run the Hub (default)
+//	doppel-hub mfa-reset remove MFA from the admin account (Hub stopped)
+//	doppel-hub kek-generate        print a new key-encryption key (64 hex characters)
+//	doppel-hub kek-rotate OLD NEW  re-wrap the data key under a new KEK file (Hub stopped)
+//	doppel-hub secrets-reset --destroy-secrets   KEK lost: drop every sealed secret (Hub stopped)
+//	doppel-hub version   print the version
 package main
 
 import (
@@ -59,6 +59,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/updatecheck"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/webhook"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/webui"
+	"github.com/mahmoudahmed3132/Doppel/sdk/go/envcompat"
 )
 
 // Version is the Hub version; overridden at build time with -ldflags -X.
@@ -87,7 +88,7 @@ func main() {
 	case "version":
 		fmt.Printf("truesignal-hub %s (contract %d, schema v%d)\n", Version, contractVersion, store.SchemaVersion())
 	default:
-		fmt.Fprintf(os.Stderr, "usage: truesignal-hub [serve|mfa-reset|kek-generate|kek-rotate|secrets-reset|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: doppel-hub [serve|mfa-reset|kek-generate|kek-rotate|secrets-reset|version]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -161,9 +162,9 @@ func kekGenerate() error {
 // up the old KEK until the Hub has started once with the new one.
 func kekRotate(log *slog.Logger, args []string) error {
 	if len(args) != 2 {
-		return errors.New("usage: truesignal-hub kek-rotate OLD_KEK_FILE NEW_KEK_FILE")
+		return errors.New("usage: doppel-hub kek-rotate OLD_KEK_FILE NEW_KEK_FILE")
 	}
-	cfg, err := config.Load(os.Getenv)
+	cfg, err := config.Load(hubEnv(log))
 	if err != nil {
 		return err
 	}
@@ -193,9 +194,9 @@ func kekRotate(log *slog.Logger, args []string) error {
 // only host access to the database, like mfa-reset.
 func secretsReset(log *slog.Logger, args []string) error {
 	if len(args) != 1 || args[0] != "--destroy-secrets" {
-		return errors.New("usage: truesignal-hub secrets-reset --destroy-secrets  (deletes the SIEM token, webhook URL, master keys, admin MFA and honeytoken secrets; use only when the KEK is lost)")
+		return errors.New("usage: doppel-hub secrets-reset --destroy-secrets  (deletes the SIEM token, webhook URL, master keys, admin MFA and honeytoken secrets; use only when the KEK is lost)")
 	}
-	cfg, err := config.Load(os.Getenv)
+	cfg, err := config.Load(hubEnv(log))
 	if err != nil {
 		return err
 	}
@@ -216,7 +217,7 @@ func secretsReset(log *slog.Logger, args []string) error {
 }
 
 func mfaReset(log *slog.Logger) error {
-	cfg, err := config.Load(os.Getenv)
+	cfg, err := config.Load(hubEnv(log))
 	if err != nil {
 		return err
 	}
@@ -240,7 +241,7 @@ func mfaReset(log *slog.Logger) error {
 }
 
 func serve(log *slog.Logger) error {
-	cfg, err := config.Load(os.Getenv)
+	cfg, err := config.Load(hubEnv(log))
 	if err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
@@ -554,4 +555,10 @@ func installedProjections(geo *geoip.Service, fleet projections.FleetReader, hon
 		out[p.Name()] = p
 	}
 	return out
+}
+
+// hubEnv reads configuration through the DOPPEL_*/TS_* compatibility layer:
+// DOPPEL_<NAME> wins, a TS_<NAME> that is actually used logs a deprecation.
+func hubEnv(log *slog.Logger) func(string) string {
+	return envcompat.OS(func(msg string) { log.Warn(msg) })
 }

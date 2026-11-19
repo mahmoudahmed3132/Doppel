@@ -19,6 +19,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mahmoudahmed3132/Doppel/sdk/go/envcompat"
 )
 
 // Drill is the synthetic event a sensor emits for fire drills and test mode.
@@ -77,11 +79,13 @@ func (o *Options) withDefaults() {
 			*d = v
 		}
 	}
-	if o.Getenv == nil {
-		o.Getenv = os.Getenv
-	}
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	}
+	if o.Getenv == nil {
+		// DOPPEL_* wins over TS_*; a used TS_* logs a deprecation (F-004).
+		log := o.Logger
+		o.Getenv = envcompat.OS(func(msg string) { log.Warn(msg) })
 	}
 	if o.QueueSize <= 0 {
 		o.QueueSize = 1000

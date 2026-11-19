@@ -34,6 +34,7 @@ jobs:
     outputs:
       version: ${{ steps.tag.outputs.version }}
       image: ${{ steps.image.outputs.image }}
+      alias: ${{ steps.image.outputs.alias }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,20 +46,28 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: scripts/release/check-tag.sh "$GITHUB_REF_NAME" "$DEFAULT_BRANCH" | tee -a "$GITHUB_OUTPUT"
       - id: image
-        run: echo "image=ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')/ts-hub" >> "$GITHUB_OUTPUT"
+        # doppel-hub is the primary image; ts-hub is the compatibility alias (same digest) for one major version.
+        run: |
+          o=$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')
+          echo "image=ghcr.io/$o/doppel-hub" >> "$GITHUB_OUTPUT"
+          echo "alias=ghcr.io/$o/ts-hub" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: refuse an already published version
+      - name: refuse an already published version (primary and alias)
         env:
-          REF: ${{ steps.image.outputs.image }}:${{ steps.tag.outputs.version }}
+          VER: ${{ steps.tag.outputs.version }}
+          IMG: ${{ steps.image.outputs.image }}
+          ALIAS: ${{ steps.image.outputs.alias }}
         run: |
-          if docker buildx imagetools inspect "$REF" >/dev/null 2>err.txt; then
-            echo "::error::$REF already exists; published versions are never rebuilt"; exit 1
-          fi
-          grep -qiE 'not found|manifest unknown|name unknown' err.txt || { cat err.txt; echo "::error::cannot determine whether $REF exists"; exit 1; }
+          for REF in "$IMG:$VER" "$ALIAS:$VER"; do
+            if docker buildx imagetools inspect "$REF" >/dev/null 2>err.txt; then
+              echo "::error::$REF already exists; published versions are never rebuilt"; exit 1
+            fi
+            grep -qiE 'not found|manifest unknown|name unknown' err.txt || { cat err.txt; echo "::error::cannot determine whether $REF exists"; exit 1; }
+          done
 
   build:
     needs: guard
@@ -72,6 +81,7 @@ jobs:
     env:
       VERSION: ${{ needs.guard.outputs.version }}
       IMAGE: ${{ needs.guard.outputs.image }}
+      ALIAS: ${{ needs.guard.outputs.alias }}
       IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/publish-hub.yml@${{ github.ref }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,19 +109,24 @@ jobs:
           build-args: VERSION=${{ env.VERSION }}
           load: true
           push: false
-          tags: scan/ts-hub:${{ env.VERSION }}
+          tags: scan/doppel-hub:${{ env.VERSION }}
       - name: scan (fixable HIGH/CRITICAL fail before anything is pushed)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.70.0
           scan-type: image
-          image-ref: scan/ts-hub:${{ env.VERSION }}
+          image-ref: scan/doppel-hub:${{ env.VERSION }}
           scanners: vuln
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0
+      - name: gate - no unwaived critical vulnerability, fixable or not (scripts/release/trivy-gate.sh)
+        run: scripts/release/trivy-gate.sh image "scan/doppel-hub:$VERSION"
       - id: push
-        name: build and push (amd64 + arm64)
+        name: build and push (amd64 + arm64; primary image and ts-hub alias, same digest)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -121,7 +136,9 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
-          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          tags: |
+            ${{ env.IMAGE }}:${{ env.VERSION }}
+            ${{ env.ALIAS }}:${{ env.VERSION }}
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.0.6
@@ -130,18 +147,55 @@ jobs:
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           echo "$DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "::error::no digest from the push"; exit 1; }
-          cosign sign --yes "$IMAGE@$DIGEST"
-          cosign verify "$IMAGE@$DIGEST" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" >/dev/null
-          echo "signed $IMAGE@$DIGEST"
+          for R in "$IMAGE" "$ALIAS"; do
+            cosign sign --yes "$R@$DIGEST"
+            cosign verify "$R@$DIGEST" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" >/dev/null
+            echo "signed $R@$DIGEST"
+          done
+      - name: CycloneDX SBOM for the image and the doppel-hub binary; attest the image SBOM
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          mkdir -p sbom
+          scripts/release/sbom.sh image "$IMAGE@$DIGEST" "sbom/doppel-hub-$VERSION.image.cdx.json"
+          cid=$(docker create "scan/doppel-hub:$VERSION" /doppel-hub) && docker cp "$cid:/doppel-hub" sbom/doppel-hub && docker rm "$cid" >/dev/null
+          scripts/release/sbom.sh binary sbom/doppel-hub "sbom/doppel-hub-$VERSION.binary.cdx.json"
+          rm sbom/doppel-hub
+          for R in "$IMAGE" "$ALIAS"; do
+            cosign attest --yes --type cyclonedx --predicate "sbom/doppel-hub-$VERSION.image.cdx.json" "$R@$DIGEST"
+            cosign verify-attestation --type cyclonedx "$R@$DIGEST" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" >/dev/null
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom/
+          if-no-files-found: error
+
+  provenance:
+    # SLSA v1 build provenance from the slsa-github-generator reusable workflow
+    # (it must be referenced by tag, not by commit SHA; the generator verifies itself).
+    needs: [guard, build]
+    permissions:
+      actions: read
+      id-token: write
+      packages: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.guard.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+    secrets:
+      registry-username: ${{ github.actor }}
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   release:
-    needs: [guard, build]
+    needs: [guard, build, provenance]
     runs-on: ubuntu-24.04
     permissions:
       contents: read    # the release is created in the releases repository with the App token
     env:
       VERSION: ${{ needs.guard.outputs.version }}
       IMAGE: ${{ needs.guard.outputs.image }}
+      ALIAS: ${{ needs.guard.outputs.alias }}
       DIGEST: ${{ needs.build.outputs.digest }}
       IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/publish-hub.yml@${{ github.ref }}
     steps:
@@ -149,6 +203,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: sbom
       - id: releases-token
         name: token for the public releases repository (GitHub App, contents:write on that repository only)
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -173,9 +231,13 @@ jobs:
             --certificate-identity $IDENTITY \\
             --certificate-oidc-issuer $ISSUER
           \`\`\`
+          Alias (same digest, same signature): \`$ALIAS:$VERSION\` (deprecated; removed after one major version).
+          CycloneDX SBOMs (image and binary) are attached to this release and attested on the image
+          (\`cosign verify-attestation --type cyclonedx\`); SLSA v1 provenance is attached to the image
+          (\`slsa-verifier verify-image $IMAGE@$DIGEST --source-uri github.com/${GITHUB_REPOSITORY} --source-tag $GITHUB_REF_NAME\`).
           Pin the digest in deploy/compose.yaml. Upgrade and rollback: docs/operations.md.
           NOTES
-          scripts/release/publish-release.sh "$GITHUB_REF_NAME" "Hub v$VERSION" notes.md
+          scripts/release/publish-release.sh "$GITHUB_REF_NAME" "Hub v$VERSION" notes.md sbom/*.cdx.json
 
   latest:
     needs: [guard, release]
@@ -188,6 +250,7 @@ jobs:
       packages: write
     env:
       IMAGE: ${{ needs.guard.outputs.image }}
+      ALIAS: ${{ needs.guard.outputs.alias }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -208,4 +271,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: move :latest to the highest verified release
-        run: scripts/release/hub-latest.sh "$IMAGE" "$GITHUB_REPOSITORY"
+        run: |
+          scripts/release/hub-latest.sh "$IMAGE" "$GITHUB_REPOSITORY"
+          scripts/release/hub-latest.sh "$ALIAS" "$GITHUB_REPOSITORY"

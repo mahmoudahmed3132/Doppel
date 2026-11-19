@@ -9,10 +9,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/mahmoudahmed3132/Doppel/sdk/go/envcompat"
 	"github.com/mahmoudahmed3132/Doppel/sdk/go/sensor"
 )
 
@@ -29,7 +31,7 @@ var spec = sensor.Spec{
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "init" {
-		os.Exit(runInit(os.Getenv, os.Stderr))
+		os.Exit(runInit(envcompat.OS(func(m string) { fmt.Fprintln(os.Stderr, "warning: "+m) }), os.Stderr))
 	}
 	sensor.Main(spec)
 }
