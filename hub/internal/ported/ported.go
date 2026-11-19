@@ -194,3 +194,22 @@ type Projection interface {
 	Name() string
 	Build(ctx context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error)
 }
+
+type windowDaysKey struct{}
+
+// WithWindowDays attaches the Hub's projection window length (in days) to ctx
+// so projections can report the window without adding "days" to pass-through
+// query parameters.
+func WithWindowDays(ctx context.Context, days int) context.Context {
+	return context.WithValue(ctx, windowDaysKey{}, days)
+}
+
+// WindowDays returns the Hub's projection window length in days from ctx, or 0
+// when not set.
+func WindowDays(ctx context.Context) int {
+	if ctx == nil {
+		return 0
+	}
+	days, _ := ctx.Value(windowDaysKey{}).(int)
+	return days
+}

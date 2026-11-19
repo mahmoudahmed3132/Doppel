@@ -454,7 +454,7 @@ func serve(log *slog.Logger) error {
 		StartedAt: startedAt, Development: cfg.Development, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin,
 		// Merged modules: ATT&CK mapper and projections (MERGE-INVENTORY.md).
 		Attack:      attack.Mapper{},
-		Projections: installedProjections(geoSvc),
+		Projections: installedProjections(geoSvc, db, honeytokens, beacons),
 	}).Register(admin)
 	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, Beacons: beacons, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
@@ -541,10 +541,16 @@ func purgeSessions(ctx context.Context, a *auth.Service, log *slog.Logger) {
 }
 
 // installedProjections lists the installed analytics projections by name (Q56).
-func installedProjections(geo *geoip.Service) map[string]ported.Projection {
+func installedProjections(geo *geoip.Service, fleet projections.FleetReader, honeytokens projections.HoneytokenLister, beacons projections.BeaconLister) map[string]ported.Projection {
 	out := map[string]ported.Projection{}
-	for _, p := range []ported.Projection{attack.MatrixProjection{}, projections.Sources{}, projections.GeoMap{GeoIP: geo},
-		projections.AttackPath{}, projections.Report{}} {
+	for _, p := range []ported.Projection{
+		projections.NewInsights(fleet, honeytokens, beacons),
+		attack.MatrixProjection{},
+		projections.Sources{},
+		projections.GeoMap{GeoIP: geo},
+		projections.AttackPath{},
+		projections.Report{},
+	} {
 		out[p.Name()] = p
 	}
 	return out
