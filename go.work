@@ -11,6 +11,7 @@ use (
 	./sensors/icmp-canary
 	./sensors/identity-decoy
 	./sensors/network-scan-detector
+	./sensors/network-service-decoy
 	./sensors/remote-access-decoy
 	./sensors/tcp-tarpit
 	./sensors/template
