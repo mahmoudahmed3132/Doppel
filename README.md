@@ -73,6 +73,7 @@ All sensors also support Hub-raised `honeytoken_used` (critical) correlation whe
 | `doppel` CLI | Native (`doppel-linux-{amd64,arm64}`) | Native (`doppel-darwin-{amd64,arm64}`); `discover` uses `lsof`/`ps` instead of `/proc` | — |
 | Decoy sensors | Containers or native binaries | Containers via Docker Desktop, or native binaries (demo) | Yes (`linux/amd64` images) |
 | Kill-chain demo | `./scripts/demo/run-demo.sh` | `./scripts/demo/run-demo.sh` | `make demo-docker` |
+| Real-Docker end-to-end (Hub + CLI + sensor containers) | `./scripts/e2e/real-docker.sh` (passwordless sudo) | `./scripts/e2e/real-docker.sh` (Docker Desktop, no sudo) | — |
 
 macOS caveats:
 - **Sensors run in Docker Desktop's Linux VM.** Decoys use host networking, so enable *Settings → Resources → Network → Enable host networking* (Docker Desktop 4.34+). Images are `linux/amd64`; on Apple Silicon they run under Rosetta and the CLI needs `TS_ALLOW_NON_AMD64=true`.

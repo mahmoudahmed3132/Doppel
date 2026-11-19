@@ -178,18 +178,21 @@ NODE_ID=$(echo "$node_resp" | jq -r .node.id)
 NODE_KEY=$(echo "$node_resp" | jq -r .node_key)
 [ -n "$NODE_ID" ] && [ "$NODE_ID" != "null" ] || fail "Create node failed: $node_resp"
 
+# Register each decoy at the version its manifest declares.
+ver() { jq -r .version "$ROOT/sensors/$1/manifest.json"; }
+
 add_sensor() {
 	local resp
 	resp=$(api POST "/nodes/$NODE_ID/sensors" -d "$1")
 	echo "$resp" | jq -e '.sensor.id' >/dev/null || fail "Register sensor failed: $resp"
 }
 
-add_sensor "{\"catalogue_name\":\"tcp-tarpit\",\"version\":\"1.0.0\",\"config\":{\"TS_PORTS\":\"${DEMO_TARPIT_PORTS}\",\"TS_MODE\":\"close\",\"TS_EVENT_COOLDOWN_SEC\":\"0\"}}"
-add_sensor "{\"catalogue_name\":\"remote-access-decoy\",\"version\":\"1.0.0\",\"config\":{\"TS_ENABLE_SSH\":\"true\",\"TS_SSH_PORT\":\"${DEMO_SSH_PORT}\",\"TS_ENABLE_TELNET\":\"false\",\"TS_ENABLE_FTP\":\"false\",\"TS_EVENT_COOLDOWN_SEC\":\"0\"}}"
-add_sensor "{\"catalogue_name\":\"database-decoy\",\"version\":\"1.0.0\",\"config\":{\"TS_ENABLE_POSTGRES\":\"true\",\"TS_POSTGRES_PORT\":\"${DEMO_POSTGRES_PORT}\",\"TS_ENABLE_MYSQL\":\"false\",\"TS_ENABLE_MSSQL\":\"false\",\"TS_EVENT_COOLDOWN_SEC\":\"0\"}}"
-add_sensor "{\"catalogue_name\":\"web-router-decoy\",\"version\":\"1.0.0\",\"config\":{\"TS_PORT\":\"${DEMO_WEB_PORT}\",\"TS_SKIN\":\"router\",\"TS_LOGIN_COOLDOWN_SEC\":\"0\",\"TS_PROBE_COOLDOWN_SEC\":\"0\"}}"
-add_sensor "{\"catalogue_name\":\"file-canary\",\"version\":\"1.0.0\",\"config\":{\"TS_LURES\":\"$W/lures/prod-db.env,$W/lures/vpn-creds.txt\",\"TS_ACCESS_ALERTS\":\"true\",\"TS_ACCESS_COOLDOWN_SEC\":\"0\",\"TS_TAMPER_COOLDOWN_SEC\":\"0\"}}"
-add_sensor "{\"catalogue_name\":\"token-receiver\",\"version\":\"1.0.0\",\"config\":{\"TS_BEACON_DOMAIN\":\"beacon.demo.local\",\"TS_ANSWER_IPV4\":\"127.0.0.1\",\"TS_DNS_PORT\":\"${DEMO_BEACON_DNS_PORT}\",\"TS_HTTP_PORT\":\"${DEMO_BEACON_HTTP_PORT}\",\"TS_ALERT_COOLDOWN_SEC\":\"0\"}}"
+add_sensor "{\"catalogue_name\":\"tcp-tarpit\",\"version\":\"$(ver tcp-tarpit)\",\"config\":{\"TS_PORTS\":\"${DEMO_TARPIT_PORTS}\",\"TS_MODE\":\"close\",\"TS_EVENT_COOLDOWN_SEC\":\"0\"}}"
+add_sensor "{\"catalogue_name\":\"remote-access-decoy\",\"version\":\"$(ver remote-access-decoy)\",\"config\":{\"TS_ENABLE_SSH\":\"true\",\"TS_SSH_PORT\":\"${DEMO_SSH_PORT}\",\"TS_ENABLE_TELNET\":\"false\",\"TS_ENABLE_FTP\":\"false\",\"TS_EVENT_COOLDOWN_SEC\":\"0\"}}"
+add_sensor "{\"catalogue_name\":\"database-decoy\",\"version\":\"$(ver database-decoy)\",\"config\":{\"TS_ENABLE_POSTGRES\":\"true\",\"TS_POSTGRES_PORT\":\"${DEMO_POSTGRES_PORT}\",\"TS_ENABLE_MYSQL\":\"false\",\"TS_ENABLE_MSSQL\":\"false\",\"TS_EVENT_COOLDOWN_SEC\":\"0\"}}"
+add_sensor "{\"catalogue_name\":\"web-router-decoy\",\"version\":\"$(ver web-router-decoy)\",\"config\":{\"TS_PORT\":\"${DEMO_WEB_PORT}\",\"TS_SKIN\":\"router\",\"TS_LOGIN_COOLDOWN_SEC\":\"0\",\"TS_PROBE_COOLDOWN_SEC\":\"0\"}}"
+add_sensor "{\"catalogue_name\":\"file-canary\",\"version\":\"$(ver file-canary)\",\"config\":{\"TS_LURES\":\"$W/lures/prod-db.env,$W/lures/vpn-creds.txt\",\"TS_ACCESS_ALERTS\":\"true\",\"TS_ACCESS_COOLDOWN_SEC\":\"0\",\"TS_TAMPER_COOLDOWN_SEC\":\"0\"}}"
+add_sensor "{\"catalogue_name\":\"token-receiver\",\"version\":\"$(ver token-receiver)\",\"config\":{\"TS_BEACON_DOMAIN\":\"beacon.demo.local\",\"TS_ANSWER_IPV4\":\"127.0.0.1\",\"TS_DNS_PORT\":\"${DEMO_BEACON_DNS_PORT}\",\"TS_HTTP_PORT\":\"${DEMO_BEACON_HTTP_PORT}\",\"TS_ALERT_COOLDOWN_SEC\":\"0\"}}"
 
 # Fetch Hub-rendered compose so every sensor receives exact Hub-derived keys
 # (TS_CAPTURE_KEY, TS_HONEYTOKEN, TS_BEACON_KEY, TS_SENSOR_ID, TS_CONFIG_REVISION).
