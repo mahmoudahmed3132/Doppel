@@ -20,6 +20,7 @@ const (
 	CodeTooLarge     = "body_too_large"
 	CodeUnauthorized = "unauthorized"
 	CodeRateLimited  = "rate_limited"
+	CodeOverloaded   = "overloaded"
 	CodeNotFound     = "not_found"
 	CodeInternal     = "internal_error"
 	CodeInvalid      = "invalid_request"

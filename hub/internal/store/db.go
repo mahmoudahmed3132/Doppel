@@ -2,6 +2,12 @@
 
 // Package store persists Hub state in a single SQLite file (WAL mode,
 // foreign keys on) through the pure-Go modernc.org/sqlite driver.
+//
+// Durability (F-603, NFR-7): the connection runs with synchronous=FULL, so
+// every committed transaction, including each ingested event, has been
+// fsynced to the WAL before the commit returns. Ingest handlers acknowledge a
+// batch only after every event in it has been committed, so an acknowledged
+// event survives a Hub process kill, an OS crash and a power loss.
 package store
 
 import (
@@ -53,7 +59,10 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 	}
 
 	q := url.Values{}
-	for _, p := range []string{"foreign_keys(1)", "journal_mode(WAL)", "busy_timeout(10000)", "synchronous(NORMAL)", "secure_delete(1)"} {
+	// synchronous(FULL): fsync the WAL on every commit. NORMAL (the WAL
+	// default) can lose the last commits on an OS crash or power loss, which
+	// would drop events the Hub has already acknowledged (F-603).
+	for _, p := range []string{"foreign_keys(1)", "journal_mode(WAL)", "busy_timeout(10000)", "synchronous(FULL)", "secure_delete(1)"} {
 		q.Add("_pragma", p)
 	}
 	q.Set("_txlock", "immediate")

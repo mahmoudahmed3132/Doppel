@@ -183,6 +183,11 @@ CREATE TABLE sessions (
 	enrol_only   INTEGER NOT NULL DEFAULT 0
 );
 `},
+	// v5: ingest durability and backpressure (F-603). Cumulative count of
+	// events a sensor's SDK reported as lost (heartbeat dropped_events).
+	{Version: 5, SQL: `
+ALTER TABLE sensors ADD COLUMN dropped_events INTEGER NOT NULL DEFAULT 0;
+`},
 }
 
 // SchemaVersion is the schema version this build migrates to.

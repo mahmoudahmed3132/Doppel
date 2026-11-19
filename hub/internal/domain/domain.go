@@ -142,7 +142,10 @@ type Sensor struct {
 	StoppedAt       *time.Time        `json:"-"`
 	OutageAlertedAt *time.Time        `json:"-"`
 	SDKVersion      string            `json:"sdk_version"`
-	CreatedAt       time.Time         `json:"created_at"`
+	// DroppedEvents is the cumulative count of events the sensor's SDK
+	// reported as lost (queue overflow or undeliverable batches).
+	DroppedEvents int64     `json:"dropped_events"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // ErrNotFound is returned by stores when a record does not exist.

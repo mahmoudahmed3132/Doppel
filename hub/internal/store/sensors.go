@@ -7,13 +7,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
 const sensorCols = `node_id, id, catalogue_name, version, config, silenced, status, status_changed_at,
-	last_heartbeat_at, last_activity_at, ever_online, stopped_at, outage_alerted_at, sdk_version, created_at`
+	last_heartbeat_at, last_activity_at, ever_online, stopped_at, outage_alerted_at, sdk_version, created_at, dropped_events`
 
 func scanSensor(row interface{ Scan(...any) error }) (*domain.Sensor, error) {
 	var (
@@ -24,7 +25,7 @@ func scanSensor(row interface{ Scan(...any) error }) (*domain.Sensor, error) {
 		created                                 int64
 	)
 	err := row.Scan(&s.NodeID, &s.ID, &s.CatalogueName, &s.Version, &cfg, &silenced, &status, &changed,
-		&hb, &activity, &everOnline, &stopped, &alerted, &s.SDKVersion, &created)
+		&hb, &activity, &everOnline, &stopped, &alerted, &s.SDKVersion, &created, &s.DroppedEvents)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound
@@ -130,20 +131,28 @@ type SensorLiveness struct {
 	StoppedAt       *time.Time
 	OutageAlertedAt *time.Time
 	SDKVersion      string
+	// DroppedDelta is added to the sensor's cumulative dropped_events
+	// (saturating at MaxInt64). Negative values are ignored.
+	DroppedDelta int64
 }
 
 // SaveSensorLiveness writes liveness state; when StatusChanged a history
 // row is appended.
 func (db *DB) SaveSensorLiveness(ctx context.Context, nodeID, id string, l SensorLiveness, at time.Time) error {
+	// Saturating add: a node-supplied count must never overflow the column
+	// into a REAL, which would break every later read of the sensor.
+	delta := max(l.DroppedDelta, 0)
 	return db.withTx(ctx, func(tx *sql.Tx) error {
 		err := affectedOne(tx.ExecContext(ctx, `UPDATE sensors SET
 			status = ?,
 			status_changed_at = CASE WHEN ? THEN ? ELSE status_changed_at END,
 			last_heartbeat_at = ?, ever_online = ?, stopped_at = ?, outage_alerted_at = ?,
-			sdk_version = CASE WHEN ? = '' THEN sdk_version ELSE ? END
+			sdk_version = CASE WHEN ? = '' THEN sdk_version ELSE ? END,
+			dropped_events = CASE WHEN dropped_events > ? - ? THEN ? ELSE dropped_events + ? END
 			WHERE node_id = ? AND id = ?`,
 			string(l.Status), l.StatusChanged, ms(at), nullMS(l.LastHeartbeatAt), boolInt(l.EverOnline),
-			nullMS(l.StoppedAt), nullMS(l.OutageAlertedAt), l.SDKVersion, l.SDKVersion, nodeID, id))
+			nullMS(l.StoppedAt), nullMS(l.OutageAlertedAt), l.SDKVersion, l.SDKVersion,
+			int64(math.MaxInt64), delta, int64(math.MaxInt64), delta, nodeID, id))
 		if err != nil || !l.StatusChanged {
 			return err
 		}

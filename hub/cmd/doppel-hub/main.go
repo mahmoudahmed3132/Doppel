@@ -488,14 +488,15 @@ func serve(log *slog.Logger) error {
 	}
 	mux.Handle("/", ui)
 	ingestAPI := &httpapi.Ingest{
-		Auth:     keys,
-		Limiter:  ratelimit.NewKeyed(50, 200),
-		Store:    db,
-		Pipeline: pipe,
-		Liveness: live,
-		Version:  httpapi.Version{Product: "truesignal-hub", Version: Version, Contract: contractVersion},
-		Log:      log,
-		Now:      time.Now,
+		Auth:      keys,
+		Limiter:   ratelimit.NewKeyed(50, 200),
+		Admission: ratelimit.NewGate(httpapi.IngestMaxInFlight, httpapi.IngestAdmitWait),
+		Store:     db,
+		Pipeline:  pipe,
+		Liveness:  live,
+		Version:   httpapi.Version{Product: "truesignal-hub", Version: Version, Contract: contractVersion},
+		Log:       log,
+		Now:       time.Now,
 	}
 	ingestAPI.Register(mux)
 	(&httpapi.NodeAPI{Ingest: ingestAPI, Fleet: fleetSvc, Store: db, Raiser: pipe, HubMajor: 3}).Register(mux)

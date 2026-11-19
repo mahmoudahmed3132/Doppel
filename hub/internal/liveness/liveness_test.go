@@ -61,7 +61,7 @@ func status(t *testing.T, db *store.DB) domain.SensorStatus {
 
 func TestFirstHeartbeatIsNotRecovery(t *testing.T) {
 	s, r, _, db := setup(t)
-	if err := s.Heartbeat(context.Background(), "node-00000001", "ts-sensor-a", "rev_1", "3.0.0"); err != nil {
+	if err := s.Heartbeat(context.Background(), "node-00000001", "ts-sensor-a", "rev_1", "3.0.0", 0); err != nil {
 		t.Fatal(err)
 	}
 	if status(t, db) != domain.StatusOnline || len(r.events) != 0 {
@@ -72,7 +72,7 @@ func TestFirstHeartbeatIsNotRecovery(t *testing.T) {
 func TestTimeoutAlertsOnceThenRecovers(t *testing.T) {
 	s, r, c, db := setup(t)
 	ctx := context.Background()
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0", 0)
 
 	c.advance(59 * time.Second)
 	s.Sweep(ctx)
@@ -93,7 +93,7 @@ func TestTimeoutAlertsOnceThenRecovers(t *testing.T) {
 		t.Fatal("not offline")
 	}
 
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_2", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_2", "3.0.0", 0)
 	if len(r.events) != 2 || r.events[1].trigger != domain.TriggerSensorRecovered || r.events[1].details["config_revision"] != "rev_2" {
 		t.Fatalf("recovery %+v", r.events)
 	}
@@ -102,7 +102,7 @@ func TestTimeoutAlertsOnceThenRecovers(t *testing.T) {
 func TestEventsCountAsActivity(t *testing.T) {
 	s, r, c, db := setup(t)
 	ctx := context.Background()
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0", 0)
 	c.advance(50 * time.Second)
 	db.TouchSensorActivity(ctx, "node-00000001", "ts-sensor-a", c.t)
 	c.advance(50 * time.Second)
@@ -115,7 +115,7 @@ func TestEventsCountAsActivity(t *testing.T) {
 func TestStopThenEscalation(t *testing.T) {
 	s, r, c, db := setup(t)
 	ctx := context.Background()
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0", 0)
 	if err := s.Stopped(ctx, "node-00000001", "ts-sensor-a", "received SIGTERM"); err != nil {
 		t.Fatal(err)
 	}
@@ -139,12 +139,12 @@ func TestStopThenEscalation(t *testing.T) {
 func TestStopThenQuickRestartNoEscalation(t *testing.T) {
 	s, r, c, _ := setup(t)
 	ctx := context.Background()
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0", 0)
 	s.Stopped(ctx, "node-00000001", "ts-sensor-a", "upgrade")
 	c.advance(20 * time.Second)
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_2", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_2", "3.0.0", 0)
 	c.advance(10 * time.Minute)
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_2", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_2", "3.0.0", 0)
 	s.Sweep(ctx)
 	if len(r.events) != 2 || r.events[1].trigger != domain.TriggerSensorRecovered {
 		t.Fatalf("%+v", r.events)
@@ -154,7 +154,7 @@ func TestStopThenQuickRestartNoEscalation(t *testing.T) {
 func TestRestartDoesNotRealertOldOutages(t *testing.T) {
 	s, r, c, db := setup(t)
 	ctx := context.Background()
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0", 0)
 	c.advance(2 * time.Minute)
 	s.Sweep(ctx) // alerted once
 	if len(r.events) != 1 {
@@ -174,7 +174,7 @@ func TestRestartDoesNotRealertOldOutages(t *testing.T) {
 func TestRestartGraceAndWindow(t *testing.T) {
 	s, r, c, db := setup(t)
 	ctx := context.Background()
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0")
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0", 0)
 
 	// Hub was down 10 minutes; DB still says online. Grace from start.
 	c.advance(10 * time.Minute)
@@ -191,7 +191,7 @@ func TestRestartGraceAndWindow(t *testing.T) {
 	}
 
 	// A sensor silent for > 24 h before restart goes offline without alert.
-	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0") // recovered (event 2)
+	s.Heartbeat(ctx, "node-00000001", "ts-sensor-a", "rev_1", "3.0.0", 0) // recovered (event 2)
 	c.advance(25 * time.Hour)
 	s3 := &Service{Store: db, Raiser: r, Log: s.Log, Now: c.now, StartedAt: c.t}
 	c.advance(2 * time.Minute)

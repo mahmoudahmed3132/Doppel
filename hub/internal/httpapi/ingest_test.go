@@ -34,6 +34,7 @@ type hubFixture struct {
 	keyB string
 	lim  *ratelimit.Keyed
 	auth *nodekey.Authenticator
+	h    *Ingest
 }
 
 func newHub(t *testing.T, rate float64, burst int) *hubFixture {
@@ -64,7 +65,7 @@ func newHub(t *testing.T, rate float64, burst int) *hubFixture {
 	h.Register(mux)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return &hubFixture{srv: srv, db: db, keyA: keyA, keyB: keyB, lim: lim, auth: auth}
+	return &hubFixture{srv: srv, db: db, keyA: keyA, keyB: keyB, lim: lim, auth: auth, h: h}
 }
 
 func (f *hubFixture) post(t *testing.T, path, key, body string) (int, map[string]any, http.Header) {
@@ -204,6 +205,38 @@ func TestRateLimit(t *testing.T) {
 	}
 }
 
+// TestEventsOverloaded: when every ingest slot is busy past the admission
+// wait, a batch is refused with 429 overloaded and Retry-After, nothing of
+// it is stored, and heartbeats are not gated (liveness must not flap under
+// event load). The batch is accepted once a slot frees (F-603).
+func TestEventsOverloaded(t *testing.T) {
+	f := newHub(t, 50, 200)
+	f.h.Admission = ratelimit.NewGate(1, 0)
+	hold, ok := f.h.Admission.Enter(context.Background())
+	if !ok {
+		t.Fatal("could not take the only slot")
+	}
+	batch := `{"events":[` + evJSON("ts-sensor-demo", "ssh_login_attempt", "") + `]}`
+	code, out, hdr := f.post(t, "/v3/ingest/events", f.keyA, batch)
+	if code != 429 || out["error"] != CodeOverloaded || hdr.Get("Retry-After") != "1" {
+		t.Fatalf("%d %v %v", code, out, hdr)
+	}
+	if ev, _ := f.db.Events(context.Background(), store.EventFilter{}); len(ev) != 0 {
+		t.Fatalf("refused batch stored %d events", len(ev))
+	}
+	hb := `{"sensor_id":"ts-sensor-demo","config_revision":"rev_00000000","sdk_version":"3.0.0"}`
+	if code, out, _ := f.post(t, "/v3/ingest/heartbeats", f.keyA, hb); code != 200 {
+		t.Fatalf("heartbeat gated by event admission: %d %v", code, out)
+	}
+	hold()
+	if code, out, _ := f.post(t, "/v3/ingest/events", f.keyA, batch); code != 200 || out["accepted"] != 1.0 {
+		t.Fatalf("retry after overload: %d %v", code, out)
+	}
+	if f.h.Admission.Refused() != 1 || f.h.Admission.InFlight() != 0 {
+		t.Fatalf("refused %d in-flight %d", f.h.Admission.Refused(), f.h.Admission.InFlight())
+	}
+}
+
 func TestHeartbeatAndStopping(t *testing.T) {
 	f := newHub(t, 50, 200)
 	ctx := context.Background()
@@ -212,8 +245,18 @@ func TestHeartbeatAndStopping(t *testing.T) {
 		t.Fatalf("%d %v", code, out)
 	}
 	s, _ := f.db.Sensor(ctx, "node-0000000a", "ts-sensor-demo")
-	if s.Status != domain.StatusOnline || s.SDKVersion != "3.0.0" {
+	if s.Status != domain.StatusOnline || s.SDKVersion != "3.0.0" || s.DroppedEvents != 3 {
 		t.Fatalf("%+v", s)
+	}
+	// dropped_events is a delta since the last acknowledged heartbeat; the
+	// Hub keeps the cumulative count (F-603). Absent means zero.
+	f.post(t, "/v3/ingest/heartbeats", f.keyA, `{"sensor_id":"ts-sensor-demo","config_revision":"rev_00000000","sdk_version":"3.0.0","dropped_events":4}`)
+	f.post(t, "/v3/ingest/heartbeats", f.keyA, `{"sensor_id":"ts-sensor-demo","config_revision":"rev_00000000","sdk_version":"3.0.0"}`)
+	if s, _ = f.db.Sensor(ctx, "node-0000000a", "ts-sensor-demo"); s.DroppedEvents != 7 {
+		t.Fatalf("cumulative dropped_events = %d, want 7", s.DroppedEvents)
+	}
+	if code, out, _ := f.post(t, "/v3/ingest/heartbeats", f.keyA, `{"sensor_id":"ts-sensor-demo","config_revision":"","sdk_version":"","dropped_events":-1}`); code != 400 {
+		t.Fatalf("negative dropped_events accepted: %d %v", code, out)
 	}
 	n, _ := f.db.Node(ctx, "node-0000000a")
 	if n.LastSeenAt == nil {
