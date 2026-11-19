@@ -36,13 +36,12 @@ func main() {
 }
 
 type config struct {
-	zone      zone
-	key       string
-	proxies   []*net.IPNet
-	cooldown  time.Duration
-	dnsPort   int
-	httpPort  int // 0: HTTP off
-	enableDNS bool
+	zone     zone
+	key      string
+	proxies  []*net.IPNet
+	cooldown time.Duration
+	dnsPort  int
+	httpPort int // 0: HTTP off
 }
 
 func setting(r sensor.Reporter, k, def string) string {

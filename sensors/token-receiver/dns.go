@@ -186,16 +186,6 @@ func (z zone) inZone(name string) ([]string, bool) {
 	return strings.Split(strings.TrimSuffix(name, "."+z.domain), "."), true
 }
 
-func (z zone) isNS(name string) bool {
-	name = strings.ToLower(strings.TrimSuffix(name, "."))
-	for _, n := range z.ns {
-		if n == name {
-			return true
-		}
-	}
-	return false
-}
-
 // handleDNS answers one query from src and reports a beacon if the name
 // carries one. transport is "udp" or "tcp".
 func (r *receiver) handleDNS(p []byte, src, transport string) []byte {

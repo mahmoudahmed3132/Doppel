@@ -16,16 +16,14 @@ type Honeytoken struct {
 	Secret   string `json:"secret"`
 }
 
-// LureGenerator is the seam for the PORTED lure-content module (§12): it
-// produces realistic content for a path, embedding the honeytoken where
-// the content type supports it, and classifies paths.
+// LureGenerator produces realistic content for a path, embedding the
+// honeytoken where the content type supports it, and classifies paths.
 type LureGenerator interface {
 	Content(path string, ht Honeytoken) (content []byte, category string, err error)
 	Category(path string) string
 }
 
-// stubLures is a deliberately plain stand-in until the PORTED module is
-// imported. Its content is NOT realistic enough for production lures.
+// stubLures is the plain generator used by tests.
 type stubLures struct{}
 
 func (stubLures) Category(path string) string {
