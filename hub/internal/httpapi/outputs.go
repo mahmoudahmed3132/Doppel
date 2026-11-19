@@ -17,13 +17,12 @@ import (
 // Outputs serves SIEM, webhook and armed-state settings. Secrets (SIEM
 // token, webhook URL) are write-only: responses report only "*_set".
 type Outputs struct {
-	SIEM     *siem.Service
-	Store    siem.SettingsStore
-	Webhook  *webhook.Notifier
-	Network  Network
-	Log      *slog.Logger
-	Now      func() time.Time
-	CABundle string
+	SIEM    *siem.Service
+	Store   siem.SettingsStore
+	Webhook *webhook.Notifier
+	Network Network
+	Log     *slog.Logger
+	Now     func() time.Time
 }
 
 const (

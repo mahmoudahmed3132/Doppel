@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -53,6 +52,3 @@ func Token(n int) string { return base64.RawURLEncoding.EncodeToString(random(n)
 
 // Hex returns n random bytes hex-encoded.
 func Hex(n int) string { return hex.EncodeToString(random(n)) }
-
-// Short returns a prefixed short random id, e.g. Short("ht") = "ht_1a2b3c4d5e6f".
-func Short(prefix string) string { return fmt.Sprintf("%s_%s", prefix, Hex(6)) }

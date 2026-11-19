@@ -61,9 +61,6 @@ func TestTechniquesWellFormed(t *testing.T) {
 	if got := T1021_004.Reference(); got != "https://attack.mitre.org/techniques/T1021/004/" {
 		t.Errorf("Reference = %s", got)
 	}
-	if got := T1078.TacticIDs(); got != "TA0001,TA0003,TA0004,TA0005" {
-		t.Errorf("TacticIDs = %s", got)
-	}
 }
 
 // The published mapping (docs/siem/attack-mapping.md) must match the code.

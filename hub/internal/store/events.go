@@ -147,36 +147,6 @@ func (db *DB) Events(ctx context.Context, f EventFilter) ([]domain.Event, error)
 	return out, rows.Err()
 }
 
-// EachEvent streams matching events newest first (exports, projections)
-// without loading them all at once. Limit is ignored.
-func (db *DB) EachEvent(ctx context.Context, f EventFilter, fn func(*domain.Event) error) error {
-	w, args := f.where()
-	rows, err := db.sql.QueryContext(ctx, `SELECT `+eventCols+` FROM events`+w+` ORDER BY seq DESC`, args...)
-	if err != nil {
-		return err
-	}
-	// Collect first: the single connection must be free for fn's own queries.
-	var all []*domain.Event
-	for rows.Next() {
-		e, err := scanEvent(rows)
-		if err != nil {
-			rows.Close()
-			return err
-		}
-		all = append(all, e)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	for _, e := range all {
-		if err := fn(e); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Event returns one event by sequence number.
 func (db *DB) Event(ctx context.Context, seq int64) (*domain.Event, error) {
 	e, err := scanEvent(db.sql.QueryRowContext(ctx, `SELECT `+eventCols+` FROM events WHERE seq = ?`, seq))

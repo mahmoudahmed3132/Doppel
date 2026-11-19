@@ -127,9 +127,6 @@ func New(o Options) (*Service, error) {
 	}, nil
 }
 
-// Lockout exposes the lockout tracker (tests and other auth surfaces).
-func (s *Service) Lockout() *Lockout { return s.lockout }
-
 // Init prepares first start. With a password override it creates or updates
 // the admin account to that password. Otherwise, when no admin exists and no
 // token override was given, it generates a one-time setup token and returns

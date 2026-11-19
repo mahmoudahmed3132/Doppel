@@ -50,15 +50,3 @@ func (db *DB) CachedManifests(ctx context.Context) ([]CachedManifest, error) {
 	}
 	return out, rows.Err()
 }
-
-// DeleteCachedManifest removes one cached manifest (failed re-verification).
-func (db *DB) DeleteCachedManifest(ctx context.Context, name, version string) error {
-	_, err := db.sql.ExecContext(ctx, `DELETE FROM catalogue_cache WHERE name = ? AND version = ?`, name, version)
-	return err
-}
-
-// DeleteAllCachedManifests empties the cache (factory reset).
-func (db *DB) DeleteAllCachedManifests(ctx context.Context) error {
-	_, err := db.sql.ExecContext(ctx, `DELETE FROM catalogue_cache`)
-	return err
-}
