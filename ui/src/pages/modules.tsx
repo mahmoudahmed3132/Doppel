@@ -1,65 +1,19 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 //
-// Page shells for the PORTED features (§12): honeytokens, beacons, assets,
-// ATT&CK and the analytics projections. When a module is not installed the
-// page says so; when it is, its DTO is rendered generically as text, since
-// the PORTED modules own their data contracts.
-import type { ComponentChildren } from "preact";
+// Honeytokens and Beacons pages, plus re-exports for the dedicated Assets
+// and Analytics pages under ui/src/pages/analytics/.
 import { useState } from "preact/hooks";
-import { enc, get, del, post, put, qs } from "../api";
-import { systemStatus } from "../app";
-import { fmtTime, pretty } from "../format";
-import { useStore } from "../store";
-import { Alert, Button, Card, Confirm, Empty, ErrorBox, Field, Loading, PageHead, Pill, useAction, useAsync } from "../ui";
+import { enc, get, del, post } from "../api";
+import { fmtTime } from "../format";
+import { Button, Card, Confirm, Empty, ErrorBox, Field, Loading, PageHead, Pill, useAction, useAsync } from "../ui";
+import { ModuleMissing } from "./analytics/common";
 
-function ModuleMissing({ name, children }: { name: string; children?: ComponentChildren }) {
-  return (
-    <Card>
-      <div class="module-missing">
-        <h2>{name} module not installed</h2>
-        <p class="muted">This feature is provided by a separately delivered module. The page, API wiring and data flow are in place and activate when the module is installed.</p>
-        {children}
-      </div>
-    </Card>
-  );
-}
-
-// ---- generic DTO rendering --------------------------------------------------
-
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-
-export function DataView({ value, depth = 0 }: { value: unknown; depth?: number }) {
-  if (value === null || value === undefined) return <span class="muted">—</span>;
-  if (typeof value !== "object") return <span class={typeof value === "number" ? "num" : ""}>{String(value)}</span>;
-  if (depth > 3) return <pre class="code small">{pretty(value)}</pre>;
-  if (Array.isArray(value)) {
-    if (!value.length) return <span class="muted">none</span>;
-    if (value.every(isObj)) {
-      const cols = Array.from(new Set(value.slice(0, 200).flatMap((r) => Object.keys(r)))).slice(0, 12);
-      return (
-        <div class="table-wrap">
-          <table class="table table-compact">
-            <thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-            <tbody>
-              {value.slice(0, 500).map((r, i) => (
-                <tr key={i}>{cols.map((c) => <td key={c}><DataView value={(r as Record<string, unknown>)[c]} depth={depth + 1} /></td>)}</tr>
-              ))}
-            </tbody>
-          </table>
-          {value.length > 500 ? <p class="muted">{value.length - 500} more rows not shown.</p> : null}
-        </div>
-      );
-    }
-    return <span>{value.map((v) => (typeof v === "object" ? pretty(v) : String(v))).join(", ")}</span>;
-  }
-  return (
-    <dl class="kv">
-      {Object.entries(value).map(([k, v]) => (
-        <div class="kv-row" key={k}><dt>{k}</dt><dd><DataView value={v} depth={depth + 1} /></dd></div>
-      ))}
-    </dl>
-  );
-}
+export { Assets } from "./assets";
+export { AttackMatrixPage as Attack } from "./analytics/attack-matrix";
+export { AttackPathPage } from "./analytics/attack-path";
+export { GeoMapPage } from "./analytics/geo-map";
+export { ReportPage } from "./analytics/report";
+export { SourcesPage } from "./analytics/sources";
 
 // ---- honeytokens ------------------------------------------------------------
 
@@ -165,113 +119,3 @@ export function Beacons() {
     </div>
   );
 }
-
-// ---- assets -------------------------------------------------------------------
-
-export function Assets() {
-  const data = useAsync(() => get<{ assets: unknown; editable: boolean }>("/assets"), []);
-  const [text, setText] = useState<string | null>(null);
-  const [err, setErr] = useState("");
-  const act = useAction();
-  if (data.error) return <div class="stack-lg"><PageHead title="Assets" /><ErrorBox error={data.error} retry={data.reload} /></div>;
-  if (!data.data) return <Loading />;
-  const current = text ?? pretty(data.data.assets);
-  return (
-    <div class="stack-lg">
-      <PageHead title="Assets" sub="Inventory used to tag event sources with an asset name and criticality." />
-      {!data.data.editable ? (
-        <ModuleMissing name="Asset inventory">
-          <p class="muted">The stored inventory is shown read-only.</p>
-          <pre class="code">{current}</pre>
-        </ModuleMissing>
-      ) : (
-        <Card title="Inventory (JSON)" actions={<Button small variant="primary" busy={act.busy} onClick={async () => {
-          let parsed: unknown;
-          try { parsed = JSON.parse(current); } catch (e) { setErr(`Invalid JSON: ${(e as Error).message}`); return; }
-          setErr("");
-          const r = await act.run(() => put<{ assets: unknown }>("/assets", { assets: parsed }), "Inventory saved");
-          if (r) { setText(pretty(r.assets)); data.reload(); }
-        }}>Save</Button>}>
-          {err ? <Alert kind="error">{err}</Alert> : null}
-          <textarea class="input mono editor" spellcheck={false} aria-label="Asset inventory JSON" value={current}
-            onInput={(e) => setText(e.currentTarget.value)} />
-          <p class="muted">
-            A JSON array of <code>{"{"}"name", "address", "criticality", "owner", "tags"{"}"}</code>. <code>address</code> is an IP
-            or a CIDR range; <code>criticality</code> is low, medium (default), high or critical. At most 5000 assets; the most
-            specific range wins. Validated by the Hub on save.
-          </p>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ---- ATT&CK and projections ------------------------------------------------------
-
-/** Page → PORTED projection name (see QUESTIONS.md Q56). */
-export const PROJECTIONS: Record<string, { name: string; title: string; sub: string; geo?: boolean }> = {
-  "attack-path": { name: "attack_path", title: "Attack path", sub: "Per-source progression across nodes and techniques." },
-  scans: { name: "sources", title: "Scans", sub: "Sources, scan patterns and their activity." },
-  geo: { name: "geo_map", title: "Geo map", sub: "Event sources by location.", geo: true },
-  report: { name: "report", title: "Report", sub: "Periodic summary for stakeholders." },
-};
-
-function useProjection(name: string, days: number, enabled: boolean) {
-  return useAsync(
-    () => (enabled ? get<{ data: unknown }>(`/analytics/projections/${enc(name)}${qs({ days })}`).then((r) => r.data) : Promise.resolve(undefined)),
-    [name, days, enabled],
-  );
-}
-
-function DaysSelect({ days, onChange }: { days: number; onChange: (d: number) => void }) {
-  return (
-    <label class="inline-field">
-      <span>Window</span>
-      <select class="input" value={String(days)} onChange={(e) => onChange(Number(e.currentTarget.value))}>
-        {[1, 7, 30, 90, 365].map((d) => <option key={d} value={d}>{d === 1 ? "24 hours" : `${d} days`}</option>)}
-      </select>
-    </label>
-  );
-}
-
-export function Projection({ page }: { page: keyof typeof PROJECTIONS }) {
-  const p = PROJECTIONS[page];
-  const st = useStore(systemStatus);
-  const [days, setDays] = useState(30);
-  const installed = !!st?.modules.projections.includes(p.name);
-  const data = useProjection(p.name, days, installed);
-  return (
-    <div class="stack-lg">
-      <PageHead title={p.title} sub={p.sub} actions={installed ? <DaysSelect days={days} onChange={setDays} /> : undefined} />
-      {!st ? <Loading /> : !installed ? <ModuleMissing name={p.title} /> : (
-        <Card>
-          {data.error ? <ErrorBox error={data.error} retry={data.reload} /> : data.loading ? <Loading /> : <DataView value={data.data} />}
-          {p.geo ? <p class="credit"><a href="https://db-ip.com" rel="noopener noreferrer" target="_blank">IP Geolocation by DB-IP</a></p> : null}
-        </Card>
-      )}
-    </div>
-  );
-}
-
-export function Attack() {
-  const st = useStore(systemStatus);
-  const [days, setDays] = useState(30);
-  const matrixInstalled = !!st?.modules.projections.includes("attack_matrix");
-  const matrix = useProjection("attack_matrix", days, matrixInstalled);
-  if (!st) return <Loading />;
-  if (!st.modules.attack) return <div class="stack-lg"><PageHead title="ATT&CK" /><ModuleMissing name="ATT&CK mapping" /></div>;
-  return (
-    <div class="stack-lg">
-      <PageHead title="ATT&CK" sub="Techniques observed across the fleet."
-        actions={<>
-          <DaysSelect days={days} onChange={setDays} />
-          <a class="btn btn-sm" href={`/api/v3/analytics/attack/navigator${qs({ days })}`} download>Navigator layer</a>
-        </>} />
-      <Card title="Matrix">
-        {!matrixInstalled ? <p class="muted">The matrix projection is not installed; download the Navigator layer to view it in ATT&amp;CK Navigator.</p>
-          : matrix.error ? <ErrorBox error={matrix.error} /> : matrix.loading ? <Loading /> : <DataView value={matrix.data} />}
-      </Card>
-    </div>
-  );
-}
-

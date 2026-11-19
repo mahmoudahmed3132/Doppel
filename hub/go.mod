@@ -2,7 +2,7 @@ module github.com/mahmoudahmed3132/Doppel/hub
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
