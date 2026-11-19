@@ -24,6 +24,7 @@ uid and effective capability mask at start (`running with privileges`).
 | `web-router-decoy` | 65532 | none | bridge | listens on 8080 in the container; the Hub publishes host port `TS_PORT` (e.g. 80) to it |
 | `token-receiver` | 0 | `NET_BIND_SERVICE` | host | DNS on 53 (UDP+TCP) and web bugs on 80, internet-facing |
 | `remote-access-decoy` | 0 | `NET_BIND_SERVICE` | host | SSH 22, Telnet 23 and FTP 21 (ports below 1024 in host networking) |
+| `database-decoy` | 65532 | none | host | MySQL 3306, PostgreSQL 5432 and MS SQL Server 1433 (all default ports ≥ 1024) |
 | `template` | 65532 | none | host | reference |
 
 ## Triggers
@@ -47,6 +48,12 @@ uid and effective capability mask at start (`running with privileges`).
 | `remote-access-decoy` | `telnet_connection` | medium | `protocol=telnet, dst_port, env_user` (when sent), `suppressed_since_last` |
 | `remote-access-decoy` | `ftp_login` | high | `protocol=ftp, dst_port, username, anonymous, password_hmac`/`password_length`, `suppressed_since_last` |
 | `remote-access-decoy` | `ftp_connection` | medium | `protocol=ftp, dst_port, username` (when `USER` sent without `PASS`), `suppressed_since_last` |
+| `database-decoy` | `mysql_login` | high | `protocol=mysql, dst_port, username, database, auth_plugin, client_name, client_version, program_name, password_supplied, auth_response_hmac`/`auth_response_length`, `suppressed_since_last` |
+| `database-decoy` | `mysql_connection` | medium | `protocol=mysql, dst_port, ssl_requested` (when `SSLRequest` sent), `suppressed_since_last` |
+| `database-decoy` | `postgres_login` | high | `protocol=postgres, dst_port, username, database, application_name, password_hmac`/`password_length`, `suppressed_since_last` |
+| `database-decoy` | `postgres_connection` | medium | `protocol=postgres, dst_port, username, database, application_name, ssl_requested, gss_requested`, `suppressed_since_last` |
+| `database-decoy` | `mssql_login` | high | `protocol=mssql, dst_port, username, hostname, app_name, server_name, library_name, database, password_hmac`/`password_length`, `suppressed_since_last` |
+| `database-decoy` | `mssql_connection` | medium | `protocol=mssql, dst_port, suppressed_since_last` |
 
 ## Honeytoken matching contract (for the PORTED matcher)
 
@@ -97,6 +104,14 @@ the honeytoken secret with the event's node id.
   forwarding exist. The SSH Ed25519 host key is derived deterministically in
   memory from `TS_CAPTURE_KEY` and `TS_SENSOR_ID` (never written to disk).
   Per-protocol `enabled_key` flags ensure disabled protocols do not hold ports.
+* **database-decoy** — emulates MySQL/MariaDB (Protocol 10 handshake,
+  `HandshakeResponse41`, `ERR 1045` / SQLSTATE `28000`), PostgreSQL v3
+  (`SSLRequest`/`GSSENCRequest` → `'N'`, `CancelRequest` silent close,
+  `StartupMessage`, `AuthenticationCleartextPassword`, `ErrorResponse 28P01`)
+  and Microsoft SQL Server / MS-TDS 7.x (`PRELOGIN` with `ENCRYPT_NOT_SUP`,
+  `LOGIN7` with nibble-swap + XOR `0xA5` password de-obfuscation, `ERROR 18456`
+  + `DONE`). Stdlib only; runs unprivileged (`65532:65532`, no capabilities)
+  with per-protocol `enabled_key` flags.
 
 ## Helpers for service decoys (clean specs)
 
