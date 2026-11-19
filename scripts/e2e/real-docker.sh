@@ -8,15 +8,36 @@
 # hardening as rendered (§6.12), fire drill, idempotent re-apply, uninstall.
 # KEEP=1 stops before the uninstall and leaves the POC running (docs/poc.md).
 #
-# Needs: docker with the compose plugin, go, jq, curl, sudo (the CLI runs as
-# root). Development flag used: unsigned manifests (the local registry is not
+# Needs: docker with the compose plugin, go, jq, curl, python3. On Linux the
+# CLI runs as root via passwordless sudo. On macOS (Docker Desktop with host
+# networking enabled) it runs as the invoking user with its config and work
+# dir inside the workspace; Docker Desktop needs no root.
+# Development flag used: unsigned manifests (the local registry is not
 # signed by a release workflow); images are still pinned by digest.
+#
+# Overrides: E2E_HOST_IP (address containers use to reach the Hub),
+# E2E_REG_PORT (local registry port; default 5000, 5055 on macOS where
+# AirPlay Receiver holds 5000).
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 W=$(mktemp -d)
-REG=127.0.0.1:5000
+W=$(cd "$W" && pwd -P)
+OS=$(uname -s)
+if [ "$OS" = Darwin ]; then
+	REG_PORT="${E2E_REG_PORT:-5055}"
+	HOSTIP="${E2E_HOST_IP:-$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)}"
+	# No sudo: the CLI runs as this user against Docker Desktop. Sensor
+	# images are built for the native architecture (arm64 on Apple Silicon).
+	export TS_CONFIG_FILE="$W/doppel/config.json" TS_WORK_DIR="$W/doppel/work" TS_ALLOW_NON_AMD64=true
+	RUN=""
+else
+	REG_PORT="${E2E_REG_PORT:-5000}"
+	HOSTIP="${E2E_HOST_IP:-$(hostname -I | awk '{print $1}')}"
+	RUN="sudo -n"
+fi
+[ -n "$HOSTIP" ] || { echo "E2E FAIL: cannot determine host IP; set E2E_HOST_IP" >&2; exit 1; }
+REG=127.0.0.1:$REG_PORT
 REGISTRY_IMAGE='registry:3.1.2@sha256:d4032d4cc323c1731c707931ecada07a53076eac38e3b61ae57533f170f2c6c3'
-HOSTIP=$(hostname -I | awk '{print $1}')
 HUB="http://$HOSTIP:18080"
 PW='e2e-correct-horse-battery-staple'
 SENSORS="tcp-tarpit template web-router-decoy"
@@ -32,7 +53,7 @@ cleanup() {
 		for c in $(docker ps -aq --filter label=io.truesignal.role=sensor); do echo "--- logs $c"; docker logs --tail 30 "$c" 2>&1 || true; done
 	fi
 	if [ "${KEEP:-0}" = 1 ] && [ "$rc" -eq 0 ]; then exit 0; fi # POC mode: leave everything running
-	sudo -n "$CLI" uninstall --yes >/dev/null 2>&1 || true
+	$RUN "$CLI" uninstall --yes >/dev/null 2>&1 || true
 	[ -f "$W/hub.pid" ] && kill "$(cat "$W/hub.pid")" 2>/dev/null || true
 	docker rm -f ts-e2e-registry >/dev/null 2>&1 || true
 	[ -n "${REGPID:-}" ] && kill "$REGPID" 2>/dev/null || true
@@ -45,7 +66,7 @@ step "build Hub, CLI and registry tool"
 (cd "$ROOT/cli" && CGO_ENABLED=0 go build -o "$CLI" ./cmd/doppel)
 
 step "local image registry; build and push sensor images by digest"
-docker run -d --name ts-e2e-registry -p 127.0.0.1:5000:5000 "$REGISTRY_IMAGE" >/dev/null
+docker run -d --name ts-e2e-registry -p "$REG:5000" "$REGISTRY_IMAGE" >/dev/null
 mkdir -p "$W/reg"
 for n in $SENSORS; do
 	v=$(jq -r .version "$ROOT/sensors/$n/manifest.json")
@@ -90,8 +111,8 @@ add '{"catalogue_name":"template","version":"1.0.0","config":{"TS_TEMPLATE_PORT"
 add '{"catalogue_name":"web-router-decoy","version":"1.0.0","config":{"TS_PORT":"8081"}}'
 
 step "link and apply with the real CLI and docker compose"
-sudo -n env TS_NODE_KEY="$KEY" "$CLI" link "$HUB"
-sudo -n "$CLI" apply
+$RUN env TS_NODE_KEY="$KEY" "$CLI" link "$HUB"
+$RUN "$CLI" apply
 docker ps --filter label=io.truesignal.role=sensor --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
 
 step "rendered hardening holds on the running containers (§6.12)"
@@ -142,7 +163,7 @@ echo "triggers seen: $got"
 [ -z "$missing" ] || fail "events missing:$missing"
 
 step "fire drill reaches the Hub from every sensor"
-sudo -n "$CLI" firedrill
+$RUN "$CLI" firedrill
 for _ in $(seq 30); do
 	d=$(api GET '/events?limit=200&archived=any' | jq '[.events[] | select(.source=="Fire drill") | .sensor_id] | unique | length')
 	[ "$d" -ge 3 ] && break
@@ -151,8 +172,8 @@ done
 [ "$d" -ge 3 ] || fail "fire drill events from $d of 3 sensors"
 
 step "status, idempotent re-apply, applied revision"
-sudo -n "$CLI" status
-sudo -n "$CLI" apply 2>&1 | tee "$W/apply2.txt"
+$RUN "$CLI" status
+$RUN "$CLI" apply 2>&1 | tee "$W/apply2.txt"
 grep -q "nothing to do" "$W/apply2.txt" || fail "second apply was not a no-op"
 api GET "/nodes/$NODE" | jq -e '.node.health.in_sync' >/dev/null || fail "node not in sync after apply"
 
@@ -162,15 +183,15 @@ if [ "${KEEP:-0}" = 1 ]; then
 Admin UI:      $HUB   (password: $PW)
 Decoys:        tcp-tarpit on 2222, template on 9099, web-router-decoy on 8081
 Try:           curl -s -X POST -d 'username=admin&password=x' http://127.0.0.1:8081/login
-               nc -z 127.0.0.1 2222; sudo $CLI firedrill
-Stop:          sudo $CLI uninstall --yes; kill \$(cat $W/hub.pid) $REGPID; docker rm -f ts-e2e-registry
+               nc -z 127.0.0.1 2222; $RUN $CLI firedrill
+Stop:          $RUN $CLI uninstall --yes; kill \$(cat $W/hub.pid) $REGPID; docker rm -f ts-e2e-registry
 Workspace:     $W
 POC
 	exit 0
 fi
 
 step "uninstall"
-sudo -n "$CLI" uninstall --yes
+$RUN "$CLI" uninstall --yes
 [ -z "$(docker ps -aq --filter label=io.truesignal.role=sensor)" ] || fail "containers left after uninstall"
 echo
 echo "E2E PASS: real Docker deployment of $SENSORS"
