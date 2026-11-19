@@ -25,6 +25,7 @@ uid and effective capability mask at start (`running with privileges`).
 | `token-receiver` | 0 | `NET_BIND_SERVICE` | host | DNS on 53 (UDP+TCP) and web bugs on 80, internet-facing |
 | `remote-access-decoy` | 0 | `NET_BIND_SERVICE` | host | SSH 22, Telnet 23 and FTP 21 (ports below 1024 in host networking) |
 | `database-decoy` | 65532 | none | host | MySQL 3306, PostgreSQL 5432 and MS SQL Server 1433 (all default ports ≥ 1024) |
+| `identity-decoy` | 0 | `NET_BIND_SERVICE` | host | LDAP 389 and LDAPS 636 (ports below 1024 in host networking), plus RDP 3389 |
 | `template` | 65532 | none | host | reference |
 
 ## Triggers
@@ -54,6 +55,14 @@ uid and effective capability mask at start (`running with privileges`).
 | `database-decoy` | `postgres_connection` | medium | `protocol=postgres, dst_port, username, database, application_name, ssl_requested, gss_requested`, `suppressed_since_last` |
 | `database-decoy` | `mssql_login` | high | `protocol=mssql, dst_port, username, hostname, app_name, server_name, library_name, database, password_hmac`/`password_length`, `suppressed_since_last` |
 | `database-decoy` | `mssql_connection` | medium | `protocol=mssql, dst_port, suppressed_since_last` |
+| `identity-decoy` | `ldap_login` | high | `protocol=ldap, dst_port, auth` (`simple`, `ntlm`), `bind_dn`, `username`, `domain`, `workstation`, `sasl_mechanism`, `password_hmac`/`password_length` or `ntlm_response_hmac`/`ntlm_response_length`, `suppressed_since_last` |
+| `identity-decoy` | `ldap_query` | medium | `protocol=ldap, dst_port, base_dn, scope, filter`, `suppressed_since_last` |
+| `identity-decoy` | `ldap_connection` | medium | `protocol=ldap, dst_port, suppressed_since_last` |
+| `identity-decoy` | `ldaps_login` | high | `protocol=ldaps, dst_port, auth` (`simple`, `ntlm`), `bind_dn`, `username`, `domain`, `workstation`, `sasl_mechanism`, `password_hmac`/`password_length` or `ntlm_response_hmac`/`ntlm_response_length`, `suppressed_since_last` |
+| `identity-decoy` | `ldaps_query` | medium | `protocol=ldaps, dst_port, base_dn, scope, filter`, `suppressed_since_last` |
+| `identity-decoy` | `ldaps_connection` | medium | `protocol=ldaps, dst_port, suppressed_since_last` |
+| `identity-decoy` | `rdp_login` | high | `protocol=rdp, dst_port, auth=credssp_ntlm, username, domain, workstation, cookie_user, ntlm_challenge, ntlm_response_hmac`/`ntlm_response_length`, `suppressed_since_last` |
+| `identity-decoy` | `rdp_connection` | medium | `protocol=rdp, dst_port, nla_offered, username`/`cookie_user` (when `mstshash=` cookie sent), `suppressed_since_last` |
 
 ## Honeytoken matching contract (for the PORTED matcher)
 
@@ -112,6 +121,16 @@ the honeytoken secret with the event's node id.
   `LOGIN7` with nibble-swap + XOR `0xA5` password de-obfuscation, `ERROR 18456`
   + `DONE`). Stdlib only; runs unprivileged (`65532:65532`, no capabilities)
   with per-protocol `enabled_key` flags.
+* **identity-decoy** — emulates Active Directory LDAP (389), LDAPS (636) and
+  RDP with NLA/CredSSP (3389) using `sdk/go/ber` for all BER/DER parsing and
+  encoding, plus a shared MS-NLMP (NTLM Type 1/2/3 + SPNEGO) engine. Generates
+  a fresh ephemeral self-signed ECDSA P-256 TLS certificate in memory at
+  startup for the persona hostname (never written to disk). LDAP supports
+  simple bind (AD `data 52e` diagnostic), anonymous bind + RootDSE search,
+  SASL/Sicily NTLM, and refuses StartTLS (`unavailable`); RDP negotiates
+  X.224 + `mstshash=` cookie + TLS upgrade + CredSSP `TSRequest` NTLM and
+  fails with `STATUS_LOGON_FAILURE`. Per-protocol `enabled_key` flags ensure
+  disabled protocols do not hold ports.
 
 ## Helpers for service decoys (clean specs)
 
