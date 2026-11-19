@@ -54,6 +54,39 @@ func TestCaptureModes(t *testing.T) {
 	}
 }
 
+func TestDeriveKey(t *testing.T) {
+	k1 := bytes.Repeat([]byte{0x11}, 32)
+	k2 := bytes.Repeat([]byte{0x22}, 32)
+	k1Copy := append([]byte(nil), k1...)
+
+	got1 := DeriveKey(k1, "doppel:ssh-host-key:v1:ts-sensor-a")
+	got1Again := DeriveKey(k1, "doppel:ssh-host-key:v1:ts-sensor-a")
+	gotDiffPurpose := DeriveKey(k1, "doppel:snmp-engine-id:v1:ts-sensor-a")
+	gotDiffKey := DeriveKey(k2, "doppel:ssh-host-key:v1:ts-sensor-a")
+
+	if len(got1) != sha256.Size {
+		t.Fatalf("len(DeriveKey) = %d, want %d", len(got1), sha256.Size)
+	}
+	if !bytes.Equal(got1, got1Again) {
+		t.Fatal("DeriveKey is not deterministic")
+	}
+	if bytes.Equal(got1, gotDiffPurpose) {
+		t.Fatal("DeriveKey did not separate different purposes")
+	}
+	if bytes.Equal(got1, gotDiffKey) {
+		t.Fatal("DeriveKey did not separate different capture keys")
+	}
+	if !bytes.Equal(k1, k1Copy) {
+		t.Fatal("DeriveKey mutated input key")
+	}
+
+	mac := hmac.New(sha256.New, k1)
+	mac.Write([]byte("doppel:ssh-host-key:v1:ts-sensor-a"))
+	if !bytes.Equal(got1, mac.Sum(nil)) {
+		t.Fatal("DeriveKey output does not match HMAC-SHA256")
+	}
+}
+
 func TestSanitize(t *testing.T) {
 	if got := Sanitize("ab\xffcd", 0); got != "ab?cd" {
 		t.Fatalf("got %q", got)

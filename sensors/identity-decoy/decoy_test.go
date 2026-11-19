@@ -154,11 +154,65 @@ func TestLoadSettings(t *testing.T) {
 	if !cfg.EnableLDAP || !cfg.EnableLDAPS || !cfg.EnableRDP {
 		t.Fatalf("expected all 3 protocols enabled by default")
 	}
-	if cfg.Persona.FQDN() != "dc01.corp.local" {
-		t.Fatalf("FQDN = %q, want dc01.corp.local", cfg.Persona.FQDN())
+	// With TS_CAPTURE_KEY present, persona defaults are deterministically derived
+	// per node/sensor instead of static corp.local/DC01.
+	if cfg.Persona.DomainDNS == defaultDomainDNS || cfg.Persona.DomainNetBIOS == defaultDomainNetBIOS {
+		t.Fatalf("expected derived persona defaults when TS_CAPTURE_KEY is set, got %+v", cfg.Persona)
 	}
-	if cfg.Persona.DefaultNamingContext() != "DC=corp,DC=local" {
-		t.Fatalf("DefaultNamingContext = %q", cfg.Persona.DefaultNamingContext())
+	if !strings.HasSuffix(cfg.Persona.DomainDNS, ".local") || len(cfg.Persona.DomainNetBIOS) > 15 {
+		t.Fatalf("derived persona out of expected format: %+v", cfg.Persona)
+	}
+
+	// Deterministic for same key+sensor, distinct for different keys or sensor IDs.
+	cfgSame, err := LoadSettings(newFakeReporter(nil))
+	if err != nil {
+		t.Fatalf("second LoadSettings failed: %v", err)
+	}
+	if cfgSame.Persona != cfg.Persona {
+		t.Fatalf("derived persona not deterministic: %+v vs %+v", cfg.Persona, cfgSame.Persona)
+	}
+	cfgOtherKey, err := LoadSettings(newFakeReporter(map[string]string{
+		"TS_CAPTURE_KEY": strings.Repeat("ff", 32),
+	}))
+	if err != nil {
+		t.Fatalf("other key LoadSettings failed: %v", err)
+	}
+	if cfgOtherKey.Persona == cfg.Persona {
+		t.Fatalf("different capture keys produced identical persona: %+v", cfg.Persona)
+	}
+	cfgOtherSensor, err := LoadSettings(newFakeReporter(map[string]string{
+		"TS_SENSOR_ID": "ts-sensor-identity-2",
+	}))
+	if err != nil {
+		t.Fatalf("other sensor LoadSettings failed: %v", err)
+	}
+	if cfgOtherSensor.Persona == cfg.Persona {
+		t.Fatalf("different sensor IDs produced identical persona: %+v", cfg.Persona)
+	}
+
+	// Explicit overrides take precedence.
+	cfgExplicit, err := LoadSettings(newFakeReporter(map[string]string{
+		"TS_DOMAIN_DNS":     "corp.local",
+		"TS_DOMAIN_NETBIOS": "CORP",
+		"TS_HOSTNAME":       "DC01",
+	}))
+	if err != nil {
+		t.Fatalf("explicit LoadSettings failed: %v", err)
+	}
+	if cfgExplicit.Persona.FQDN() != "dc01.corp.local" || cfgExplicit.Persona.DefaultNamingContext() != "DC=corp,DC=local" {
+		t.Fatalf("explicit override ignored: %+v", cfgExplicit.Persona)
+	}
+
+	// Without a capture key (e.g. plain mode), falls back to static defaults.
+	cfgNoKey, err := LoadSettings(newFakeReporter(map[string]string{
+		"TS_PASSWORD_CAPTURE": "plain",
+		"TS_CAPTURE_KEY":      "",
+	}))
+	if err != nil {
+		t.Fatalf("no-key LoadSettings failed: %v", err)
+	}
+	if cfgNoKey.Persona.FQDN() != "dc01.corp.local" || cfgNoKey.Persona.DomainNetBIOS != "CORP" {
+		t.Fatalf("no-key fallback = %+v, want dc01.corp.local / CORP", cfgNoKey.Persona)
 	}
 
 	// All disabled must fail.
@@ -453,7 +507,7 @@ func TestLDAPSimpleBindAndRootDSEE2E(t *testing.T) {
 		t.Fatalf("write RootDSE search: %v", err)
 	}
 	_, op1, _, _, rawEntry, _ := decodeLDAPResponse(t, conn)
-	if op1 != ldapOpSearchEntry || !strings.Contains(rawEntry, "DC=corp,DC=local") || !strings.Contains(rawEntry, "dc01.corp.local") {
+	if op1 != ldapOpSearchEntry || !strings.Contains(rawEntry, d.cfg.Persona.DefaultNamingContext()) || !strings.Contains(rawEntry, d.cfg.Persona.FQDN()) {
 		t.Fatalf("unexpected RootDSE entry: op=%d", op1)
 	}
 	_, op2, rc2, _, _, _ := decodeLDAPResponse(t, conn)
@@ -611,7 +665,7 @@ func TestLDAPSE2E(t *testing.T) {
 	defer tlsConn.Close()
 
 	certs := tlsConn.ConnectionState().PeerCertificates
-	if len(certs) == 0 || certs[0].Subject.CommonName != "dc01.corp.local" {
+	if len(certs) == 0 || certs[0].Subject.CommonName != d.cfg.Persona.FQDN() {
 		t.Fatalf("unexpected LDAPS cert: %+v", certs)
 	}
 
@@ -691,8 +745,8 @@ func TestRDPNLACredSSPE2E(t *testing.T) {
 	if err := tlsConn.Handshake(); err != nil {
 		t.Fatalf("RDP TLS handshake: %v", err)
 	}
-	if cn := tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName; cn != "dc01.corp.local" {
-		t.Fatalf("RDP TLS cert CN = %q", cn)
+	if cn := tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName; cn != d.cfg.Persona.FQDN() {
+		t.Fatalf("RDP TLS cert CN = %q, want %q", cn, d.cfg.Persona.FQDN())
 	}
 
 	// Send CredSSP TSRequest with SPNEGO NTLM Type 1.
