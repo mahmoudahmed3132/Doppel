@@ -5,9 +5,7 @@ package main
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"errors"
 	"net"
 	"strconv"
@@ -25,16 +23,15 @@ import (
 const sshHostKeyLabelPrefix = "doppel:ssh-host-key:v1:"
 
 // deriveSSHHostKey derives an Ed25519 SSH host key deterministically from the
-// node capture key and sensor ID so the fingerprint is stable across restarts
-// on one node and distinct across nodes, without writing key material to disk.
-// When captureKey is empty (possible only when TS_PASSWORD_CAPTURE is plain or
-// none), an ephemeral Ed25519 key is generated in memory.
+// node capture key and sensor ID via decoy.DeriveKey so the fingerprint is
+// stable across restarts on one node and distinct across nodes, without writing
+// key material to disk. When captureKey is empty (possible only when
+// TS_PASSWORD_CAPTURE is plain or none), an ephemeral Ed25519 key is generated
+// in memory.
 func deriveSSHHostKey(captureKey []byte, sensorID string) (ssh.Signer, error) {
 	var priv ed25519.PrivateKey
 	if len(captureKey) > 0 {
-		mac := hmac.New(sha256.New, captureKey)
-		mac.Write([]byte(sshHostKeyLabelPrefix + sensorID))
-		seed := mac.Sum(nil)
+		seed := decoy.DeriveKey(captureKey, sshHostKeyLabelPrefix+sensorID)
 		priv = ed25519.NewKeyFromSeed(seed)
 	} else {
 		var err error

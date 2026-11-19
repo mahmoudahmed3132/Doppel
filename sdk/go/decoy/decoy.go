@@ -182,6 +182,17 @@ func (c Capture) Secret(prefix, value string) sensor.Fields {
 	}
 }
 
+// DeriveKey deterministically derives a 32-byte key from captureKey and a
+// domain-separated purpose label using HMAC-SHA256. Decoys use it to derive
+// per-node, per-sensor identities (such as SSH host key seeds, SNMPv3 engine
+// IDs, and NTLM persona defaults) so two Doppel nodes never share identical
+// fingerprints without persisting key material to disk.
+func DeriveKey(captureKey []byte, purpose string) []byte {
+	mac := hmac.New(sha256.New, captureKey)
+	mac.Write([]byte(purpose))
+	return mac.Sum(nil)
+}
+
 // Limiter caps how many events one source can raise per window, so a password
 // spray of thousands of attempts cannot flood the Hub and the SIEM. Allow
 // reports whether to emit, and how many events were suppressed since the last

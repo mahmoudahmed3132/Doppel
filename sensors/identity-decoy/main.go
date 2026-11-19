@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -144,6 +145,34 @@ func parseOSBuild(raw string) (OSVersion, error) {
 	return OSVersion{Major: uint8(maj), Minor: uint8(minV), Build: uint16(bld)}, nil
 }
 
+var (
+	personaDomainStems = []string{"corp", "intranet", "ad", "internal", "office", "prod", "campus", "hq"}
+	personaHostPrefix  = []string{"DC", "AD", "IAM", "SRV"}
+)
+
+// deriveDefaultPersona derives deterministic per-node/per-sensor default NTLM
+// domain and computer names from TS_CAPTURE_KEY via decoy.DeriveKey so two
+// Doppel nodes never advertise identical default Active Directory personas.
+// Explicit TS_DOMAIN_DNS, TS_DOMAIN_NETBIOS, or TS_HOSTNAME settings override
+// these defaults; when TS_CAPTURE_KEY is absent, static defaults are used.
+// TLS certificates remain ephemeral per startup (see generateEphemeralTLSConfig).
+func deriveDefaultPersona(r sensor.Reporter) (domainDNS, domainNetBIOS, hostname string) {
+	rawKey, _ := r.Setting(decoy.CaptureKeyKey)
+	key, err := hex.DecodeString(strings.TrimSpace(rawKey))
+	if err != nil || len(key) < 16 {
+		return defaultDomainDNS, defaultDomainNetBIOS, defaultHostname
+	}
+	sensorID, _ := r.Setting("TS_SENSOR_ID")
+	digest := decoy.DeriveKey(key, "doppel:identity-persona:v1:"+sensorID)
+	stem := personaDomainStems[int(digest[0])%len(personaDomainStems)]
+	tag := fmt.Sprintf("%02x%02x", digest[1], digest[2])
+	hostPre := personaHostPrefix[int(digest[3])%len(personaHostPrefix)]
+	hostNum := 1 + int(digest[4])%99
+	return fmt.Sprintf("%s-%s.local", stem, tag),
+		strings.ToUpper(stem + tag),
+		fmt.Sprintf("%s%02d", hostPre, hostNum)
+}
+
 // LoadSettings reads and validates the TS_ configuration.
 func LoadSettings(r sensor.Reporter) (*Settings, error) {
 	s := &Settings{}
@@ -168,19 +197,21 @@ func LoadSettings(r sensor.Reporter) (*Settings, error) {
 		return nil, err
 	}
 
-	if s.Persona.DomainDNS, err = stringSetting(r, "TS_DOMAIN_DNS", defaultDomainDNS, 128); err != nil {
+	defDomainDNS, defDomainNetBIOS, defHostname := deriveDefaultPersona(r)
+
+	if s.Persona.DomainDNS, err = stringSetting(r, "TS_DOMAIN_DNS", defDomainDNS, 128); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(s.Persona.DomainDNS) == "" {
 		return nil, errors.New("TS_DOMAIN_DNS must not be empty")
 	}
-	if s.Persona.DomainNetBIOS, err = stringSetting(r, "TS_DOMAIN_NETBIOS", defaultDomainNetBIOS, 15); err != nil {
+	if s.Persona.DomainNetBIOS, err = stringSetting(r, "TS_DOMAIN_NETBIOS", defDomainNetBIOS, 15); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(s.Persona.DomainNetBIOS) == "" {
 		return nil, errors.New("TS_DOMAIN_NETBIOS must not be empty")
 	}
-	if s.Persona.Hostname, err = stringSetting(r, "TS_HOSTNAME", defaultHostname, 63); err != nil {
+	if s.Persona.Hostname, err = stringSetting(r, "TS_HOSTNAME", defHostname, 63); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(s.Persona.Hostname) == "" {

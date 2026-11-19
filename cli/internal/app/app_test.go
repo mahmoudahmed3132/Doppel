@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/mahmoudahmed3132/Doppel/cli/internal/config"
+	"github.com/mahmoudahmed3132/Doppel/cli/internal/discover"
 )
 
 const key = "tsk_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -267,5 +268,133 @@ func TestStatusJSONAndFiredrill(t *testing.T) {
 	}
 	if strings.Join(kills, ";") != "docker kill --signal SIGUSR1 ts-sensor-a;docker kill --signal SIGUSR1 ts-sensor-b" {
 		t.Fatalf("%v", kills)
+	}
+}
+
+func TestDiscoverPlanJSONAndApply(t *testing.T) {
+	var mu sync.Mutex
+	var registered []map[string]any
+	applied := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v3/session/login":
+			http.SetCookie(w, &http.Cookie{Name: "ts_session", Value: "demo-sess", Path: "/"})
+			io.WriteString(w, `{"ok":true}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v3/session/logout":
+			io.WriteString(w, `{"ok":true}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v3/catalogue":
+			io.WriteString(w, `{"ok":true,"sensors":[
+				{"name":"remote-access-decoy","latest":"1.0.0"},
+				{"name":"database-decoy","latest":"1.0.0"}
+			]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v3/catalogue/remote-access-decoy/1.0.0":
+			io.WriteString(w, `{"ok":true,"manifest":{
+				"name":"remote-access-decoy","display_name":"Remote access decoy","version":"1.0.0",
+				"runtime":{"listen_ports":[{"config_key":"TS_SSH_PORT","protocol":"tcp","enabled_key":"TS_ENABLE_SSH"}]},
+				"config":[
+					{"name":"TS_ENABLE_SSH","type":"bool","default":"true"},
+					{"name":"TS_SSH_PORT","type":"port","default":"22"}
+				],
+				"discovery":{"process_names":["sshd"],"listening_ports":[22],"defaults":{"TS_SSH_PORT":"free_port(2222)"}}
+			}}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v3/catalogue/database-decoy/1.0.0":
+			io.WriteString(w, `{"ok":true,"manifest":{
+				"name":"database-decoy","display_name":"Database decoy","version":"1.0.0",
+				"runtime":{"listen_ports":[{"config_key":"TS_POSTGRES_PORT","protocol":"tcp","enabled_key":"TS_ENABLE_POSTGRES"}]},
+				"config":[
+					{"name":"TS_ENABLE_POSTGRES","type":"bool","default":"true"},
+					{"name":"TS_POSTGRES_PORT","type":"port","default":"5432"}
+				],
+				"discovery":{"process_names":["postgres"],"listening_ports":[5432],"defaults":{"TS_POSTGRES_PORT":"free_port(5432)"}}
+			}}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v3/nodes/node-0000000a":
+			io.WriteString(w, `{"ok":true,"node":{"sensors":[]}}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v3/nodes/node-0000000a/sensors":
+			var body map[string]any
+			json.NewDecoder(r.Body).Decode(&body)
+			registered = append(registered, body)
+			io.WriteString(w, `{"ok":true,"sensor":{"id":"ts-sensor-new"}}`)
+		case r.URL.Path == "/v3/node/compose":
+			io.WriteString(w, `{"ok":true,"revision":"rev_00000002","compose":{"name":"truesignal","x-truesignal":{"node_id":"node-0000000a","revision":"rev_00000002","node_key_env":"TS_NODE_KEY"},"services":{}},"warnings":[]}`)
+		case r.URL.Path == "/v3/node/applied":
+			applied = true
+			io.WriteString(w, `{"ok":true}`)
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	// Build fake /proc with sshd on tcp/22 and no postgres.
+	procDir := t.TempDir()
+	os.MkdirAll(filepath.Join(procDir, "net"), 0o755)
+	os.MkdirAll(filepath.Join(procDir, "100/fd"), 0o755)
+	os.WriteFile(filepath.Join(procDir, "net/tcp"), []byte(
+		"  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"+
+			"   0: 00000000:0016 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 1001 1 0\n"), 0o644)
+	os.WriteFile(filepath.Join(procDir, "100/comm"), []byte("sshd\n"), 0o644)
+	os.Symlink("socket:[1001]", filepath.Join(procDir, "100/fd/3"))
+
+	newDiscoverApp := func(stdin string) (*App, *bytes.Buffer, *bytes.Buffer) {
+		a, out, errb, _ := newApp(t, map[string]string{"TS_ADMIN_PASSWORD": "pw"})
+		config.Save(a.Paths, &config.Config{HubEndpoint: srv.URL, NodeID: "node-0000000a", NodeKey: key})
+		a.ProcRoot = procDir
+		a.Stdin = strings.NewReader(stdin)
+		a.DiscoverEnv = &discover.Env{
+			FileExists: func(string) bool { return false },
+			BindFree:   func(_ string, port int) bool { return port != 22 },
+			Hostname:   func() (string, error) { return "demo-host", nil },
+		}
+		return a, out, errb
+	}
+
+	// 1. --plan + --apply must fail with exit 2.
+	a0, _, err0 := newDiscoverApp("")
+	if code := a0.Run(context.Background(), []string{"discover", "--plan", "--apply"}); code != 2 {
+		t.Fatalf("--plan --apply exit = %d, want 2: %s", code, err0)
+	}
+
+	// 2. --json outputs clean JSON plan and does not register anything.
+	a1, out1, err1 := newDiscoverApp("")
+	if code := a1.Run(context.Background(), []string{"discover", "--json"}); code != 0 {
+		t.Fatalf("discover --json exit %d: %s", code, err1)
+	}
+	var plan discover.Plan
+	if err := json.Unmarshal(out1.Bytes(), &plan); err != nil {
+		t.Fatalf("discover --json invalid JSON: %v\n%s", err, out1)
+	}
+	if len(plan.Proposals) != 2 || plan.Proposals[0].Name != "remote-access-decoy" || plan.Proposals[0].Config["TS_SSH_PORT"] != "2222" {
+		t.Fatalf("unexpected plan: %+v", plan)
+	}
+	if plan.Proposals[1].Name != "database-decoy" || plan.Proposals[1].Config["TS_POSTGRES_PORT"] != "5432" {
+		t.Fatalf("unexpected second proposal: %+v", plan.Proposals[1])
+	}
+	if len(registered) != 0 || applied {
+		t.Fatalf("--json mutated Hub: registered=%d applied=%v", len(registered), applied)
+	}
+
+	// 3. --plan prints human summary and does not register anything.
+	a2, out2, err2 := newDiscoverApp("")
+	if code := a2.Run(context.Background(), []string{"discover", "--plan"}); code != 0 {
+		t.Fatalf("discover --plan exit %d: %s", code, err2)
+	}
+	if !strings.Contains(out2.String(), "doppel discover --apply") || !strings.Contains(out2.String(), "tcp/2222") {
+		t.Fatalf("unexpected --plan output: %s", out2)
+	}
+	if len(registered) != 0 || applied {
+		t.Fatalf("--plan mutated Hub")
+	}
+
+	// 4. --apply with interactive confirmation ("y\nn\n") deploys only the confirmed sensor and runs apply.
+	a3, out3, err3 := newDiscoverApp("y\nn\n")
+	if code := a3.Run(context.Background(), []string{"discover", "--apply"}); code != 0 {
+		t.Fatalf("discover --apply exit %d: %s\nout: %s", code, err3, out3)
+	}
+	if len(registered) != 1 || registered[0]["catalogue_name"] != "remote-access-decoy" || !applied {
+		t.Fatalf("registered=%v applied=%v", registered, applied)
 	}
 }

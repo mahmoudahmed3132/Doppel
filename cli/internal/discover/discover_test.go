@@ -110,3 +110,75 @@ func TestFreePortTracksAssignments(t *testing.T) {
 		t.Fatal("exhausted range not reported")
 	}
 }
+
+func TestBuildPlanConflictFreeMix(t *testing.T) {
+	// fakeProc has sshd on tcp/22 and named on udp/53; postgres is NOT running.
+	h, err := Scan(fakeProc(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := Env{
+		FileExists: func(string) bool { return false },
+		BindFree:   func(_ string, port int) bool { return port != 22 && port != 53 },
+		Hostname:   func() (string, error) { return "app01", nil },
+	}
+	remoteAccess := manifest(t, `{
+		"name":"remote-access-decoy","display_name":"Remote access decoy","version":"1.0.0",
+		"runtime":{"listen_ports":[
+			{"config_key":"TS_SSH_PORT","protocol":"tcp","enabled_key":"TS_ENABLE_SSH"},
+			{"config_key":"TS_TELNET_PORT","protocol":"tcp","enabled_key":"TS_ENABLE_TELNET"}
+		]},
+		"config":[
+			{"name":"TS_ENABLE_SSH","type":"bool","default":"true"},
+			{"name":"TS_SSH_PORT","type":"port","default":"22"},
+			{"name":"TS_ENABLE_TELNET","type":"bool","default":"false"},
+			{"name":"TS_TELNET_PORT","type":"port","default":"23"}
+		],
+		"discovery":{"process_names":["sshd"],"listening_ports":[22],"defaults":{"TS_SSH_PORT":"free_port(2222)"}}
+	}`)
+	tarpit := manifest(t, `{
+		"name":"tcp-tarpit","display_name":"TCP tarpit","version":"1.0.0",
+		"runtime":{"listen_ports":[{"config_key":"TS_PORTS","protocol":"tcp"}]},
+		"config":[{"name":"TS_PORTS","type":"list","required":true}],
+		"discovery":{"process_names":["sshd"],"listening_ports":[22],"defaults":{"TS_PORTS":"free_port(2222)"}}
+	}`)
+	db := manifest(t, `{
+		"name":"database-decoy","display_name":"Database decoy","version":"1.0.0",
+		"runtime":{"listen_ports":[
+			{"config_key":"TS_POSTGRES_PORT","protocol":"tcp","enabled_key":"TS_ENABLE_POSTGRES"}
+		]},
+		"config":[
+			{"name":"TS_ENABLE_POSTGRES","type":"bool","default":"true"},
+			{"name":"TS_POSTGRES_PORT","type":"port","default":"5432"}
+		],
+		"discovery":{"process_names":["postgres"],"listening_ports":[5432],"defaults":{"TS_POSTGRES_PORT":"free_port(5432)"}}
+	}`)
+	template := manifest(t, `{
+		"name":"template","display_name":"Template","version":"1.0.0",
+		"discovery":{"defaults":{"TS_TEMPLATE_PORT":"free_port(9099)"}}
+	}`)
+
+	plan := BuildPlan([]*Manifest{tarpit, db, template, remoteAccess}, h, env, map[string]bool{}, nil)
+	if len(plan.Proposals) != 3 {
+		t.Fatalf("got %d proposals, want 3: %+v", len(plan.Proposals), plan.Proposals)
+	}
+	// remote-access-decoy and tcp-tarpit tie on score (50); alphabetical order puts remote-access-decoy first.
+	if plan.Proposals[0].Name != "remote-access-decoy" || plan.Proposals[0].Config["TS_SSH_PORT"] != "2222" {
+		t.Fatalf("first proposal = %+v, want remote-access-decoy on 2222", plan.Proposals[0])
+	}
+	// Disabled telnet port 23 must NOT appear in active Ports bindings.
+	if len(plan.Proposals[0].Ports) != 1 || plan.Proposals[0].Ports[0].Port != 2222 {
+		t.Fatalf("unexpected remote-access-decoy ports: %+v", plan.Proposals[0].Ports)
+	}
+	// tcp-tarpit must automatically shift to 2223 to stay conflict-free.
+	if plan.Proposals[1].Name != "tcp-tarpit" || plan.Proposals[1].Config["TS_PORTS"] != "2223" {
+		t.Fatalf("second proposal = %+v, want tcp-tarpit on 2223", plan.Proposals[1])
+	}
+	// database-decoy is proposed on unoccupied standard port 5432 even though postgres is not running.
+	if plan.Proposals[2].Name != "database-decoy" || plan.Proposals[2].Config["TS_POSTGRES_PORT"] != "5432" {
+		t.Fatalf("third proposal = %+v, want database-decoy on 5432", plan.Proposals[2])
+	}
+	if !strings.Contains(strings.Join(plan.Proposals[2].Reasons, ","), "port 5432 available") {
+		t.Fatalf("database-decoy reasons = %v, want port 5432 available", plan.Proposals[2].Reasons)
+	}
+}

@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -210,16 +209,15 @@ func LoadSettings(r sensor.Reporter) (*Settings, error) {
 }
 
 // deriveSNMPEngineID produces a deterministic 11-byte RFC 3411 engine ID
-// (enterprise 8072 / Net-SNMP, format 0x05 octets, plus 6 derived bytes) so
-// two Doppel nodes do not share an identical SNMPv3 fingerprint.
+// (enterprise 8072 / Net-SNMP, format 0x05 octets, plus 6 derived bytes) via
+// decoy.DeriveKey so two Doppel nodes do not share an identical SNMPv3
+// fingerprint.
 func deriveSNMPEngineID(r sensor.Reporter, sysName string) []byte {
 	sensorID, _ := r.Setting("TS_SENSOR_ID")
 	rawKey, _ := r.Setting(decoy.CaptureKeyKey)
 	var digest [32]byte
 	if key, err := hex.DecodeString(strings.TrimSpace(rawKey)); err == nil && len(key) >= 16 {
-		mac := hmac.New(sha256.New, key)
-		mac.Write([]byte("doppel:snmp-engine-id:v1:" + sensorID))
-		copy(digest[:], mac.Sum(nil))
+		copy(digest[:], decoy.DeriveKey(key, "doppel:snmp-engine-id:v1:"+sensorID))
 	} else {
 		digest = sha256.Sum256([]byte("doppel:snmp-engine-id:v1:" + sensorID + ":" + sysName))
 	}
