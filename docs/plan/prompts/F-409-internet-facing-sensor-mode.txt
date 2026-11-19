@@ -1,0 +1,62 @@
+You are implementing feature F-409 "Internet-facing sensor mode (scanner intelligence)" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-409-internet-facing-sensor-mode origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-409-internet-facing-sensor-mode && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+- docs/clean-specs/README.md and docs/clean-specs/common-decoy.md (clean-room decoy rules)
+- General rules for every new sensor (spec section E4):
+  General rules for every new sensor:
+  
+  - Follow EXECUTION-PLAN §0 (clean-room, pinned Dockerfile, SDK reuse, fuzzing).
+  - Add a clean spec under `docs/clean-specs/<name>.md` **before** implementation.
+  - Every login fails. Never proxy to a real system. Strict input limits and per-source rate limits.
+  - No outbound connections except to the Hub, unless the spec says otherwise.
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P3 · **Edition:** Enterprise · **Effort:** M.
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-409 Internet-facing sensor mode (scanner intelligence)
+- **Priority:** P3 · **Edition:** Enterprise · **Effort:** M.
+- **Requirements:**
+  1. Run selected decoys on public IPs with an "external" profile: aggressive rate limits, no credential capture by default (privacy), and classification into mass scanner (known research scanners list), opportunistic exploit, or **targeted** (matches the organisation's domains, SNI, Host header or brand strings).
+  2. Only "targeted" raises incidents. The rest feeds TI (F-304).
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-409: Internet-facing sensor mode (scanner intelligence)". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.

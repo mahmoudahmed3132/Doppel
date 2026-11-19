@@ -1,0 +1,67 @@
+You are implementing feature F-302 "SIEM fan-out, schemas and durable delivery" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-302-siem-fan-out-schemas-and-durable origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-302-siem-fan-out-schemas-and-durable && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P1 · **Edition:** Core (1), Enterprise (N) · **Effort:** M · **Schema:** v17.
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-302 SIEM fan-out, schemas and durable delivery
+- **Priority:** P1 · **Edition:** Core (1), Enterprise (N) · **Effort:** M · **Schema:** v17.
+- **Requirements:**
+  1. N outputs, each with its own filter (e.g. incidents only, or exclude drills).
+  2. Output types:
+     - existing syslog (TLS/TCP/UDP), Elastic and LogScale;
+     - **Splunk HEC**;
+     - **Microsoft Sentinel** (Azure Monitor Logs Ingestion API with DCR, OAuth client credentials);
+     - **Google SecOps / Chronicle** (ingestion API);
+     - **IBM QRadar** (LEEF over syslog-TLS);
+     - **CEF** over syslog;
+     - **Kafka** (TLS + SASL/SCRAM) for data lakes.
+  3. Schemas: ECS (default, existing), **OCSF 1.x** (Detection Finding / Network Activity classes), CEF and LEEF mappings. Document the mapping tables in `docs/siem/`.
+  4. Per-output durable queue: disk-backed (DB table or segment files), size-bounded (default 2 GB), drop-oldest **only** after the bound, with a `siem_dropped` counter and a high-severity Hub event on the first drop.
+  5. At-least-once delivery with `event.id` for de-duplication on the receiving side. Batch and compress (gzip) for HTTPS outputs.
+  6. "Send test record" per output (exists for one). A "replay range" admin action to re-send events from time A to B to one output (dual control in production).
+  7. Ship content packs: Elastic detection rules + dashboards, LogScale parser + alerts + dashboard, Sentinel analytics rules + workbook, Splunk app (props/transforms + saved searches), QRadar DSM notes.
+- **Acceptance:** Elastic and LogScale both receive identical records during a migration. Killing one output doesn't affect the other. Queue metrics are exported.
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-302: SIEM fan-out, schemas and durable delivery". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.

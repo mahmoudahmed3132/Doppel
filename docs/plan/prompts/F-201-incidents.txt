@@ -1,0 +1,66 @@
+You are implementing feature F-201 "Incidents (correlation engine)" of the Doppel deception platform
+(repo: mahmoudahmed3132/Doppel). Work from the repository root.
+
+=== 1. SET UP THE BRANCH ===
+git fetch origin
+git switch -c feat/f-201-incidents origin/main
+(If the branch already exists, continue on it instead: git switch feat/f-201-incidents && git rebase origin/main)
+
+=== 2. READ BEFORE CODING (in this order) ===
+- docs/plan/ENTERPRISE-SPEC.md sections 0 (rules) and 7 (definition of done)
+- docs/plan/ROADMAP.md section 0 and docs/plan/EXECUTION-PLAN.md section 0 (still binding)
+- the feature section below, then THREATMODEL.md and every file the section names
+
+=== 3. DEPENDENCIES ===
+- **Priority:** P1 · **Edition:** Enterprise (basic grouping in Core) · **Effort:** L · **Schema:** v13 · **Depends on:** F-001, F-002.
+Check that every dependency named above is already merged into origin/main:
+  gh pr list --state merged --search "<dependency id> in:title"   (and confirm in the code).
+If one is missing, STOP and tell me which one. Do not build a dependency yourself unless I say so.
+
+=== 4. SCOPE ===
+- Implement only this feature. No unrelated refactors.
+- Schema: if you add a migration, it takes the next free version after rebasing on the latest
+  origin/main (migrations are a gap-free list). Say which version you used in the PR.
+- Ambiguity: add an entry to QUESTIONS.md (next free id, Q82 or later) with the conservative
+  default, then continue.
+- STOP and ask me if: a requirement conflicts with an existing security invariant; you need a
+  real credential, cloud account or external service; you need sudo or changes outside the repo.
+- Never weaken an existing test, assertion or security check to make something pass.
+- Test data: card-network test PANs/BINs only, dummy keys, documentation IP ranges.
+
+=== 5. FEATURE SPECIFICATION (copied from docs/plan/ENTERPRISE-SPEC.md; the repo file wins if they differ) ===
+#### F-201 Incidents (correlation engine)
+- **Priority:** P1 · **Edition:** Enterprise (basic grouping in Core) · **Effort:** L · **Schema:** v13 · **Depends on:** F-001, F-002.
+- **Why:** analysts work incidents, not single events. Deception's strength is that one intruder touching several decoys is one high-confidence incident.
+- **Requirements:**
+  1. Correlation rules (configurable, with defaults):
+     - same `source_ip` within a sliding window (default 30 min, max 24 h) → same incident;
+     - same honeytoken or beacon used from any source → same incident keyed on the token id;
+     - optional subnet or ASN grouping (F-002 rollups).
+  2. Incident fields: id (`INC-YYYY-NNNNN`), title (auto: "<source> touched N decoys on M nodes"), severity (max of members, escalated: ≥ 3 decoys or any honeytoken/credential use → critical), status, assignee, created/updated/closed, first_seen/last_seen, sources, nodes, sensors, techniques, member event count, disposition, regulatory classification (F-205), tags, external ticket refs.
+  3. Late events matching an open incident attach to it. Events matching a closed incident within a reopen window (default 24 h) reopen it with a `reopened` timeline entry. Outside the window they open a new incident linked as `related_to`.
+  4. Incident notifications replace per-event notifications for members after the first, to avoid alert storms. Configurable.
+  5. Manual operations: merge, split (move events), link.
+- **API:** `GET/POST /api/v3/incidents`, `GET/PATCH /api/v3/incidents/{id}`, `POST /api/v3/incidents/{id}/merge|split|link|comments`, `GET /api/v3/incidents/{id}/timeline`.
+- **UI:** a new Incidents page (list + detail), which becomes the default landing page for analysts. Incident detail shows: kill-chain graph (reuse the attack-path component), timeline, member events, enrichment (asset, geo, AD user if known), notes, actions.
+- **SIEM:** emit incident create/update/close records as `event.kind=alert`, `doppel.incident.*` fields.
+- **Tests:** correlation unit tests (window edges, honeytoken key, late events, reopen). Load test with 100k events/hour.
+- **Acceptance:** an nmap sweep plus an SSH attempt plus a honeytoken use from one IP produces exactly 1 critical incident with 3+ member events.
+
+=== 6. VERIFY (report each: passed / failed with output / not run with reason) ===
+make
+make ui                              (if ui/ changed)
+python3 scripts/validate-docs.py
+./scripts/compose-guard.sh
+./scripts/release/selftest.sh
+./scripts/e2e/real-docker.sh         (needs Docker; extend it if the feature touches the runtime path)
+go test -fuzz=. -fuzztime=15s        (each new protocol parser)
+
+=== 7. FINISH ===
+1. Do not edit the section 9 status log (the owner updates it at merge time; parallel PRs would
+   conflict there).
+2. Commit in logical steps (Conventional Commits), push the branch, and open a DRAFT pull request
+   to main titled "F-201: Incidents (correlation engine)". The PR body must contain: what changed, schema version used,
+   the Acceptance criteria as a checklist (each ticked or explained), gate results, and any
+   QUESTIONS.md entries added.
+3. Do not merge, tag or publish anything. End with the PR link and a one-paragraph summary.
