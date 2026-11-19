@@ -193,6 +193,42 @@ def main() -> int:
             idx.append(f"| [{pid}]({name}) | {title} | {m} |")
         idx.append("")
     (OUT / "00-INDEX.md").write_text("\n".join(idx))
+
+    # Paste-ready bundles for Claude Desktop / web, in run order.
+    order = [(w, p) for w, ids in WAVES for p in ids]
+    n = len(order)
+    quick = [
+        "DOPPEL FEATURE PROMPTS (short form), in run order.",
+        "Paste ONE block per new Claude Code session opened on the Doppel repo folder.",
+        "Needs docs/plan/prompts merged into main. Wait for each draft PR, review, merge, then paste the next.",
+        "Same-wave features can run in parallel only if each session has its own worktree.",
+        "",
+    ]
+    full = [
+        "DOPPEL FEATURE PROMPTS (full form), in run order.",
+        "Copy everything between a BEGIN line and its END line into ONE new Claude Code session",
+        "opened on the Doppel repo folder. Wait for its draft PR, review, merge, then do the next.",
+        "",
+    ]
+    cur = None
+    for k, (wave, pid) in enumerate(order, 1):
+        name, title, _ = written[pid]
+        if wave != cur:
+            quick += ["", "=" * 78, wave.upper(), "=" * 78, ""]
+            full += ["", "=" * 78, wave.upper(), "=" * 78, ""]
+            cur = wave
+        quick += [
+            f"----- [{k}/{n}] {pid}: {title} -----",
+            f"Implement Doppel feature {pid}. First run `git status --porcelain`; if the working tree has "
+            f"uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full "
+            f"instructions with `git show origin/main:docs/plan/prompts/{name}`. Follow them exactly, "
+            f"step by step, and end with the draft PR link.",
+            "",
+        ]
+        full += [f">>>>> BEGIN [{k}/{n}] {pid}: {title}", (OUT / name).read_text().rstrip(),
+                 f"<<<<< END {pid}", ""]
+    (OUT / "QUICK-PROMPTS.txt").write_text("\n".join(quick) + "\n")
+    (OUT / "ALL-PROMPTS.txt").write_text("\n".join(full) + "\n")
     print(f"wrote {len(written)} prompts + 00-INDEX.md to {OUT.relative_to(ROOT)}")
     return 0
 

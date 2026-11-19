@@ -1,0 +1,319 @@
+DOPPEL FEATURE PROMPTS (short form), in run order.
+Paste ONE block per new Claude Code session opened on the Doppel repo folder.
+Needs docs/plan/prompts merged into main. Wait for each draft PR, review, merge, then paste the next.
+Same-wave features can run in parallel only if each session has its own worktree.
+
+
+==============================================================================
+WAVE 1: PILOT BLOCKERS (P0)
+==============================================================================
+
+----- [1/93] F-004: Build and release hygiene -----
+Implement Doppel feature F-004. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-004-build-and-release-hygiene.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [2/93] F-603: Ingest durability and backpressure -----
+Implement Doppel feature F-603. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-603-ingest-durability-and-backpressure.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [3/93] F-001: Fire drill as a first-class flag -----
+Implement Doppel feature F-001. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-001-fire-drill-as-a-first-class.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [4/93] F-002: Source identity normalisation and correlation -----
+Implement Doppel feature F-002. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-002-source-identity-normalisation-and-correlation.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [5/93] F-005: Liveness alerting to PCI 10.7.2 grade -----
+Implement Doppel feature F-005. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-005-liveness-alerting-to-pci-10-7.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [6/93] F-003a: Native TLS, listen address, health and metrics (H1 / WP-4A + F-003 items 1, 2, 4) -----
+Implement Doppel feature F-003a. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-003a-native-tls-listen-address-health-and.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [7/93] F-003b: Backup, restore and verify (B1 / WP-4C + F-003 item 3) -----
+Implement Doppel feature F-003b. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-003b-backup-restore-and-verify.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [8/93] F-101a: OIDC single sign-on (S1 / WP-4B + extra OIDC requirements) -----
+Implement Doppel feature F-101a. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-101a-oidc-single-sign-on.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+
+==============================================================================
+WAVE 2: IDENTITY, SECURITY AND PLATFORM BASICS (P1)
+==============================================================================
+
+----- [9/93] F-103: Local user management and password policy -----
+Implement Doppel feature F-103. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-103-local-user-management-and-password-policy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [10/93] F-104: API tokens and service accounts -----
+Implement Doppel feature F-104. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-104-api-tokens-and-service-accounts.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [11/93] F-105: In-product audit log -----
+Implement Doppel feature F-105. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-105-in-product-audit-log.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [12/93] F-106: Dual control and step-up authentication -----
+Implement Doppel feature F-106. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-106-dual-control-and-step-up-authentication.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [13/93] F-107: Session management and admin access restrictions -----
+Implement Doppel feature F-107. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-107-session-management-and-admin-access-restrictions.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [14/93] F-502: Node groups, sites and policies -----
+Implement Doppel feature F-502. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-502-node-groups-sites-and-policies.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [15/93] F-505: Node host facts and health -----
+Implement Doppel feature F-505. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-505-node-host-facts-and-health.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [16/93] F-503: Bulk enrolment and node bootstrap -----
+Implement Doppel feature F-503. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-503-bulk-enrolment-and-node-bootstrap.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [17/93] F-609: Observability for operators -----
+Implement Doppel feature F-609. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-609-observability-for-operators.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [18/93] F-608: Load, soak and chaos testing harness -----
+Implement Doppel feature F-608. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-608-load-soak-and-chaos-testing-harness.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [19/93] F-1101: Secure development lifecycle evidence -----
+Implement Doppel feature F-1101. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1101-secure-development-lifecycle-evidence.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [20/93] F-1103: Hardening guides and benchmarks -----
+Implement Doppel feature F-1103. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1103-hardening-guides-and-benchmarks.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [21/93] F-1301: Public API contract and versioning -----
+Implement Doppel feature F-1301. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1301-public-api-contract-and-versioning.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+
+==============================================================================
+WAVE 3: SOC CORE AND SCALE (P1)
+==============================================================================
+
+----- [22/93] F-201: Incidents (correlation engine) -----
+Implement Doppel feature F-201. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-201-incidents.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [23/93] F-102: RBAC v2: custom roles and scopes -----
+Implement Doppel feature F-102. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-102-rbac-v2-custom-roles-and-scopes.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [24/93] F-203: Suppressions with reason and expiry -----
+Implement Doppel feature F-203. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-203-suppressions-with-reason-and-expiry.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [25/93] F-301: Notification router (multi-destination, rule-based) -----
+Implement Doppel feature F-301. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-301-notification-router.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [26/93] F-302: SIEM fan-out, schemas and durable delivery -----
+Implement Doppel feature F-302. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-302-siem-fan-out-schemas-and-durable.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [27/93] F-805: Analytics correctness and performance -----
+Implement Doppel feature F-805. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-805-analytics-correctness-and-performance.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [28/93] F-504: Upgrade orchestration -----
+Implement Doppel feature F-504. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-504-upgrade-orchestration.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [29/93] F-601: PostgreSQL backend -----
+Implement Doppel feature F-601. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-601-postgresql-backend.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+
+==============================================================================
+WAVE 4: WORKFLOW, SOVEREIGNTY, UX (P1)
+==============================================================================
+
+----- [30/93] F-202: Triage lifecycle, assignment and disposition -----
+Implement Doppel feature F-202. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-202-triage-lifecycle-assignment-and-disposition.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [31/93] F-204: Evidence export with chain of custody -----
+Implement Doppel feature F-204. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-204-evidence-export-with-chain-of-custody.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [32/93] F-206: Ticketing and case-management integrations -----
+Implement Doppel feature F-206. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-206-ticketing-and-case-management-integrations.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [33/93] F-303: Asset and identity enrichment sources -----
+Implement Doppel feature F-303. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-303-asset-and-identity-enrichment-sources.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [34/93] F-602: High availability -----
+Implement Doppel feature F-602. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-602-high-availability.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [35/93] F-604: Retention, archive and legal hold -----
+Implement Doppel feature F-604. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-604-retention-archive-and-legal-hold.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [36/93] F-605: Key management: BYOK and HSM -----
+Implement Doppel feature F-605. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-605-key-management-byok-and-hsm.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [37/93] F-606: Data residency controls -----
+Implement Doppel feature F-606. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-606-data-residency-controls.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [38/93] F-607: Air-gapped / offline operation -----
+Implement Doppel feature F-607. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-607-air-gapped-offline-operation.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [39/93] F-801: Reporting engine (scheduled, server-rendered, localised) -----
+Implement Doppel feature F-801. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-801-reporting-engine.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [40/93] F-901: Internationalisation: Arabic (RTL), French, English -----
+Implement Doppel feature F-901. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-901-internationalisation-arabic-french-english.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [41/93] F-902: Onboarding and guided deployment -----
+Implement Doppel feature F-902. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-902-onboarding-and-guided-deployment.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [42/93] F-903: Accessibility (WCAG 2.2 AA) -----
+Implement Doppel feature F-903. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-903-accessibility.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [43/93] F-415: Persona and realism engine (extends WP-2C / Q81) -----
+Implement Doppel feature F-415. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-415-persona-and-realism-engine.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [44/93] F-501: IP-per-decoy and VLAN projection -----
+Implement Doppel feature F-501. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-501-ip-per-decoy-and-vlan-projection.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [45/93] F-506a: Multi-arch (arm64) images -----
+Implement Doppel feature F-506a. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-506a-multi-arch-images.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [46/93] F-506b: Kubernetes: Helm chart and node mode -----
+Implement Doppel feature F-506b. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-506b-kubernetes-helm-chart-and-node-mode.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [47/93] F-1102: Continuous fuzzing and decoy escape review -----
+Implement Doppel feature F-1102. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1102-continuous-fuzzing-and-decoy-escape-review.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [48/93] F-1201: Signed licences and edition gating -----
+Implement Doppel feature F-1201. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1201-signed-licences-and-edition-gating.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+
+==============================================================================
+WAVE 5: DECEPTION CONTENT (P1)
+==============================================================================
+
+----- [49/93] F-401: SMB/CIFS file-share decoy -----
+Implement Doppel feature F-401. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-401-smb-cifs-file-share-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [50/93] F-405a: kubernetes-api-decoy -----
+Implement Doppel feature F-405a. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-405a-kubernetes-api-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [51/93] F-405b: docker-api-decoy -----
+Implement Doppel feature F-405b. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-405b-docker-api-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [52/93] F-405c: redis-decoy -----
+Implement Doppel feature F-405c. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-405c-redis-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [53/93] F-405d: elasticsearch-decoy -----
+Implement Doppel feature F-405d. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-405d-elasticsearch-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [54/93] F-405e: mongodb-decoy -----
+Implement Doppel feature F-405e. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-405e-mongodb-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [55/93] F-405f: vnc-decoy -----
+Implement Doppel feature F-405f. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-405f-vnc-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [56/93] F-405g: smtp-decoy -----
+Implement Doppel feature F-405g. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-405g-smtp-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [57/93] F-405h: http-app-decoy -----
+Implement Doppel feature F-405h. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-405h-http-app-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [58/93] F-404: Lure and breadcrumb engine -----
+Implement Doppel feature F-404. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-404-lure-and-breadcrumb-engine.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [59/93] F-402: AD-integrated deception objects (honey users, SPNs, AS-REP) -----
+Implement Doppel feature F-402. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-402-ad-integrated-deception-objects.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+
+==============================================================================
+WAVE 6: EMEA DIFFERENTIATION (P2)
+==============================================================================
+
+----- [60/93] F-101b: SAML 2.0 and SCIM 2.0 -----
+Implement Doppel feature F-101b. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-101b-saml-2-0-and-scim-2.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [61/93] F-205: Regulatory incident clocks (DORA, NIS2, CBE, SAMA, NCA, UAE, custom) -----
+Implement Doppel feature F-205. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-205-regulatory-incident-clocks.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [62/93] F-802: Detection-pipeline assurance (continuous control validation) -----
+Implement Doppel feature F-802. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-802-detection-pipeline-assurance.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [63/93] F-803: Compliance evidence packs -----
+Implement Doppel feature F-803. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-803-compliance-evidence-packs.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [64/93] F-806: Red-team / TLPT engagement mode -----
+Implement Doppel feature F-806. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-806-red-team-tlpt-engagement-mode.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [65/93] F-1001: Privacy mode (pseudonymisation with four-eyes reveal) -----
+Implement Doppel feature F-1001. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1001-privacy-mode.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [66/93] F-1002: Data subject and retention tooling -----
+Implement Doppel feature F-1002. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1002-data-subject-and-retention-tooling.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [67/93] F-304: Threat-intel sharing (STIX/TAXII, MISP) -----
+Implement Doppel feature F-304. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-304-threat-intel-sharing.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [68/93] F-305: Response actions (approval-gated) -----
+Implement Doppel feature F-305. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-305-response-actions.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [69/93] F-403: Entra ID / Microsoft 365 deception -----
+Implement Doppel feature F-403. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-403-entra-id-microsoft-365-deception.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [70/93] F-406: Cloud canaries minted in customer-owned accounts -----
+Implement Doppel feature F-406. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-406-cloud-canaries-minted-in-customer-owned.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [71/93] F-407: Beacon types (extends token-receiver) -----
+Implement Doppel feature F-407. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-407-beacon-types.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [72/93] F-408: OT/ICS decoys (GCC energy and utilities) -----
+Implement Doppel feature F-408. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-408-ot-ics-decoys.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [73/93] F-410: Fake merchant portal and payment API decoy (fintech) -----
+Implement Doppel feature F-410. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-410-fake-merchant-portal-and-payment-api.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [74/93] F-413: Honey records for data-exfiltration detection -----
+Implement Doppel feature F-413. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-413-honey-records-for-data-exfiltration-detection.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [75/93] F-414: AI and agent deception -----
+Implement Doppel feature F-414. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-414-ai-and-agent-deception.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [76/93] F-506c: Hardened OVA appliance -----
+Implement Doppel feature F-506c. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-506c-hardened-ova-appliance.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [77/93] F-507: Fleet-wide discovery and placement recommendations -----
+Implement Doppel feature F-507. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-507-fleet-wide-discovery-and-placement-recommendations.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [78/93] F-804: Deception coverage map -----
+Implement Doppel feature F-804. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-804-deception-coverage-map.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [79/93] F-904: Global search and investigation pivots -----
+Implement Doppel feature F-904. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-904-global-search-and-investigation-pivots.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [80/93] F-701: Tenants -----
+Implement Doppel feature F-701. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-701-tenants.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [81/93] F-702: MSSP console -----
+Implement Doppel feature F-702. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-702-mssp-console.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [82/93] F-704: Usage metering -----
+Implement Doppel feature F-704. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-704-usage-metering.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [83/93] F-1202: Trial and demo mode -----
+Implement Doppel feature F-1202. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1202-trial-and-demo-mode.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [84/93] F-1302: Terraform provider and configuration as code -----
+Implement Doppel feature F-1302. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1302-terraform-provider-and-configuration-as-code.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+
+==============================================================================
+WAVE 7: LATER (P3)
+==============================================================================
+
+----- [85/93] F-409: Internet-facing sensor mode (scanner intelligence) -----
+Implement Doppel feature F-409. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-409-internet-facing-sensor-mode.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [86/93] F-411: ISO 8583 listener decoy -----
+Implement Doppel feature F-411. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-411-iso-8583-listener-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [87/93] F-412: HSM command-port decoy -----
+Implement Doppel feature F-412. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-412-hsm-command-port-decoy.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [88/93] F-506d: Windows native decoy service -----
+Implement Doppel feature F-506d. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-506d-windows-native-decoy-service.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [89/93] F-703: White-labelling -----
+Implement Doppel feature F-703. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-703-white-labelling.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [90/93] F-1003: Lawful-deception guidance pack -----
+Implement Doppel feature F-1003. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1003-lawful-deception-guidance-pack.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [91/93] F-1104: FIPS 140-3 build -----
+Implement Doppel feature F-1104. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1104-fips-140-3-build.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [92/93] F-1203: Opt-in product telemetry -----
+Implement Doppel feature F-1203. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1203-opt-in-product-telemetry.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
+----- [93/93] F-1303: Third-party sensor ecosystem -----
+Implement Doppel feature F-1303. First run `git status --porcelain`; if the working tree has uncommitted changes, stop and tell me. Then run `git fetch origin` and read your full instructions with `git show origin/main:docs/plan/prompts/F-1303-third-party-sensor-ecosystem.txt`. Follow them exactly, step by step, and end with the draft PR link.
+
