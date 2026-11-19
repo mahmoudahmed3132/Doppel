@@ -6,6 +6,7 @@ use (
 	./cli
 	./hub
 	./sdk/go
+	./sensors/database-decoy
 	./sensors/file-canary
 	./sensors/icmp-canary
 	./sensors/network-scan-detector
