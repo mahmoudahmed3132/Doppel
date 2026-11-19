@@ -1,14 +1,14 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
 // Package projections holds the analytics projections behind
-// ported.Projection (QUESTIONS Q56): sources, geo_map, attack_path and
-// report. Each receives the window's events, already enriched by the Hub
+// ported.Projection (QUESTIONS Q56): insights, sources, geo_map, attack_path
+// and report. Each receives the window's events, already enriched by the Hub
 // (asset, location, ATT&CK).
 //
 // Imported from TrueSignal (see PROVENANCE.md): the aggregations are that
 // codebase's sources, geomap, path and report projections, adapted from its
-// event store to domain.EnrichedEvent; the insights summary they used is
-// not imported (MERGE-INVENTORY.md H12).
+// event store to domain.EnrichedEvent; insights is a clean-room implementation
+// from docs/clean-specs/insights-projection.md.
 package projections
 
 import (
