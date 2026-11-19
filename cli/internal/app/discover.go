@@ -4,10 +4,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/mahmoudahmed3132/Doppel/cli/internal/config"
@@ -53,11 +55,55 @@ type nodeDetail struct {
 	} `json:"node"`
 }
 
+// seedTakenPorts records ports already configured on deployed sensors so new
+// discovery proposals do not collide with them.
+func seedTakenPorts(nd *nodeDetail, taken map[int]bool) {
+	for _, s := range nd.Node.Sensors {
+		for k, v := range s.Config {
+			if !strings.HasSuffix(k, "_PORT") && !strings.HasSuffix(k, "_PORTS") {
+				continue
+			}
+			for _, part := range strings.Split(v, ",") {
+				if p, err := strconv.Atoi(strings.TrimSpace(part)); err == nil && p >= 1 && p <= 65535 {
+					taken[p] = true
+				}
+			}
+		}
+	}
+}
+
+func (a *App) printProposal(p discover.Proposal) {
+	a.info("\n%s %s (%s) [score %d]", a.paint("1", p.Display), p.Version, p.Name, p.Score)
+	a.info("  why:    %s", strings.Join(p.Reasons, ", "))
+	if len(p.Ports) > 0 {
+		parts := make([]string, 0, len(p.Ports))
+		for _, b := range p.Ports {
+			parts = append(parts, fmt.Sprintf("%s/%d", b.Protocol, b.Port))
+		}
+		a.info("  ports:  %s", strings.Join(parts, ", "))
+	}
+	keys := make([]string, 0, len(p.Config))
+	for k := range p.Config {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		a.info("  config: %s=%s", k, p.Config[k])
+	}
+}
+
 func (a *App) discover(ctx context.Context, args []string) int {
 	fs := a.flags("discover")
+	planOnly := fs.Bool("plan", false, "propose a conflict-free decoy mix without deploying")
+	jsonOut := fs.Bool("json", false, "output the discovery plan as JSON (implies --plan)")
+	doApply := fs.Bool("apply", false, "register recommended decoys (with confirmation) and run apply")
 	yes := fs.Bool("yes", false, "register all proposals without asking")
 	noApply := fs.Bool("no-apply", false, "register sensors but do not run apply")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if (*planOnly || *jsonOut) && *doApply {
+		fmt.Fprintln(a.Stderr, "error: --plan/--json cannot be combined with --apply")
 		return 2
 	}
 	cfg, err := config.Load(a.Paths)
@@ -68,7 +114,9 @@ func (a *App) discover(ctx context.Context, args []string) int {
 	if err != nil {
 		return a.fail(err)
 	}
-	a.info("Host: %d listening sockets, %d process names (read from %s; no network probing)", len(host.Sockets), len(host.Processes), a.ProcRoot)
+	if !*jsonOut {
+		a.info("Host: %d listening sockets, %d process names (read from %s; no network probing)", len(host.Sockets), len(host.Processes), a.ProcRoot)
+	}
 
 	c, err := a.client(cfg)
 	if err != nil {
@@ -93,12 +141,13 @@ func (a *App) discover(ctx context.Context, args []string) int {
 	for _, s := range nd.Node.Sensors {
 		deployed[s.CatalogueName] = true
 	}
+	seedTakenPorts(&nd, taken)
 
 	env := discover.DefaultEnv()
 	if a.DiscoverEnv != nil {
 		env = *a.DiscoverEnv
 	}
-	var proposals []discover.Proposal
+	var manifests []*discover.Manifest
 	for _, s := range cat.Sensors {
 		if s.Latest == "" || deployed[s.Name] {
 			continue
@@ -109,29 +158,39 @@ func (a *App) discover(ctx context.Context, args []string) int {
 		if err := adm.Get(ctx, "/api/v3/catalogue/"+url.PathEscape(s.Name)+"/"+url.PathEscape(s.Latest), &det); err != nil || det.Manifest == nil {
 			continue
 		}
-		reasons := discover.Match(det.Manifest, host, env)
-		if len(reasons) == 0 {
-			continue
-		}
-		proposals = append(proposals, discover.Propose(det.Manifest, reasons, host, env, taken))
+		manifests = append(manifests, det.Manifest)
 	}
-	if len(proposals) == 0 {
+
+	plan := discover.BuildPlan(manifests, host, env, deployed, taken)
+
+	if *jsonOut {
+		enc := json.NewEncoder(a.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(plan); err != nil {
+			return a.fail(err)
+		}
+		return 0
+	}
+
+	if len(plan.Proposals) == 0 {
 		a.ok("no new decoys match this host")
 		return 0
 	}
 
+	if *planOnly {
+		for _, p := range plan.Proposals {
+			a.printProposal(p)
+			if len(p.Missing) > 0 {
+				a.warn("%s needs values for %s; configure it in the Hub instead", p.Name, strings.Join(p.Missing, ", "))
+			}
+		}
+		a.info("\nPlan proposes %d conflict-free decoy(s). Run doppel discover --apply to deploy.", len(plan.Proposals))
+		return 0
+	}
+
 	registered := 0
-	for _, p := range proposals {
-		a.info("\n%s %s (%s)", a.paint("1", p.Display), p.Version, p.Name)
-		a.info("  why:    %s", strings.Join(p.Reasons, ", "))
-		keys := make([]string, 0, len(p.Config))
-		for k := range p.Config {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			a.info("  config: %s=%s", k, p.Config[k])
-		}
+	for _, p := range plan.Proposals {
+		a.printProposal(p)
 		if len(p.Missing) > 0 {
 			a.warn("%s needs values for %s; configure it in the Hub instead", p.Name, strings.Join(p.Missing, ", "))
 			continue
@@ -157,7 +216,7 @@ func (a *App) discover(ctx context.Context, args []string) int {
 		a.info("nothing registered")
 		return 0
 	}
-	if *noApply {
+	if *noApply && !*doApply {
 		a.info("Run doppel apply to deploy.")
 		return 0
 	}

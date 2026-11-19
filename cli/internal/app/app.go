@@ -95,7 +95,8 @@ const usage = `doppel — Doppel node agent
 Usage:
   doppel link <hub-url>    link this node (node key from TS_NODE_KEY)
   doppel apply             deploy the Hub's desired configuration
-  doppel discover [--yes]  propose decoys for this host and deploy them
+  doppel discover [--plan] [--json] [--apply] [--yes]
+                           propose a conflict-free decoy mix and deploy it
   doppel firedrill         make every sensor send its synthetic event
   doppel status [--json]   show node, Hub and container status
   doppel uninstall [--yes] remove Doppel from this node (lure files are kept)

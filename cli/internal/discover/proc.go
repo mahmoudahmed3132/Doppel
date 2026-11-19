@@ -17,9 +17,9 @@ import (
 
 // Socket is one listening socket.
 type Socket struct {
-	Proto   string // tcp | udp
-	Port    int
-	Process string // comm of the owning process, "" if unknown
+	Proto   string `json:"proto"` // tcp | udp
+	Port    int    `json:"port"`
+	Process string `json:"process,omitempty"` // comm of the owning process, "" if unknown
 }
 
 // Host is a snapshot of the host.
