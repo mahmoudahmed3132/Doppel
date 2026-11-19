@@ -2,7 +2,7 @@ module github.com/mahmoudahmed3132/Doppel/cli
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require golang.org/x/term v0.47.0
 
