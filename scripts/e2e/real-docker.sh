@@ -41,7 +41,13 @@ REGISTRY_IMAGE='registry:3.1.2@sha256:d4032d4cc323c1731c707931ecada07a53076eac38
 HUB="http://$HOSTIP:18080"
 PW='e2e-correct-horse-battery-staple'
 SENSORS="tcp-tarpit template web-router-decoy"
-CLI="$W/doppel"
+mkdir -p "$W/bin"; CLI="$W/bin/doppel"
+# Command as printed for the user to rerun from their own shell (macOS needs the TS_* paths).
+if [ "$OS" = Darwin ]; then
+	PCLI="env TS_CONFIG_FILE=$TS_CONFIG_FILE TS_WORK_DIR=$TS_WORK_DIR TS_ALLOW_NON_AMD64=true $CLI"
+else
+	PCLI="$CLI"
+fi
 fail() { echo "E2E FAIL: $*" >&2; exit 1; }
 step() { echo; echo "=== $*"; }
 
@@ -183,8 +189,8 @@ if [ "${KEEP:-0}" = 1 ]; then
 Admin UI:      $HUB   (password: $PW)
 Decoys:        tcp-tarpit on 2222, template on 9099, web-router-decoy on 8081
 Try:           curl -s -X POST -d 'username=admin&password=x' http://127.0.0.1:8081/login
-               nc -z 127.0.0.1 2222; $RUN $CLI firedrill
-Stop:          $RUN $CLI uninstall --yes; kill \$(cat $W/hub.pid) $REGPID; docker rm -f ts-e2e-registry
+               nc -z 127.0.0.1 2222; $RUN $PCLI firedrill
+Stop:          $RUN $PCLI uninstall --yes; kill \$(cat $W/hub.pid) $REGPID; docker rm -f ts-e2e-registry
 Workspace:     $W
 POC
 	exit 0
