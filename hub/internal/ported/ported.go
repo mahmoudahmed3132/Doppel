@@ -1,9 +1,8 @@
 // Copyright (c) 2026 TrueSignal Deception. All rights reserved.
 
-// Package ported declares the integration seams for the modules marked
-// PORTED in specification §12. The owner supplies the implementations; this
-// repository contains only the interfaces, minimal test stubs (package
-// ported/stub) and the wiring around them.
+// Package ported declares the internal module interfaces. All modules are
+// in-tree and required; the interfaces remain as test seams (fakes in
+// package ported/stub).
 //
 // Implementations must be safe for concurrent use.
 package ported

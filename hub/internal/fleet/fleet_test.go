@@ -260,23 +260,6 @@ func TestSensorEditUpgradeDelete(t *testing.T) {
 	}
 }
 
-func TestFailClosedWithoutCompiler(t *testing.T) {
-	s, db, _ := newService(t, false)
-	ctx := context.Background()
-	n, _, _ := s.CreateNode(ctx, "n1", nil)
-	if _, _, err := s.AddSensor(ctx, n.ID, spec("ssh", "22")); !errors.Is(err, ErrCompilerUnavailable) {
-		t.Fatalf("add without compiler: %v", err)
-	}
-	if _, err := s.Compose(ctx, n.ID); !errors.Is(err, ErrCompilerUnavailable) {
-		t.Fatal("compose without compiler")
-	}
-	// Deletion is never blocked.
-	db.ApplySensorChanges(ctx, n.ID, store.SensorChanges{Create: []domain.Sensor{{ID: "ts-sensor-x", CatalogueName: "x", Version: "1.0.0", CreatedAt: time.Now()}}})
-	if _, err := s.DeleteSensor(ctx, n.ID, "ts-sensor-x"); err != nil {
-		t.Fatalf("delete without compiler: %v", err)
-	}
-}
-
 func TestPreviewDoesNotSaveAndIsRedacted(t *testing.T) {
 	s, db, _ := newService(t, true)
 	ctx := context.Background()

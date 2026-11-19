@@ -50,11 +50,12 @@ type LiveFeed interface {
 }
 
 // Pipeline processes accepted events in the order defined by §6.5.
+// Collaborators other than Store, Log and Now may be nil in tests.
 type Pipeline struct {
 	Store       Store
 	Lists       SourceLists
-	Beacons     ported.BeaconService     // nil: every beacon is unknown
-	Honeytokens ported.HoneytokenService // nil: no honeytoken matching
+	Beacons     ported.BeaconService
+	Honeytokens ported.HoneytokenService
 	Enricher    Enricher
 	SIEM        SIEMSink
 	Notifier    Notifier

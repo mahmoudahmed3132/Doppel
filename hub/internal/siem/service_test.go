@@ -216,7 +216,7 @@ func waitUntil(t *testing.T, cond func() bool) {
 func httpService(t *testing.T, h *fakeHTTP) *Service {
 	t.Helper()
 	s := &Service{Renderer: stub.ECS{}, HTTP: h, Log: quiet(), BackoffBase: time.Millisecond, BackoffCap: 2 * time.Millisecond}
-	cfg, err := Config{Protocol: ProtoElastic, Address: "https://es.example:9200/logs-truesignal-default", Token: "k"}.Normalize(s.Capabilities())
+	cfg, err := Config{Protocol: ProtoElastic, Address: "https://es.example:9200/logs-truesignal-default", Token: "k"}.Normalize()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,29 +409,22 @@ func TestShutdownFlushes(t *testing.T) {
 }
 
 func TestConfigValidation(t *testing.T) {
-	none := Capabilities{}
-	all := Capabilities{ECS: true, HTTP: true}
-	bad := []struct {
-		c    Config
-		caps Capabilities
-	}{
-		{Config{Protocol: "smtp"}, all},
-		{Config{Protocol: ProtoTCP, Address: "nohost"}, all},
-		{Config{Protocol: ProtoTCP, Address: "h:99999"}, all},
-		{Config{Protocol: ProtoTCP, Address: "h:514", Format: "cef"}, all},
-		{Config{Protocol: ProtoTCP, Address: "h:514", Format: FormatECS}, none},
-		{Config{Protocol: ProtoElastic, Address: "https://es:9200/logs", Token: "k"}, none},
-		{Config{Protocol: ProtoElastic, Address: "http://es:9200/logs", Token: "k"}, all},
-		{Config{Protocol: ProtoElastic, Address: "https://es:9200/", Token: "k"}, all},
-		{Config{Protocol: ProtoLogScale, Address: "https://u:p@ls/api/v1/ingest/hec"}, all},
-		{Config{Protocol: ProtoLogScale, Address: "https://ls/api/v1/ingest/hec"}, all},
+	bad := []Config{
+		{Protocol: "smtp"},
+		{Protocol: ProtoTCP, Address: "nohost"},
+		{Protocol: ProtoTCP, Address: "h:99999"},
+		{Protocol: ProtoTCP, Address: "h:514", Format: "cef"},
+		{Protocol: ProtoElastic, Address: "http://es:9200/logs", Token: "k"},
+		{Protocol: ProtoElastic, Address: "https://es:9200/", Token: "k"},
+		{Protocol: ProtoLogScale, Address: "https://u:p@ls/api/v1/ingest/hec"},
+		{Protocol: ProtoLogScale, Address: "https://ls/api/v1/ingest/hec"},
 	}
-	for i, b := range bad {
-		if _, err := b.c.Normalize(b.caps); !errors.Is(err, ErrInvalid) {
-			t.Errorf("case %d accepted: %+v", i, b.c)
+	for i, c := range bad {
+		if _, err := c.Normalize(); !errors.Is(err, ErrInvalid) {
+			t.Errorf("case %d accepted: %+v", i, c)
 		}
 	}
-	c, err := Config{Protocol: "TCP", Address: " siem.local:6514 "}.Normalize(none)
+	c, err := Config{Protocol: "TCP", Address: " siem.local:6514 "}.Normalize()
 	if err != nil || c.Format != FormatRFC5424 || c.Address != "siem.local:6514" {
 		t.Fatalf("%+v %v", c, err)
 	}

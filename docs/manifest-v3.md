@@ -89,4 +89,4 @@ The CLI must add `TS_NODE_KEY=<key from /etc/truesignal/config.json>` to the
 | `missing_config`, `invalid_config` | 422 | 6 |
 | `port_conflict` | 409 | 7 |
 | `manifest_unavailable`, `manifest_mismatch`, `incompatible_manifest`, `invalid_manifest` | 422 | catalogue / schema |
-| `honeytoken_unavailable`, `hub_endpoint_unset` | 422 | rule 9 prerequisites |
+| `hub_endpoint_unset` | 422 | rule 9 prerequisites |

@@ -61,12 +61,12 @@ func newSysHub(t *testing.T) *sysHub {
 		TOTP: stub.TOTP{}, Log: log, Now: time.Now, SessionTTL: time.Hour, SessionIdle: time.Hour})
 	tok, _ := svc.Init(ctx)
 	h := &sysHub{db: db, audit: &auditLog{}, siem: &deliverer{}}
-	settings := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, Log: log}
+	settings := &hubsettings.Service{Store: db, Parser: sourcelist.Parser{}, Assets: stub.Assets{}, Log: log}
 	settings.Load(ctx)
 	admin := &Admin{Auth: svc, Settings: db, Audit: h.audit, Log: log, Now: time.Now, Development: true}
 	h.admin = admin
 	(&Events{Store: db, Enricher: &enrich.Enricher{Nodes: db}, Log: log}).Register(admin)
-	(&System{Settings: settings, Auth: svc, BeaconDB: db, SIEM: h.siem, Log: log, Now: time.Now,
+	(&System{Settings: settings, Auth: svc, Beacons: stub.NewBeacons(), BeaconDB: db, SIEM: h.siem, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
 			h.reset = append(h.reset, purge)
 			return db.FactoryReset(ctx, purge)
@@ -212,13 +212,7 @@ func TestSettingsAndAssets(t *testing.T) {
 	if code, _, _ := h.c.do("PATCH", "/api/v3/settings", map[string]any{"siem_token": "x"}); code != 400 {
 		t.Fatal("unknown field accepted")
 	}
-	if code, out, _ := h.c.do("PUT", "/api/v3/assets", map[string]any{"assets": []any{}}); code != 503 || out["error"] != "module_unavailable" {
-		t.Fatalf("%d %v", code, out)
-	}
-	if code, out, _ := h.c.do("POST", "/api/v3/beacons", map[string]any{"type": "dns", "name": "x"}); code != 503 {
-		t.Fatalf("%d %v", code, out)
-	}
-	if code, out, _ := h.c.do("GET", "/api/v3/beacons", nil); code != 200 || out["available"] != false {
+	if code, out, _ := h.c.do("GET", "/api/v3/beacons", nil); code != 200 || out["available"] != true {
 		t.Fatalf("%d %v", code, out)
 	}
 }

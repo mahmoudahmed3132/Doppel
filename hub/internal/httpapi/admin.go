@@ -266,8 +266,6 @@ func (a *Admin) failAuth(w http.ResponseWriter, err error) {
 		Fail(w, http.StatusBadRequest, "weak_password", err.Error())
 	case errors.Is(err, auth.ErrInvalidEndpoint):
 		Fail(w, http.StatusBadRequest, "invalid_endpoint", err.Error())
-	case errors.Is(err, auth.ErrMFAUnavailable):
-		Fail(w, http.StatusServiceUnavailable, "mfa_unavailable", "the MFA module is not installed")
 	case errors.Is(err, auth.ErrMFAEnabled):
 		Fail(w, http.StatusConflict, "mfa_enabled", err.Error())
 	case errors.Is(err, auth.ErrMFANotEnabled):

@@ -34,7 +34,7 @@ type AuditDeliverer interface {
 type System struct {
 	Settings *hubsettings.Service
 	Auth     *auth.Service
-	Beacons  ported.BeaconService // nil: create/artefact unavailable
+	Beacons  ported.BeaconService
 	BeaconDB ported.BeaconStore
 	SIEM     AuditDeliverer
 	Reset    ResetFunc
@@ -64,8 +64,6 @@ func (s *System) fail(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, hubsettings.ErrInvalid):
 		Fail(w, http.StatusBadRequest, CodeInvalid, err.Error())
-	case errors.Is(err, hubsettings.ErrUnavailable):
-		Fail(w, http.StatusServiceUnavailable, "module_unavailable", "the required module is not installed")
 	case errors.Is(err, domain.ErrNotFound):
 		Fail(w, http.StatusNotFound, CodeNotFound, "not found")
 	default:
@@ -92,7 +90,7 @@ func (s *System) patchSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *System) getAssets(w http.ResponseWriter, r *http.Request) {
-	OK(w, map[string]any{"assets": s.Settings.AssetsRaw(r.Context()), "editable": s.Settings.Assets != nil})
+	OK(w, map[string]any{"assets": s.Settings.AssetsRaw(r.Context()), "editable": true})
 }
 
 func (s *System) putAssets(w http.ResponseWriter, r *http.Request) {
@@ -116,16 +114,12 @@ func (s *System) listBeacons(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	OK(w, map[string]any{"beacons": l, "available": s.Beacons != nil}) // Token has json:"-"
+	OK(w, map[string]any{"beacons": l, "available": true}) // Token has json:"-"
 }
 
 var beaconIDRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 func (s *System) createBeacon(w http.ResponseWriter, r *http.Request) {
-	if s.Beacons == nil {
-		s.fail(w, hubsettings.ErrUnavailable)
-		return
-	}
 	var req struct {
 		Type string `json:"type"`
 		Name string `json:"name"`
@@ -152,10 +146,6 @@ func (s *System) beaconArtefact(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, domain.ErrNotFound)
 		return
 	}
-	if s.Beacons == nil {
-		s.fail(w, hubsettings.ErrUnavailable)
-		return
-	}
 	art, err := s.Beacons.Artefact(r.Context(), id)
 	if err != nil {
 		s.fail(w, err)
@@ -177,12 +167,7 @@ func (s *System) deleteBeacon(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, domain.ErrNotFound)
 		return
 	}
-	var err error
-	if s.Beacons != nil {
-		err = s.Beacons.Delete(r.Context(), id)
-	} else {
-		err = s.BeaconDB.DeleteBeacon(r.Context(), id)
-	}
+	err := s.Beacons.Delete(r.Context(), id)
 	if err != nil {
 		s.fail(w, err)
 		return

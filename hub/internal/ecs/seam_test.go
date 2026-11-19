@@ -19,9 +19,6 @@ import (
 func TestRendererThroughSIEMService(t *testing.T) {
 	at := time.Date(2026, 11, 15, 11, 0, 0, 0, time.UTC)
 	svc := &siem.Service{Renderer: ecs.Renderer{Now: func() time.Time { return at }}}
-	if !svc.Capabilities().ECS {
-		t.Fatal("ECS capability not reported")
-	}
 	cfg := siem.Config{Format: siem.FormatECS}
 	ev := &domain.EnrichedEvent{Event: domain.Event{EventID: "0192f000-0000-7000-8000-0000000000e1", NodeID: "node-0000000e", SensorID: "ts-sensor-web",
 		Trigger: "web_login_attempt", Severity: "high", OccurredAt: at, Source: "203.0.113.7", Target: "router",

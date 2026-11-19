@@ -77,10 +77,6 @@ func (f *Fleet) fail(w http.ResponseWriter, err error) {
 		Fail(w, http.StatusNotFound, CodeNotFound, "not found")
 	case errors.Is(err, fleet.ErrSensorExists):
 		Fail(w, http.StatusConflict, "sensor_exists", err.Error())
-	case errors.Is(err, fleet.ErrCompilerUnavailable):
-		Fail(w, http.StatusServiceUnavailable, "compose_unavailable", "the compose compiler is not available; sensor changes are refused")
-	case errors.Is(err, fleet.ErrCatalogueUnavailable):
-		Fail(w, http.StatusServiceUnavailable, "catalogue_unavailable", "the sensor catalogue is not available")
 	default:
 		f.Log.Error("fleet operation failed", "error", err.Error())
 		Fail(w, http.StatusInternalServerError, CodeInternal, "internal error")

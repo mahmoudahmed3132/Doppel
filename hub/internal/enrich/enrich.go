@@ -2,8 +2,7 @@
 
 // Package enrich computes output-only event enrichment (§6.5 step 6): node
 // alias, ATT&CK mapping, source asset and location. It is evaluated on every
-// read, so inventory or database changes apply to past events too. The
-// mapping, asset and GeoIP logic are PORTED modules; each is optional.
+// read, so inventory or database changes apply to past events too.
 package enrich
 
 import (
@@ -24,12 +23,12 @@ type AssetIndexProvider interface {
 	AssetIndex(ctx context.Context) ported.AssetIndex
 }
 
-// Enricher implements ingest.Enricher.
+// Enricher implements ingest.Enricher. Collaborators may be nil in tests.
 type Enricher struct {
 	Nodes  Nodes
-	Attack ported.AttackMapper // nil: no ATT&CK enrichment
-	Assets AssetIndexProvider  // nil: no asset enrichment
-	Geo    ported.GeoLocator   // nil: no location
+	Attack ported.AttackMapper
+	Assets AssetIndexProvider
+	Geo    ported.GeoLocator
 }
 
 // Enrich returns ev with enrichment. Failures degrade to "no enrichment".

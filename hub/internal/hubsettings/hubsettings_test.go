@@ -18,16 +18,13 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
-func newSvc(t *testing.T, parser bool) (*Service, *store.DB) {
+func newSvc(t *testing.T) (*Service, *store.DB) {
 	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "ts.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	s := &Service{Store: db, DefaultRegistry: "https://registry.example/", Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	if parser {
-		s.Parser = sourcelist.Parser{}
-	}
+	s := &Service{Store: db, Parser: sourcelist.Parser{}, Assets: stub.Assets{}, DefaultRegistry: "https://registry.example/", Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	s.Load(context.Background())
 	return s, db
 }
@@ -35,7 +32,7 @@ func newSvc(t *testing.T, parser bool) (*Service, *store.DB) {
 func ptr[T any](v T) *T { return &v }
 
 func TestDefaultsAndUpdate(t *testing.T) {
-	s, _ := newSvc(t, true)
+	s, _ := newSvc(t)
 	ctx := context.Background()
 	v := s.Get(ctx)
 	if v.RegistryURL != "https://registry.example/" || v.UpdateCheckHours != 24 || v.Retention.HistoryDays != 30 ||
@@ -64,7 +61,7 @@ func TestDefaultsAndUpdate(t *testing.T) {
 		t.Fatal("whitelist not applied immediately")
 	}
 	// A fresh service (restart) loads the same matcher.
-	s2 := &Service{Store: s.Store, Parser: sourcelist.Parser{}, Log: s.Log}
+	s2 := &Service{Store: s.Store, Parser: sourcelist.Parser{}, Assets: stub.Assets{}, Log: s.Log}
 	s2.Load(ctx)
 	if s2.Whitelist() == nil || !s2.Whitelist().Match("scanner.corp") {
 		t.Fatal("whitelist not loaded at start")
@@ -72,7 +69,7 @@ func TestDefaultsAndUpdate(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
-	s, _ := newSvc(t, true)
+	s, _ := newSvc(t)
 	ctx := context.Background()
 	bad := []Patch{
 		{PublicEndpoint: ptr("ftp://x")},
@@ -98,21 +95,10 @@ func TestValidation(t *testing.T) {
 	if v := s.Get(ctx); v.PublicEndpoint != "" {
 		t.Fatal("partial update persisted")
 	}
-	if _, err := s.ReplaceAssets(ctx, []byte(`[]`)); !errors.Is(err, ErrUnavailable) {
-		t.Fatal("assets accepted without the PORTED module")
-	}
-}
-
-func TestListsStoredButInactiveWithoutParser(t *testing.T) {
-	s, _ := newSvc(t, false)
-	v, err := s.Update(context.Background(), Patch{Whitelist: &[]string{"10.0.0.7"}})
-	if err != nil || v.SourceListsActive || len(v.Whitelist) != 1 || s.Whitelist() != nil {
-		t.Fatalf("%+v %v", v, err)
-	}
 }
 
 func TestRetention(t *testing.T) {
-	s, db := newSvc(t, false)
+	s, db := newSvc(t)
 	ctx := context.Background()
 	now := time.Now()
 	for i, age := range []time.Duration{100 * 24 * time.Hour, 40 * 24 * time.Hour, time.Hour} {
@@ -142,16 +128,12 @@ func TestRetention(t *testing.T) {
 	}
 }
 
-// With the asset module installed (stub): validated, normalised, stored,
-// indexed for enrichment, rebuilt from storage on restart; invalid or
-// oversized inventories are refused without replacing the current one.
+// Asset inventory: validated, normalised, stored, indexed for enrichment,
+// rebuilt from storage on restart; invalid or oversized inventories are
+// refused without replacing the current one.
 func TestAssetInventoryWithModule(t *testing.T) {
-	s, db := newSvc(t, false)
+	s, db := newSvc(t)
 	ctx := context.Background()
-	if _, err := s.ReplaceAssets(ctx, []byte(`[]`)); !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("without the module: %v", err)
-	}
-	s.Assets = stub.Assets{}
 	norm, err := s.ReplaceAssets(ctx, []byte(` [ {"match":"10.0.0.7", "name":"jump-host", "criticality":"high"} ] `))
 	if err != nil || !strings.HasPrefix(string(norm), `[{"match":"10.0.0.7"`) {
 		t.Fatalf("%s %v", norm, err)
@@ -181,7 +163,7 @@ func TestAssetInventoryWithModule(t *testing.T) {
 // refused and the current list kept); a stored list from before validation
 // is loaded leniently instead of being dropped.
 func TestSourceListsWithRealMatcher(t *testing.T) {
-	s, db := newSvc(t, true)
+	s, db := newSvc(t)
 	ctx := context.Background()
 	if _, err := s.Update(ctx, Patch{Whitelist: &[]string{"10.0.0.0/8", "scanner.example"}}); err != nil {
 		t.Fatal(err)
