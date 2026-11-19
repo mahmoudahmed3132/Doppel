@@ -6,7 +6,8 @@
 # Hub, the real CLI applying the Hub-rendered compose with `docker compose`,
 # real connections to the decoys, events and heartbeats arriving, container
 # hardening as rendered (§6.12), fire drill, idempotent re-apply, uninstall.
-# KEEP=1 stops before the uninstall and leaves the POC running (docs/poc.md).
+# KEEP=1 stops before the uninstall and leaves the POC running (docs/poc.md);
+# it builds the real admin UI first (needs Node 22+, else it fails with a clear message).
 #
 # Needs: docker with the compose plugin, go, jq, curl, python3. On Linux the
 # CLI runs as root via passwordless sudo. On macOS (Docker Desktop with host
@@ -67,8 +68,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [ "${KEEP:-0}" = 1 ]; then
+	# POC mode shows the real admin UI: build it (make ui) before the Hub embeds it.
+	step "build the admin UI (KEEP=1)"
+	command -v node >/dev/null 2>&1 || fail "KEEP=1 needs Node 22+ to build the admin UI (make ui); node not found. Install Node 22 or run without KEEP=1"
+	node_major=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
+	[ "$node_major" -ge 22 ] 2>/dev/null || fail "KEEP=1 needs Node 22+ to build the admin UI (make ui); found $(node --version 2>/dev/null || echo unknown)"
+	command -v npm >/dev/null 2>&1 || fail "KEEP=1 needs npm (ships with Node 22+) to build the admin UI"
+	(cd "$ROOT" && make ui)
+fi
+
 step "build Hub, CLI and registry tool"
-(cd "$ROOT/hub" && CGO_ENABLED=0 go build -o "$W/hub" ./cmd/truesignal-hub && go build -o "$W/ts-registry" ./cmd/ts-registry)
+(cd "$ROOT/hub" && CGO_ENABLED=0 go build -o "$W/hub" ./cmd/doppel-hub && go build -o "$W/ts-registry" ./cmd/ts-registry)
 (cd "$ROOT/cli" && CGO_ENABLED=0 go build -o "$CLI" ./cmd/doppel)
 
 step "local image registry; build and push sensor images by digest"

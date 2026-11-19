@@ -19,6 +19,9 @@ concurrency:
 env:
   GO_VERSION: "1.27.4"
   NODE_VERSION: "22"
+  # Never download a toolchain silently: the Go that setup-go installs must be
+  # the one go.mod asks for (checked by scripts/check-go-version.sh).
+  GOTOOLCHAIN: local
 
 jobs:
   modules:
@@ -52,6 +55,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: "**/go.sum"
+      - name: Go version matches go.mod (GOTOOLCHAIN=local, no silent download)
+        run: scripts/check-go-version.sh "$GO_VERSION"
       - name: go vet
         working-directory: ${{ matrix.module }}
         run: go vet ./...
@@ -96,11 +101,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: "**/go.sum"
+      - name: Go version matches go.mod (GOTOOLCHAIN=local, no silent download)
+        run: scripts/check-go-version.sh "$GO_VERSION"
       - name: npm ci, tsc, safety lint, build
         run: make ui
       - name: embedded build is CSP-clean and routable
         working-directory: hub
-        run: go test -count=1 ./internal/webui/ && go build -o /dev/null ./cmd/truesignal-hub
+        run: go test -count=1 ./internal/webui/ && go build -o /dev/null ./cmd/doppel-hub
 
   images:
     name: image builds + scan
@@ -200,6 +207,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: "**/go.sum"
+      - name: Go version matches go.mod (GOTOOLCHAIN=local, no silent download)
+        run: scripts/check-go-version.sh "$GO_VERSION"
       - name: deploy, exercise and uninstall decoys through the real CLI
         run: scripts/e2e/real-docker.sh
 
@@ -215,6 +224,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: "**/go.sum"
+      - name: Go version matches go.mod (GOTOOLCHAIN=local, no silent download)
+        run: scripts/check-go-version.sh "$GO_VERSION"
       - name: run the scripted kill-chain and assert every expected event
         run: scripts/demo/run-demo.sh --smoke --skip-ui-build
 
@@ -230,6 +241,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: "**/go.sum"
+      - name: Go version matches go.mod (GOTOOLCHAIN=local, no silent download)
+        run: scripts/check-go-version.sh "$GO_VERSION"
       - name: every module (and its tests) compiles and vets on darwin
         run: |
           for m in $(sed -n 's/^[[:space:]]*\.\/\(.*\)$/\1/p' go.work); do
@@ -294,4 +307,6 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: "**/go.sum"
+      - name: Go version matches go.mod (GOTOOLCHAIN=local, no silent download)
+        run: scripts/check-go-version.sh "$GO_VERSION"
       - run: scripts/release/selftest.sh
