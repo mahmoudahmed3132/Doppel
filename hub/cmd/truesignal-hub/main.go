@@ -454,7 +454,7 @@ func serve(log *slog.Logger) error {
 		StartedAt: startedAt, Development: cfg.Development, Log: log, Now: time.Now, Origin: admin.ExpectedOrigin,
 		// Merged modules: ATT&CK mapper and projections (MERGE-INVENTORY.md).
 		Attack:      attack.Mapper{},
-		Projections: installedProjections(geoSvc),
+		Projections: installedProjections(geoSvc, db, honeytokens, beacons),
 	}).Register(admin)
 	(&httpapi.System{Settings: settingsSvc, Auth: authSvc, BeaconDB: db, Beacons: beacons, SIEM: siemSvc, Network: network, Log: log, Now: time.Now,
 		Reset: func(ctx context.Context, purge bool) error {
