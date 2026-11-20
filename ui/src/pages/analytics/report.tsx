@@ -6,6 +6,8 @@
 // ATT&CK techniques, and honeytoken uses.
 import { useState } from "preact/hooks";
 import { enc } from "../../api";
+import { can, me } from "../../app";
+import { useStore } from "../../store";
 import { SeverityBars } from "../../charts";
 import { fmtNum, fmtTime } from "../../format";
 import { Link } from "../../router";
@@ -129,11 +131,14 @@ export function ReportPage() {
   const [fromInput, setFromInput] = useState(() => isoDateOffset(-30));
   const [toInput, setToInput] = useState(() => isoDateOffset(1));
   const [applied, setApplied] = useState(() => ({ from: isoDateOffset(-30), to: isoDateOffset(1) }));
+  // Fire drills are excluded by default (F-001); analysts and admins may add them back.
+  const [drills, setDrills] = useState(false);
+  const canDrills = can(useStore(me), "analyst");
 
   const days = windowDaysForRange(applied.from);
   const data = useProjection<ReportDTO>(
     "report",
-    { days, from: applied.from || undefined, to: applied.to || undefined },
+    { days, from: applied.from || undefined, to: applied.to || undefined, include_drills: canDrills && drills ? true : undefined },
   );
 
   const applyPreset = (d: number) => {
@@ -175,6 +180,12 @@ export function ReportPage() {
             <input type="date" class="input" value={toInput} onChange={(e) => setToInput(e.currentTarget.value)} required />
           </label>
           <Button type="submit" variant="primary" small>Apply</Button>
+          {canDrills ? (
+            <label class="inline-field">
+              <input type="checkbox" checked={drills} onChange={(e) => setDrills(e.currentTarget.checked)} />
+              <span>Include fire drills</span>
+            </label>
+          ) : null}
           <div class="row report-presets">
             <Button small variant="ghost" onClick={() => applyPreset(7)}>7 days</Button>
             <Button small variant="ghost" onClick={() => applyPreset(30)}>30 days</Button>
@@ -216,6 +227,7 @@ export function ReportPage() {
             </div>
           </div>
 
+          {canDrills && drills ? <p class="muted">Fire drills are included in these figures.</p> : null}
           {dto.archivedEvents > 0 ? (
             <p class="muted">
               {fmtNum(dto.archivedEvents)} archived, whitelisted, or known-scanner events in this period are excluded from the figures below.

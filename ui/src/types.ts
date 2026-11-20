@@ -20,6 +20,8 @@ export interface EventRecord {
   source_ip?: string; source_port?: number | null; source_kind?: SourceKind; labels?: string[];
   target: string; details: unknown;
   read: boolean; archived: boolean; whitelisted: boolean; known_scanner: boolean; node_alias: string;
+  /** Fire drill (F-001): stored as info, excluded from analytics, shown in the Drills view. */
+  drill: boolean;
   enrichment: { attack?: { primary: Technique; secondary?: Technique[] }; source_asset?: { name: string; criticality: string }; location?: Location; asn?: number; as_org?: string };
 }
 
