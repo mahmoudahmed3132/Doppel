@@ -88,10 +88,22 @@ the Hub had already stored come back as `duplicates` (idempotency by
   replaced with `{"details_dropped":true}` (as the Hub would), `source` and
   `target` are truncated to 256 bytes. Queue memory is therefore bounded by
   queue size × about 65 KiB.
-- Batching: up to 100 events or 1 s.
+- Batching: up to 100 events and up to 240 KiB of encoded events, or 1 s,
+  whichever comes first. The byte budget keeps every request under the Hub's
+  256 KiB body limit (`413 body_too_large`); without it four 64 KiB events in
+  one batch would have the whole batch, up to 100 events, refused. A batch
+  always takes at least one event; the per-event limits keep a single event
+  well under 256 KiB. Event size is estimated as an upper bound: `details`
+  at its encoded length, and `sensor_id`, `trigger`, `source` and `target`
+  at 6 bytes per byte or character, because JSON escaping (`<`, control
+  characters) can expand them that much and `source`/`target` often carry
+  attacker-supplied text.
 - Retry: network errors, `408`, `429`, `5xx`; up to 7 attempts per batch;
   delay = min(60 s, 1 s·2^(n-1)) with jitter in [d/2, d]; `Retry-After`
-  honoured up to 60 s. Other `4xx`: batch dropped and counted.
+  honoured up to 60 s. `413` on a batch of more than one event (for example
+  a proxy in front of the Hub with a lower body limit): the batch is split
+  in half and each half delivered, recursively. Other `4xx`, and `413` on a
+  single event: batch dropped and counted.
 - Heartbeat: immediately at start, then every 30 s.
 - SIGTERM/SIGINT: stop the sensor body, flush ≤ 5 s, send stop notice, exit 0.
 - SIGUSR1: queue the sensor's synthetic event with `source = "Fire drill"`.
