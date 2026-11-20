@@ -31,6 +31,11 @@ type HubEventRaiser interface {
 	RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger string, sev domain.Severity, source, target string, details map[string]any) (*domain.Event, error)
 }
 
+// ContainerRestartRecorder records container restart counts reported by the node CLI agent.
+type ContainerRestartRecorder interface {
+	ReportContainerRestarts(ctx context.Context, nodeID string, restarts map[string]int) error
+}
+
 // NodeAPI serves the node agent CLI (node-key authenticated).
 type NodeAPI struct {
 	Ingest   *Ingest // shares node-key auth and rate limiting
@@ -48,6 +53,7 @@ func (n *NodeAPI) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v3/node/identity", n.cli(n.Ingest.authenticated(n.identity)))
 	mux.HandleFunc("GET /v3/node/compose", n.cli(n.Ingest.authenticated(n.compose)))
 	mux.HandleFunc("POST /v3/node/applied", n.cli(n.Ingest.authenticated(n.applied)))
+	mux.HandleFunc("POST /v3/node/status", n.cli(n.Ingest.authenticated(n.status)))
 }
 
 // cli enforces the CLI/Hub major-version rule before authentication.
@@ -168,6 +174,59 @@ func (n *NodeAPI) applied(w http.ResponseWriter, r *http.Request, nodeID string)
 	default:
 		Fail(w, http.StatusBadRequest, CodeInvalid, "result must be applied, unchanged, rolled_back or failed")
 		return
+	}
+	OK(w, nil)
+}
+
+type nodeContainerStatus struct {
+	SensorID     string `json:"sensor_id"`
+	RestartCount int    `json:"restart_count"`
+	State        string `json:"state,omitempty"`
+	Status       string `json:"status,omitempty"`
+}
+
+func (n *NodeAPI) status(w http.ResponseWriter, r *http.Request, nodeID string) {
+	var req struct {
+		Containers []nodeContainerStatus `json:"containers"`
+		Restarts   map[string]int        `json:"restarts"`
+	}
+	if err := DecodeStrict(w, r, 64<<10, &req); err != nil {
+		FailDecode(w, err)
+		return
+	}
+	if len(req.Containers) > 100 || len(req.Restarts) > 100 {
+		Fail(w, http.StatusBadRequest, CodeInvalid, "at most 100 container status entries")
+		return
+	}
+	counts := make(map[string]int, len(req.Containers)+len(req.Restarts))
+	for id, c := range req.Restarts {
+		if c < 0 {
+			Fail(w, http.StatusBadRequest, CodeInvalid, "restart_count must be >= 0")
+			return
+		}
+		sid, ok := n.Ingest.sensorOf(w, r, nodeID, id)
+		if !ok {
+			return
+		}
+		counts[sid] = c
+	}
+	for _, c := range req.Containers {
+		if c.RestartCount < 0 {
+			Fail(w, http.StatusBadRequest, CodeInvalid, "restart_count must be >= 0")
+			return
+		}
+		sid, ok := n.Ingest.sensorOf(w, r, nodeID, c.SensorID)
+		if !ok {
+			return
+		}
+		counts[sid] = c.RestartCount
+	}
+	if rec, ok := n.Ingest.Liveness.(ContainerRestartRecorder); ok && len(counts) > 0 {
+		if err := rec.ReportContainerRestarts(r.Context(), nodeID, counts); err != nil {
+			n.Ingest.Log.Error("recording container restarts failed", "node_id", nodeID, "error", err.Error())
+			Fail(w, http.StatusInternalServerError, CodeInternal, "status report not recorded")
+			return
+		}
 	}
 	OK(w, nil)
 }

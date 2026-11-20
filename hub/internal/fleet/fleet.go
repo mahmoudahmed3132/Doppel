@@ -29,11 +29,13 @@ import (
 
 // Limits on admin input.
 const (
-	MaxAliasRunes  = 64
-	MaxTags        = 32
-	MaxTagBytes    = 32
-	MaxConfigKeys  = 64
-	MaxConfigValue = 4096
+	MaxAliasRunes         = 64
+	MaxTags               = 32
+	MaxTagBytes           = 32
+	MaxConfigKeys         = 64
+	MaxConfigValue        = 4096
+	MaxSilenceReasonRunes = 256
+	MaxSilenceDuration    = 30 * 24 * time.Hour
 )
 
 // Rendered is the compose compiler's output for one node.
@@ -108,6 +110,7 @@ type Store interface {
 	Sensor(ctx context.Context, nodeID, id string) (*domain.Sensor, error)
 	Sensors(ctx context.Context, nodeID string) ([]domain.Sensor, error)
 	SetSensorSilenced(ctx context.Context, nodeID, id string, v bool) error
+	SetSensorSilence(ctx context.Context, nodeID, id string, silenced bool, reason string, until *time.Time) error
 	ApplySensorChanges(ctx context.Context, nodeID string, c store.SensorChanges) error
 }
 
@@ -601,7 +604,38 @@ func (s *Service) DeleteSensor(ctx context.Context, nodeID, sensorID string) (Re
 	})
 }
 
-// SetSilenced toggles webhook silencing; the compose file is unaffected.
+// SilenceSensor silences webhook notifications for a sensor with a mandatory
+// reason and expiry (at most 30 days in the future). The compose file is unaffected.
+func (s *Service) SilenceSensor(ctx context.Context, nodeID, sensorID, reason string, until time.Time) (string, time.Time, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" || !utf8.ValidString(reason) || utf8.RuneCountInString(reason) > MaxSilenceReasonRunes {
+		return "", time.Time{}, invalid("silence reason must be 1 to %d characters", MaxSilenceReasonRunes)
+	}
+	for _, r := range reason {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' {
+			return "", time.Time{}, invalid("silence reason must not contain control characters")
+		}
+	}
+	now := s.Now().UTC()
+	untilUTC := until.UTC()
+	if until.IsZero() || !untilUTC.After(now) {
+		return "", time.Time{}, invalid("silence expiry must be in the future")
+	}
+	if untilUTC.Sub(now) > MaxSilenceDuration {
+		return "", time.Time{}, invalid("silence expiry must be at most 30 days")
+	}
+	if err := s.Store.SetSensorSilence(ctx, nodeID, sensorID, true, reason, &untilUTC); err != nil {
+		return "", time.Time{}, err
+	}
+	return reason, untilUTC, nil
+}
+
+// UnsilenceSensor clears a sensor's silence window; the compose file is unaffected.
+func (s *Service) UnsilenceSensor(ctx context.Context, nodeID, sensorID string) error {
+	return s.Store.SetSensorSilence(ctx, nodeID, sensorID, false, "", nil)
+}
+
+// SetSilenced toggles webhook silencing without a window (retained for internal compatibility).
 func (s *Service) SetSilenced(ctx context.Context, nodeID, sensorID string, v bool) error {
 	return s.Store.SetSensorSilenced(ctx, nodeID, sensorID, v)
 }

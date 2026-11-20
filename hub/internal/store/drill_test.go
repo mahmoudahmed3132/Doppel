@@ -37,7 +37,7 @@ func TestDrillMigrationBackfill(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if v, _ := db.schemaVersion(ctx); v != 7 || SchemaVersion() < 7 {
+	if v, _ := db.schemaVersion(ctx); v != SchemaVersion() || SchemaVersion() < 7 {
 		t.Fatalf("schema %d", v)
 	}
 	evs, err := db.Events(ctx, EventFilter{})

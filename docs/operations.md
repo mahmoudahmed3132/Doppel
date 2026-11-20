@@ -154,6 +154,39 @@ secrets; the KEK is not in it (see THREATMODEL.md R1).
   `Fire drill` and creates the `events_nondrill` index on first start (one
   table scan; the `.pre-v7-…bak` snapshot is written first, §3).
 
+### Liveness alerting and silence windows (F-005, PCI DSS 10.7.2)
+
+- **Node-level liveness:** when no heartbeat arrives from any sensor on an
+  online node for `3 × interval` (90 s), the Hub emits `node_offline`
+  (`severity: high`), and emits `node_online` (`severity: info`) once any
+  sensor on that node resumes heartbeating.
+- **Sensor tamper vs. sensor offline:** if a sensor misses heartbeats for
+  `2 × interval` (60 s) without a stop notice while its node continues
+  heartbeating — or if a sensor container is stopped (`docker stop`) and not
+  restarted within `2 × interval` (60 s) while its node continues heartbeating —
+  the Hub emits `sensor_tamper_suspected` (`severity: high`). It also emits
+  `sensor_tamper_suspected` (`severity: high`) when a node reports via
+  `POST /v3/node/status` that a sensor container restarted more than 3 times in
+  5 minutes (`reason: container_restart_loop`). When an entire node goes silent,
+  per-sensor timeouts emit `sensor_heartbeat_lost` (`severity: medium`) at
+  `2 × interval` followed by `node_offline` (`severity: high`) at
+  `3 × interval`.
+- **Configuration drift:** when a node's `applied_revision` differs from its
+  `desired_revision` for longer than `config_drift_minutes` (default 15 minutes,
+  configurable under **Settings → General** or `PATCH /api/v3/settings`), the
+  Hub emits `config_drift` (`severity: medium`) once per drift episode until the
+  revisions converge.
+- **Silence windows:** silencing a sensor from the node page
+  (`POST /api/v3/nodes/{node}/sensors/{sensor}/silence`) requires a mandatory
+  reason (≤ 256 characters) and an expiry (`until`, `expires_at`, or
+  `duration_seconds`, at most 30 days). Silenced sensors still record events and
+  forward to the SIEM, but suppress webhook notifications until the window
+  expires. When the window expires, the Hub's liveness sweep automatically
+  unsilences the sensor and emits a `sensor.silence_expired` audit record.
+- Schema v8 (`nodes.ever_online`, `nodes.offline_alerted_at`,
+  `nodes.drift_since`, `nodes.drift_alerted_at`, `sensors.silenced_reason`,
+  `sensors.silenced_until`) is applied on first start after `.pre-v8-…bak`.
+
 ## 3. Upgrade the Hub
 
 1. Read the release notes; verify the new digest (§1).

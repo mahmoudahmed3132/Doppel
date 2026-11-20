@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
@@ -36,8 +37,8 @@ func (f *Fleet) Register(a *Admin) {
 	a.RouteFull("PATCH /api/v3/nodes/{node}/sensors/{sensor}", "sensor.update", needAdmin, f.updateSensor)
 	a.RouteFull("DELETE /api/v3/nodes/{node}/sensors/{sensor}", "sensor.delete", needAdmin, f.deleteSensor)
 	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/upgrade", "sensor.upgrade", needAdmin, f.upgradeSensor)
-	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/silence", "sensor.silence", needAnalyst, f.silence(true))
-	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/unsilence", "sensor.unsilence", needAnalyst, f.silence(false))
+	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/silence", "sensor.silence", needAnalyst, f.silenceSensor)
+	a.RouteFull("POST /api/v3/nodes/{node}/sensors/{sensor}/unsilence", "sensor.unsilence", needAnalyst, f.unsilenceSensor)
 }
 
 // ids extracts and validates path ids; invalid ids are reported as 404.
@@ -351,16 +352,63 @@ func (f *Fleet) deleteSensor(w http.ResponseWriter, r *http.Request) {
 	OK(w, map[string]any{"events_kept": true, "render": renderJSON(rd)})
 }
 
-func (f *Fleet) silence(v bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		node, id, ok := f.sensorIDs(w, r)
-		if !ok {
-			return
-		}
-		if err := f.Svc.SetSilenced(r.Context(), node, id, v); err != nil {
-			f.fail(w, err)
-			return
-		}
-		OK(w, map[string]any{"silenced": v})
+func (f *Fleet) silenceSensor(w http.ResponseWriter, r *http.Request) {
+	node, id, ok := f.sensorIDs(w, r)
+	if !ok {
+		return
 	}
+	var req struct {
+		Reason          string `json:"reason"`
+		Until           string `json:"until"`
+		ExpiresAt       string `json:"expires_at"`
+		DurationSeconds int64  `json:"duration_seconds"`
+	}
+	if !decodeInto(w, r, &req) {
+		return
+	}
+	untilRaw := strings.TrimSpace(req.Until)
+	if untilRaw == "" {
+		untilRaw = strings.TrimSpace(req.ExpiresAt)
+	}
+	var until time.Time
+	switch {
+	case untilRaw != "":
+		t, err := time.Parse(time.RFC3339Nano, untilRaw)
+		if err != nil {
+			Fail(w, http.StatusBadRequest, CodeInvalid, "silence expiry must be an RFC 3339 timestamp")
+			return
+		}
+		until = t
+	case req.DurationSeconds > 0:
+		if req.DurationSeconds > int64(fleet.MaxSilenceDuration/time.Second) {
+			Fail(w, http.StatusBadRequest, CodeInvalid, "silence expiry must be at most 30 days")
+			return
+		}
+		until = f.Svc.Now().UTC().Add(time.Duration(req.DurationSeconds) * time.Second)
+	default:
+		Fail(w, http.StatusBadRequest, CodeInvalid, "silence expiry (until or duration_seconds) is required")
+		return
+	}
+	reason, untilUTC, err := f.Svc.SilenceSensor(r.Context(), node, id, req.Reason, until)
+	if err != nil {
+		f.fail(w, err)
+		return
+	}
+	OK(w, map[string]any{
+		"silenced":        true,
+		"silenced_reason": reason,
+		"silenced_until":  untilUTC.Format(time.RFC3339),
+	})
+}
+
+func (f *Fleet) unsilenceSensor(w http.ResponseWriter, r *http.Request) {
+	node, id, ok := f.sensorIDs(w, r)
+	if !ok {
+		return
+	}
+	if err := f.Svc.UnsilenceSensor(r.Context(), node, id); err != nil {
+		f.fail(w, err)
+		return
+	}
+	OK(w, map[string]any{"silenced": false})
 }

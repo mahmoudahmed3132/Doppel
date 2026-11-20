@@ -13,18 +13,18 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
-const sensorCols = `node_id, id, catalogue_name, version, config, silenced, status, status_changed_at,
+const sensorCols = `node_id, id, catalogue_name, version, config, silenced, silenced_reason, silenced_until, status, status_changed_at,
 	last_heartbeat_at, last_activity_at, ever_online, stopped_at, outage_alerted_at, sdk_version, created_at, dropped_events`
 
 func scanSensor(row interface{ Scan(...any) error }) (*domain.Sensor, error) {
 	var (
-		s                                       domain.Sensor
-		cfg, status                             string
-		silenced, everOnline                    int
-		changed, hb, activity, stopped, alerted sql.NullInt64
-		created                                 int64
+		s                                                      domain.Sensor
+		cfg, status, silencedReason                            string
+		silenced, everOnline                                   int
+		silencedUntil, changed, hb, activity, stopped, alerted sql.NullInt64
+		created                                                int64
 	)
-	err := row.Scan(&s.NodeID, &s.ID, &s.CatalogueName, &s.Version, &cfg, &silenced, &status, &changed,
+	err := row.Scan(&s.NodeID, &s.ID, &s.CatalogueName, &s.Version, &cfg, &silenced, &silencedReason, &silencedUntil, &status, &changed,
 		&hb, &activity, &everOnline, &stopped, &alerted, &s.SDKVersion, &created, &s.DroppedEvents)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -36,6 +36,10 @@ func scanSensor(row interface{ Scan(...any) error }) (*domain.Sensor, error) {
 		return nil, err
 	}
 	s.Silenced = silenced != 0
+	if s.Silenced {
+		s.SilencedReason = silencedReason
+		s.SilencedUntil = fromNullMS(silencedUntil)
+	}
 	s.Status = domain.SensorStatus(status)
 	s.StatusChangedAt = fromNullMS(changed)
 	s.LastHeartbeatAt = fromNullMS(hb)
@@ -62,7 +66,13 @@ func (db *DB) CreateSensor(ctx context.Context, s *domain.Sensor) error {
 	if isUniqueViolation(err) {
 		return domain.ErrConflict
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if s.Silenced && (s.SilencedReason != "" || s.SilencedUntil != nil) {
+		return db.SetSensorSilence(ctx, s.NodeID, s.ID, true, s.SilencedReason, s.SilencedUntil)
+	}
+	return nil
 }
 
 // Sensor returns one sensor instance.
@@ -94,9 +104,20 @@ func (db *DB) Sensors(ctx context.Context, nodeID string) ([]domain.Sensor, erro
 	return out, rows.Err()
 }
 
-// SetSensorSilenced toggles webhook silencing.
+// SetSensorSilence sets or clears a sensor's silence window (reason and expiry).
+func (db *DB) SetSensorSilence(ctx context.Context, nodeID, id string, silenced bool, reason string, until *time.Time) error {
+	if !silenced {
+		reason = ""
+		until = nil
+	}
+	return affectedOne(db.sql.ExecContext(ctx,
+		`UPDATE sensors SET silenced = ?, silenced_reason = ?, silenced_until = ? WHERE node_id = ? AND id = ?`,
+		boolInt(silenced), reason, nullMS(until), nodeID, id))
+}
+
+// SetSensorSilenced toggles webhook silencing without a window (retained for compatibility).
 func (db *DB) SetSensorSilenced(ctx context.Context, nodeID, id string, v bool) error {
-	return affectedOne(db.sql.ExecContext(ctx, `UPDATE sensors SET silenced = ? WHERE node_id = ? AND id = ?`, boolInt(v), nodeID, id))
+	return db.SetSensorSilence(ctx, nodeID, id, v, "", nil)
 }
 
 // DeleteSensor removes a sensor instance; its events are kept.
@@ -249,7 +270,11 @@ func (db *DB) ApplySensorChanges(ctx context.Context, nodeID string, c SensorCha
 				return err
 			}
 		}
-		return affectedOne(tx.ExecContext(ctx, `UPDATE nodes SET desired_revision = ? WHERE id = ?`, c.Desired, nodeID))
+		return affectedOne(tx.ExecContext(ctx, `UPDATE nodes SET
+			desired_revision = ?,
+			drift_since = CASE WHEN ? = '' OR ? = applied_revision THEN NULL ELSE drift_since END,
+			drift_alerted_at = CASE WHEN ? = '' OR ? = applied_revision THEN NULL ELSE drift_alerted_at END
+			WHERE id = ?`, c.Desired, c.Desired, c.Desired, c.Desired, c.Desired, nodeID))
 	})
 }
 

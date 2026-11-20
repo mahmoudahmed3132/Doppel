@@ -64,7 +64,7 @@ exposes node keys and events on the wire (R2); use https in production.
 | Session theft | Opaque server-side session, `HttpOnly`, `SameSite=Strict`, `Secure` (except development), idle + absolute expiry; live feed rechecks the session every 15 s without refreshing it |
 | CSRF | Origin/Referer must equal the Hub origin on every non-safe method; WebSocket Origin checked |
 | Clickjacking / framing | `frame-ancestors 'none'`, `X-Frame-Options: DENY`, COOP |
-| Destructive actions by mistake or by a hijacked session | Typed confirmations; factory reset requires password re-entry and is refused unless its audit record reaches the SIEM first |
+| Destructive actions by mistake or by a hijacked session | Typed confirmations; factory reset requires password re-entry and is refused unless its audit record reaches the SIEM first; sensor silence windows require a mandatory reason and expire within 30 days with an automatic `sensor.silence_expired` audit record |
 | Secret disclosure via API | Secrets reported only as `*_set`; sensor secret config masked; SIEM token/webhook URL never logged |
 
 **Residual:** an attacker with a live admin session can disarm webhooks,

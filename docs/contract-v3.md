@@ -134,9 +134,27 @@ events.
 - Test mode: send the synthetic event once; exit 0 when the Hub counts it as
   accepted or duplicate within 10 s, else 1.
 
+## Liveness and PCI DSS 10.7.2 alerting (F-005)
+
+The Hub reserves the following fleet-health triggers (`403 reserved_trigger` if sent by a sensor):
+
+| Trigger | Default severity | Raised when |
+|---|---|---|
+| `sensor_stopped` | `low` | Sensor sends `POST /v3/ingest/stopping` (e.g. `SIGTERM`). |
+| `sensor_heartbeat_lost` | `medium` | Sensor misses heartbeats for `2 × interval` (60 s) when the entire node is dark, or is not restarted within `5 min` after a stop when the node is dark. |
+| `sensor_tamper_suspected` | `high` | Sensor misses heartbeats for `2 × interval` (60 s) without a stop notice while its node keeps heartbeating; or is stopped (`docker stop`) and not restarted within `2 × interval` (60 s) while its node keeps heartbeating; or a sensor container restarts more than `N` times (default `3`) in `M` minutes (default `5 min`) as reported to `POST /v3/node/status`. |
+| `sensor_recovered` | `info` | Sensor resumes heartbeating after `offline` or `stopped`. |
+| `node_offline` | `high` | No heartbeat arrives from any sensor on an online node for `3 × interval` (90 s). |
+| `node_online` | `info` | A node previously alerted as `node_offline` receives a sensor heartbeat again. |
+| `config_drift` | `medium` | A node's `applied_revision` differs from its `desired_revision` for longer than `config_drift_minutes` (default `15 min`, configurable via `PATCH /api/v3/settings`). |
+| `node_apply_failed` | `high` | CLI reports a failed or rolled-back `doppel apply` via `POST /v3/node/applied`. |
+
+Silence windows (`POST /api/v3/nodes/{node}/sensors/{sensor}/silence`) require a non-empty `reason` (≤ 256 chars) and an expiry (`until`, `expires_at`, or `duration_seconds`, at most 30 days ahead). When the window expires, the Hub's liveness sweep automatically unsilences the sensor and emits a `sensor.silence_expired` audit record.
+
 ## Node agent endpoints
 
 See [`cli.md`](cli.md#node-api-hub-side-node-key-authenticated): `GET /v3/node/identity`,
-`GET /v3/node/compose`, `POST /v3/node/applied`. Same bearer node key; additionally
+`GET /v3/node/compose`, `POST /v3/node/applied`, `POST /v3/node/status`. Same bearer node key; additionally
 `X-TrueSignal-CLI-Version` must carry the Hub's major version (`426 version_mismatch`,
 body includes `required_major`).
+

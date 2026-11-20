@@ -121,6 +121,11 @@ paths:
       security: [{nodeKey: []}]
       summary: CLI reports the applied revision or an apply failure (raises node_apply_failed)
       responses: {'200': {description: OK}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}}
+  /v3/node/status:
+    post:
+      security: [{nodeKey: []}]
+      summary: CLI reports container restart counts and status (raises sensor_tamper_suspected when a container restarts > N times in M minutes; F-005 / F-505)
+      responses: {'200': {description: OK}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '426': {$ref: '#/components/responses/Error'}}
   /v3/version:
     get:
       security: []
@@ -538,9 +543,25 @@ paths:
       - {name: node, in: path, required: true, schema: {type: string}}
       - {name: sensor, in: path, required: true, schema: {type: string}}
     post:
-      summary: Stop webhook notifications for this sensor (SIEM delivery unaffected)
+      summary: Stop webhook notifications for this sensor during a bounded silence window (reason and expiry required, max 30 days; SIEM delivery unaffected; auto-unsilences on expiry with sensor.silence_expired audit)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: {type: string, minLength: 1, maxLength: 256}
+                until: {type: string, format: date-time, description: 'RFC 3339 expiry timestamp (at most 30 days ahead); mutually optional with expires_at or duration_seconds'}
+                expires_at: {type: string, format: date-time, description: 'Alias for until'}
+                duration_seconds: {type: integer, minimum: 1, maximum: 2592000, description: 'Silence duration in seconds (max 30 days) when until/expires_at is omitted'}
       responses:
-        '200': {description: '{"silenced": true}'}
+        '200': {description: '{"silenced": true, "silenced_reason": string, "silenced_until": string}'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
   /api/v3/nodes/{node}/sensors/{sensor}/unsilence:
     parameters:
       - {name: node, in: path, required: true, schema: {type: string}}
@@ -680,7 +701,7 @@ paths:
   /api/v3/settings:
     get: {summary: Hub settings (no secrets), responses: {'200': {description: '{"settings": View}'}}}
     patch:
-      summary: 'Partial update: public_endpoint, registry_url ("" = default), catalogue_refresh_hours (1..168), update_check_hours (0..720, 0 = off), retention {archive_after_days, purge_archived_after_days (0 = off), history_days}, whitelist, known_scanners'
+      summary: 'Partial update: public_endpoint, registry_url ("" = default), catalogue_refresh_hours (1..168), update_check_hours (0..720, 0 = off), config_drift_minutes (1..1440, default 15), retention {archive_after_days, purge_archived_after_days (0 = off), history_days}, whitelist, known_scanners'
       responses: {'200': {description: '{"settings": View}'}, '400': {$ref: '#/components/responses/Error'}}
   /api/v3/assets:
     get: {summary: 'Asset inventory (editable is always true; retained for compatibility)', responses: {'200': {description: '{"assets", "editable"}'}}}

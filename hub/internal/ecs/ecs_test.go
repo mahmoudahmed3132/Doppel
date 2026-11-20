@@ -150,9 +150,17 @@ func TestECSThreat(t *testing.T) {
 }
 
 func TestECSLivenessAndFileMapping(t *testing.T) {
-	live := roundTrip(t, Renderer{}.ecsEvent(ev2(domain.Event{Trigger: "sensor_heartbeat_lost", Severity: "high", Source: "truesignal-hub"})))
-	if get(live, "event.kind") != "event" || get(live, "event.category").([]any)[0] != "host" {
-		t.Errorf("liveness = %v", live["event"])
+	for _, trig := range []string{
+		domain.TriggerSensorHeartbeatLost,
+		domain.TriggerSensorTamperSuspected,
+		domain.TriggerNodeOffline,
+		domain.TriggerNodeOnline,
+		domain.TriggerConfigDrift,
+	} {
+		live := roundTrip(t, Renderer{}.ecsEvent(ev2(domain.Event{Trigger: trig, Severity: "high", Source: "truesignal-hub"})))
+		if get(live, "event.kind") != "event" || get(live, "event.category").([]any)[0] != "host" {
+			t.Errorf("liveness (%s) = %v", trig, live["event"])
+		}
 	}
 	file := roundTrip(t, Renderer{}.ecsEvent(ev2(domain.Event{Trigger: "decoy_file_accessed", Severity: "high",
 		Details: json.RawMessage(`{"path":"/srv/finance/payroll.xlsx"}`)})))

@@ -33,8 +33,9 @@ Request bodies are never included.
 | `sensor.update` | sensor configuration changed | `PATCH /api/v3/nodes/{node}/sensors/{sensor}` |
 | `sensor.upgrade` | sensor version changed | `POST /api/v3/nodes/{node}/sensors/{sensor}/upgrade` |
 | `sensor.delete` | sensor deleted (events kept) | `DELETE /api/v3/nodes/{node}/sensors/{sensor}` |
-| `sensor.silence` | webhooks silenced for a sensor | `POST /api/v3/nodes/{node}/sensors/{sensor}/silence` |
+| `sensor.silence` | webhooks silenced for a sensor (mandatory reason and expiry ≤ 30 days) | `POST /api/v3/nodes/{node}/sensors/{sensor}/silence` |
 | `sensor.unsilence` | webhooks re-enabled | `POST /api/v3/nodes/{node}/sensors/{sensor}/unsilence` |
+| `sensor.silence_expired` | sensor silence window expired and auto-unsilenced by the Hub (`method` = `SYSTEM`, `actor` = `system`, `actor_ip` = `local`) | `SYSTEM /api/v3/nodes/{node}/sensors/{sensor}/unsilence` |
 | `catalogue.refresh` | manual catalogue refresh | `POST /api/v3/catalogue/refresh` |
 | `siem.update` | SIEM output changed (also delivered to the previous destination) | `PUT /api/v3/settings/siem` |
 | `siem.test` | SIEM test record sent | `POST /api/v3/settings/siem/test` |

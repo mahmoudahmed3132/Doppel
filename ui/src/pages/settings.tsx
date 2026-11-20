@@ -57,6 +57,7 @@ function General({ s, save }: { s: Settings; save: Save }) {
   const [registry, setRegistry] = useState(s.registry_url);
   const [refresh, setRefresh] = useState(String(s.catalogue_refresh_hours));
   const [updates, setUpdates] = useState(String(s.update_check_hours));
+  const [drift, setDrift] = useState(String(s.config_drift_minutes ?? 15));
   const cat = useAsync(() => get<{ status: CatalogueStatus }>("/catalogue").then((r) => r.status), []);
   const act = useAction();
   return (
@@ -64,7 +65,13 @@ function General({ s, save }: { s: Settings; save: Save }) {
       <Card title="Hub">
         <form class="stack" onSubmit={(e) => {
           e.preventDefault();
-          save({ public_endpoint: endpoint.trim(), registry_url: registry.trim(), catalogue_refresh_hours: Number(refresh), update_check_hours: Number(updates) });
+          save({
+            public_endpoint: endpoint.trim(),
+            registry_url: registry.trim(),
+            catalogue_refresh_hours: Number(refresh),
+            update_check_hours: Number(updates),
+            config_drift_minutes: Number(drift),
+          });
         }}>
           <Field label="Hub endpoint" hint="URL nodes use to reach this Hub. Shown in node link commands.">
             {(id) => <input id={id} class="input mono" type="url" value={endpoint} onInput={(e) => setEndpoint(e.currentTarget.value)} />}
@@ -72,9 +79,10 @@ function General({ s, save }: { s: Settings; save: Save }) {
           <Field label="Sensor registry URL" hint="Signed sensor catalogue. Changing it re-verifies every manifest against the new source.">
             {(id) => <input id={id} class="input mono" type="url" value={registry} onInput={(e) => setRegistry(e.currentTarget.value)} />}
           </Field>
-          <div class="grid-2 tight">
+          <div class="grid-3 tight">
             <Field label="Catalogue refresh (hours)">{(id) => <input id={id} class="input" type="number" min={1} max={168} value={refresh} onInput={(e) => setRefresh(e.currentTarget.value)} />}</Field>
             <Field label="Update check (hours)" hint="0 disables">{(id) => <input id={id} class="input" type="number" min={0} max={720} value={updates} onInput={(e) => setUpdates(e.currentTarget.value)} />}</Field>
+            <Field label="Config drift alert (minutes)" hint="Default 15">{(id) => <input id={id} class="input" type="number" min={1} max={1440} value={drift} onInput={(e) => setDrift(e.currentTarget.value)} />}</Field>
           </div>
           <div><Button type="submit" variant="primary">Save</Button></div>
         </form>

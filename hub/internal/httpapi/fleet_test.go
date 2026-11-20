@@ -225,8 +225,18 @@ func TestFleetSensorAPI(t *testing.T) {
 		t.Fatal("secret config value returned")
 	}
 
-	if code, out, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/silence", nil); code != 200 || out["silenced"] != true {
-		t.Fatal("silence")
+	if code, _, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/silence", nil); code != 400 {
+		t.Fatalf("silence without reason/expiry should fail: %d", code)
+	}
+	if code, _, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/silence", map[string]any{"reason": "maintenance", "duration_seconds": 31 * 86400}); code != 400 {
+		t.Fatalf("silence exceeding 30 days should fail: %d", code)
+	}
+	if code, out, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/silence", map[string]any{"reason": "planned maintenance", "duration_seconds": 3600}); code != 200 ||
+		out["silenced"] != true || out["silenced_reason"] != "planned maintenance" || out["silenced_until"] == nil {
+		t.Fatalf("silence: %d %v", code, out)
+	}
+	if code, out, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/unsilence", nil); code != 200 || out["silenced"] != false {
+		t.Fatalf("unsilence: %d %v", code, out)
 	}
 	if code, out, _ := h.c.do("POST", base+"/sensors/ts-sensor-a/upgrade", map[string]string{"version": "1.1.0"}); code != 200 ||
 		out["sensor"].(map[string]any)["version"] != "1.1.0" {

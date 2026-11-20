@@ -112,6 +112,9 @@ export function NodePage({ id }: { id: string }) {
   const [tags, setTags] = useState("");
   const [sensorDlg, setSensorDlg] = useState<{ open: boolean; editing?: SensorView }>({ open: false });
   const [upgrade, setUpgrade] = useState<SensorView | null>(null);
+  const [silenceSensor, setSilenceSensor] = useState<SensorView | null>(null);
+  const [silenceReason, setSilenceReason] = useState("");
+  const [silenceDuration, setSilenceDuration] = useState("3600");
   const [confirm, setConfirm] = useState<"" | "rotate" | "delete" | "upgradeAll" | { removeSensor: SensorView }>("");
   const [key, setKey] = useState<KeyResult | null>(null);
   const [compose, setCompose] = useState<string | null>(null);
@@ -176,7 +179,7 @@ export function NodePage({ id }: { id: string }) {
         {n.sensors.length ? (
           <div class="table-wrap">
             <table class="table">
-              <thead><tr><th>Sensor</th><th>Type</th><th>Version</th><th>Status</th><th>Last heartbeat</th><th>Last activity</th><th title="Events the sensor reported as lost before reaching the Hub (SDK queue overflow or undeliverable batches), since it was added">Dropped events</th><th title="Silenced sensors still record events but send no webhook notifications">Silenced</th><th><span class="sr-only">Actions</span></th></tr></thead>
+              <thead><tr><th>Sensor</th><th>Type</th><th>Version</th><th>Status</th><th>Last heartbeat</th><th>Last activity</th><th title="Events the sensor reported as lost before reaching the Hub (SDK queue overflow or undeliverable batches), since it was added">Dropped events</th><th title="Silenced sensors still record events but send no webhook notifications until the silence window expires">Silenced</th><th><span class="sr-only">Actions</span></th></tr></thead>
               <tbody>
                 {n.sensors.map((s) => (
                   <tr key={s.id}>
@@ -192,9 +195,15 @@ export function NodePage({ id }: { id: string }) {
                     <td class="num">{s.dropped_events > 0
                       ? <Pill kind="warn" title="Events lost in the sensor's queue; check Hub load and node connectivity">{s.dropped_events.toLocaleString()}</Pill>
                       : "0"}</td>
-                    <td>
+                    <td title={s.silenced ? `${s.silenced_reason || "Silenced"}${s.silenced_until ? ` (until ${fmtTime(s.silenced_until)})` : ""}` : undefined}>
                       <Toggle label={s.silenced ? "on" : "off"} checked={s.silenced} disabled={act.busy} onChange={async (v) => {
-                        if (await act.run(() => post(`/nodes/${enc(id)}/sensors/${enc(s.id)}/${v ? "silence" : "unsilence"}`), v ? "Sensor silenced" : "Sensor unsilenced")) node.reload();
+                        if (v) {
+                          setSilenceReason("");
+                          setSilenceDuration("3600");
+                          setSilenceSensor(s);
+                        } else if (await act.run(() => post(`/nodes/${enc(id)}/sensors/${enc(s.id)}/unsilence`), "Sensor unsilenced")) {
+                          node.reload();
+                        }
                       }} />
                     </td>
                     <td class="nowrap actions">
@@ -220,6 +229,37 @@ export function NodePage({ id }: { id: string }) {
         <div class="stack">
           <Field label="Alias">{(fid) => <input id={fid} class="input" maxLength={64} value={alias} onInput={(e) => setAlias(e.currentTarget.value)} />}</Field>
           <Field label="Tags" hint="Comma-separated">{(fid) => <input id={fid} class="input" value={tags} onInput={(e) => setTags(e.currentTarget.value)} />}</Field>
+        </div>
+      </Modal>
+
+      <Modal title="Silence sensor" open={silenceSensor !== null} onClose={() => setSilenceSensor(null)}
+        footer={<>
+          <Button variant="ghost" onClick={() => setSilenceSensor(null)}>Cancel</Button>
+          <Button variant="primary" busy={act.busy} disabled={!silenceReason.trim() || !silenceSensor} onClick={async () => {
+            if (!silenceSensor) return;
+            const ok = await act.run(() => post(`/nodes/${enc(id)}/sensors/${enc(silenceSensor.id)}/silence`, {
+              reason: silenceReason.trim(),
+              duration_seconds: Number(silenceDuration),
+            }), "Sensor silenced");
+            if (ok) { setSilenceSensor(null); node.reload(); }
+          }}>Silence</Button>
+        </>}>
+        <div class="stack">
+          <p class="muted">Silenced sensors continue recording events and forwarding to the SIEM, but suppress webhook notifications until the window expires (max 30 days). Expiry is automatically audited.</p>
+          <Field label="Reason" hint="Required (max 256 characters)">
+            {(fid) => <input id={fid} class="input" maxLength={256} value={silenceReason} onInput={(e) => setSilenceReason(e.currentTarget.value)} required autoFocus />}
+          </Field>
+          <Field label="Duration">
+            {(fid) => (
+              <select id={fid} class="input" value={silenceDuration} onChange={(e) => setSilenceDuration(e.currentTarget.value)}>
+                <option value="3600">1 hour</option>
+                <option value="14400">4 hours</option>
+                <option value="86400">24 hours</option>
+                <option value="604800">7 days</option>
+                <option value="2592000">30 days (maximum)</option>
+              </select>
+            )}
+          </Field>
         </div>
       </Modal>
 

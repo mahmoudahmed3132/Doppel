@@ -390,7 +390,16 @@ func serve(log *slog.Logger) error {
 		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker, Honeytokens: honeytokens, Beacons: beacons}
 	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
 		Run(ctx, siem.HeartbeatInterval)
-	live := &liveness.Service{Store: db, Raiser: pipe, Publisher: broker, Log: log, Now: time.Now, StartedAt: startedAt}
+	live := &liveness.Service{
+		Store:        db,
+		Raiser:       pipe,
+		Publisher:    broker,
+		Audit:        auditor,
+		Log:          log,
+		Now:          time.Now,
+		StartedAt:    startedAt,
+		DriftTimeout: settingsSvc.ConfigDriftTimeout,
+	}
 	go live.Run(ctx, 5*time.Second)
 
 	network := httpapi.Network{Trusted: cfg.TrustedProxies}
