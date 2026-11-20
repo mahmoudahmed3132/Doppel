@@ -25,6 +25,10 @@ const (
 	pathEvents     = "/v3/ingest/events"
 	pathHeartbeats = "/v3/ingest/heartbeats"
 	pathStopping   = "/v3/ingest/stopping"
+	pathVersion    = "/v3/version"
+
+	// capDrill is the Hub capability for the event drill flag.
+	capDrill = "event.drill"
 
 	maxResponseBytes = 64 << 10
 	requestTimeout   = 15 * time.Second
@@ -90,19 +94,50 @@ func retryable(err error) bool {
 	return he.Status == http.StatusRequestTimeout || he.Status == http.StatusTooManyRequests || he.Status >= 500
 }
 
+// hubVersion is the part of the Hub's /v3/version answer the SDK uses.
+type hubVersion struct {
+	Contract     int      `json:"contract"`
+	Capabilities []string `json:"capabilities"`
+}
+
+// capabilities fetches the Hub's advertised contract capabilities.
+func (c *hubClient) capabilities(ctx context.Context) (map[string]bool, error) {
+	var v hubVersion
+	if err := c.do(ctx, http.MethodGet, pathVersion, nil, &v); err != nil {
+		return nil, err
+	}
+	caps := make(map[string]bool, len(v.Capabilities))
+	for _, s := range v.Capabilities {
+		caps[s] = true
+	}
+	return caps, nil
+}
+
 // post sends body as JSON and decodes a 2xx reply into out (may be nil).
 func (c *hubClient) post(ctx context.Context, path string, body, out any) error {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
+	return c.do(ctx, http.MethodPost, path, b, out)
+}
+
+// do performs one request (body nil: no body) and decodes a 2xx reply into
+// out (may be nil).
+func (c *hubClient) do(ctx context.Context, method, path string, b []byte, out any) error {
 	u := *c.base
 	u.Path += path
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(b))
+	var rd io.Reader
+	if b != nil {
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), rd)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if b != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("User-Agent", "truesignal-sdk-go/"+SDKVersion)
 	if c.key != "" {
 		req.Header.Set("Authorization", "Bearer "+c.key)

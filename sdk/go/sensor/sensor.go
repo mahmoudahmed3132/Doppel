@@ -33,7 +33,9 @@ type Drill struct {
 	Details  Details
 }
 
-// DrillSource is the source of every synthetic event.
+// DrillSource is the source of every synthetic event. Kept for Hubs and
+// SIEM content that predate the drill flag (contract capability
+// event.drill); a Hub with the capability also gets "drill": true.
 const DrillSource = "Fire drill"
 
 // Spec describes a sensor program.
@@ -114,6 +116,50 @@ type Sensor struct {
 	client *hubClient
 	ids    *uuidGen
 	now    func() time.Time
+
+	capMu      sync.Mutex
+	drillCap   bool      // the Hub accepts the event drill flag
+	capChecked time.Time // zero: never asked
+	capRetry   time.Duration
+}
+
+// Capability probe intervals: a Hub without the drill capability is asked
+// again hourly (it may be upgraded); a failed probe is retried after a minute.
+const (
+	capRecheckMissing = time.Hour
+	capRecheckFailed  = time.Minute
+)
+
+// hubAcceptsDrill reports whether the Hub advertises capability event.drill,
+// asking /v3/version when the cached answer is missing or stale. A failed
+// probe counts as "no" (the event is then sent without the flag; a Hub with
+// the capability still recognises drills by their source).
+func (s *Sensor) hubAcceptsDrill(ctx context.Context) bool {
+	s.capMu.Lock()
+	defer s.capMu.Unlock()
+	if s.drillCap || (!s.capChecked.IsZero() && s.now().Sub(s.capChecked) < s.capRetry) {
+		return s.drillCap
+	}
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	caps, err := s.client.capabilities(ctx)
+	s.capChecked = s.now()
+	if err != nil {
+		s.capRetry = capRecheckFailed
+		s.log.Warn("hub capability check failed, sending events without the drill flag", "error", err.Error())
+		return false
+	}
+	s.drillCap, s.capRetry = caps[capDrill], capRecheckMissing
+	return s.drillCap
+}
+
+// wireBatch prepares a batch for sending: the drill flag is added only when
+// the Hub accepts it.
+func (s *Sensor) wireBatch(ctx context.Context, batch []wireEvent) []wireEvent {
+	if s.hubAcceptsDrill(ctx) {
+		return withDrillFlag(batch)
+	}
+	return batch
 }
 
 // Main runs the sensor and exits the process with the resulting code.
@@ -214,7 +260,9 @@ func (s *Sensor) drillEvent(d Drill) wireEvent {
 	if sev == "" {
 		sev = s.cfg.DefaultSeverity
 	}
-	return s.build(sev, d.Trigger, DrillSource, d.Target, d.Details)
+	ev := s.build(sev, d.Trigger, DrillSource, d.Target, d.Details)
+	ev.isDrill = true
+	return ev
 }
 
 func (s *Sensor) runTestMode(ctx context.Context, d Drill) int {
@@ -222,7 +270,7 @@ func (s *Sensor) runTestMode(ctx context.Context, d Drill) int {
 	defer cancel()
 	ev := s.drillEvent(d)
 	var resp ingestResponse
-	if err := s.client.post(ctx, pathEvents, eventBatch{Events: []wireEvent{ev}}, &resp); err != nil {
+	if err := s.client.post(ctx, pathEvents, eventBatch{Events: s.wireBatch(ctx, []wireEvent{ev})}, &resp); err != nil {
 		s.log.Error("test mode: delivery failed", "error", err.Error())
 		return 1
 	}
@@ -419,6 +467,7 @@ func (s *Sensor) runSender(ctx context.Context, flush <-chan struct{}) {
 // deliver sends one batch with retries. Undeliverable events are counted as
 // dropped.
 func (s *Sensor) deliver(ctx context.Context, batch []wireEvent) {
+	batch = s.wireBatch(ctx, batch)
 	for attempt := 1; ; attempt++ {
 		var resp ingestResponse
 		err := s.client.post(ctx, pathEvents, eventBatch{Events: batch}, &resp)
