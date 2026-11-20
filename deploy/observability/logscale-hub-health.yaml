@@ -1,0 +1,59 @@
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
+#
+# CrowdStrike Falcon LogScale dashboard for Doppel Hub self-health (F-003 item 4).
+# Import via LogScale UI -> Dashboards -> New Dashboard -> From Template / YAML.
+name: Doppel Hub Self-Health
+description: >-
+  Monitors Doppel Hub heartbeats, SIEM queue depth and dropped records,
+  node and sensor availability, and Hub-raised liveness/tamper alerts.
+timeSelector: {}
+sharedTimeInterval:
+  enabled: true
+  isLive: false
+  start: 24h
+widgets:
+  hub-fleet-online:
+    x: 0
+    y: 0
+    width: 6
+    height: 4
+    title: Nodes & Sensors Online
+    type: query
+    visualization: time-chart
+    queryString: |
+      event.module="truesignal" event.kind="metric"
+      | timechart(function=[avg(truesignal.heartbeat.nodes_online, as=nodes_online), avg(truesignal.heartbeat.sensors_online, as=sensors_online)])
+  hub-siem-health:
+    x: 6
+    y: 0
+    width: 6
+    height: 4
+    title: SIEM Queue Depth & Cumulative Drops
+    type: query
+    visualization: time-chart
+    queryString: |
+      event.module="truesignal" event.kind="metric"
+      | timechart(function=[max(truesignal.heartbeat.siem_queue_depth, as=queue_depth), max(truesignal.heartbeat.siem_dropped, as=siem_dropped)])
+  hub-liveness-alerts:
+    x: 0
+    y: 4
+    width: 12
+    height: 5
+    title: Liveness, Config Drift & Tamper Events
+    type: query
+    visualization: table-view
+    queryString: |
+      event.module="truesignal"
+      | in(field="event.action", values=["node_offline", "node_online", "sensor_heartbeat_lost", "sensor_recovered", "sensor_tamper_suspected", "config_drift"])
+      | table([@timestamp, event.action, event.severity, host.name, truesignal.sensor_id, message])
+  hub-drills:
+    x: 0
+    y: 9
+    width: 12
+    height: 4
+    title: Fire-Drill Pipeline Verification
+    type: query
+    visualization: table-view
+    queryString: |
+      event.module="truesignal" event.kind="pipeline_test"
+      | table([@timestamp, host.name, truesignal.sensor_id, event.action, message])

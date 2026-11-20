@@ -49,13 +49,12 @@ Event content is fully attacker-controlled and must never be interpreted.
 | Reserved/forged triggers (e.g. `honeytoken_used`) from a sensor | Reserved triggers rejected with 403 at ingest |
 | Drills injected through the admin API | Drills enter only through the node API (node key); the admin API has no route that creates events (`TestDrillsOnlyFromAuthenticatedSensors`) |
 | Key exposure via process list | CLI takes the key from the environment, never argv; config file 0600 |
-| Network MITM | https endpoint with TLS verification (system roots; sensors also accept `TS_CA_BUNDLE`). Plain `http` is **accepted, not refused**: the CLI warns that it sends the node key in clear |
+| Network MITM | Enforced HTTPS (closes R2): production Hubs refuse to start without native TLS (`TS_TLS_CERT_FILE`/`TS_TLS_KEY_FILE`, TLS 1.2+ modern AEAD ciphers, SIGHUP hot reload) or `TS_TRUSTED_PROXIES`, and require `https://` `public_endpoint`. The CLI and Go/Python SDKs refuse plain `http://` unless `TS_DEV_ALLOW_HTTP=true` is explicitly set for local development. Bare-binary Hubs bind `127.0.0.1` by default (`TS_LISTEN_ADDR`). Unauthenticated `/healthz` and `/readyz` return minimal status only; Prometheus `/metrics` binds a dedicated loopback listener (`TS_METRICS_ADDR`, default `127.0.0.1:9090`) and is never mounted on the public port |
 
 **Residual:** a compromised node can forge events *as itself* (any
 non-reserved trigger, any severity, and can mark real events as fire drills to
 keep them out of alerting; they still reach the SIEM as `pipeline_test`) and read its own unredacted compose
-(including derived keys for its sensors). It cannot act as other nodes. A Hub endpoint configured as `http://`
-exposes node keys and events on the wire (R2); use https in production.
+(including derived keys for its sensors). It cannot act as other nodes. Setting `TS_DEV_ALLOW_HTTP=true` or `TS_ENV=development` relaxes HTTPS enforcement and logs a warning; never use those flags in production.
 
 ### B3: Admin browser ↔ Hub
 | Threat | Control |

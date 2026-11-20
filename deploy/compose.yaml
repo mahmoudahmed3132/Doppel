@@ -3,8 +3,11 @@
 # Production Hub deployment (see docs/operations.md). Pin the image by digest:
 # replace <digest> with the value from the release notes and verify the
 # signature first (cosign verify, docs/operations.md "Verify the image").
-# The Hub listens on loopback only; terminate TLS in a reverse proxy in front
-# of it and list that proxy in TS_TRUSTED_PROXIES.
+# The Hub binary defaults to TS_LISTEN_ADDR=127.0.0.1 (loopback only). Inside
+# Docker it binds 0.0.0.0 while Docker publishes the port only on HUB_BIND_IP
+# (default 127.0.0.1 for a same-host proxy, or set HUB_BIND_IP to the
+# VDC-internal interface when terminating + re-encrypting TLS on an off-host
+# F5 BIG-IP; see docs/operations.md "F5 BIG-IP").
 # CI (compose-guard) refuses any production compose file containing "build:".
 name: truesignal-hub
 services:
@@ -18,13 +21,22 @@ services:
     tmpfs: ["/tmp:size=16m,mode=1777"]
     environment:
       TS_ENV: production
-      TS_TRUSTED_PROXIES: "127.0.0.1/32"
+      TS_LISTEN_ADDR: "0.0.0.0"
+      TS_TRUSTED_PROXIES: "127.0.0.1/32" # For F5 HA, list both units' self-IPs (not the floating IP)
       TS_REQUIRE_MFA: "true"
       TS_KEK_FILE: /run/secrets/hub_kek   # required in production (docs/operations.md "Secrets at rest")
+      # Native TLS (required for off-host F5 server-side re-encryption):
+      # TS_TLS_CERT_FILE: /run/secrets/hub_tls_cert
+      # TS_TLS_KEY_FILE: /run/secrets/hub_tls_key
+      # Prometheus /metrics listens on 127.0.0.1:9090 by default (never on the public port).
+      TS_METRICS_ADDR: "127.0.0.1:9090"
     ports:
-      - "127.0.0.1:8080:8080"
+      - "${HUB_BIND_IP:-127.0.0.1}:8080:8080"
+      - "127.0.0.1:9090:9090"
     secrets:
       - hub_kek
+      # - hub_tls_cert
+      # - hub_tls_key
     volumes:
       - hub-data:/data
     mem_limit: 512m
@@ -37,5 +49,9 @@ secrets:
     # 64 hex characters from `doppel-hub kek-generate`. Keep it OUT of the
     # hub-data volume and out of the backups of that volume.
     file: ./secrets/hub_kek
+  # hub_tls_cert:
+  #   file: ./secrets/hub_tls_cert.pem
+  # hub_tls_key:
+  #   file: ./secrets/hub_tls_key.pem
 volumes:
   hub-data: {}

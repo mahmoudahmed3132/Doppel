@@ -187,6 +187,90 @@ secrets; the KEK is not in it (see THREATMODEL.md R1).
   `nodes.drift_since`, `nodes.drift_alerted_at`, `sensors.silenced_reason`,
   `sensors.silenced_until`) is applied on first start after `.pre-v8-…bak`.
 
+### Listen address, native TLS, health probes and metrics (F-003a / H1)
+
+- **Loopback-only default (`TS_LISTEN_ADDR`):** the Hub binary binds
+  `127.0.0.1` by default (`TS_LISTEN_ADDR=127.0.0.1`, `TS_LISTEN_PORT=8080`),
+  so a bare-binary Hub is not reachable from other hosts until explicitly bound
+  to another interface. Inside Docker (`deploy/compose.yaml`), set
+  `TS_LISTEN_ADDR=0.0.0.0` while restricting the host port mapping via
+  `HUB_BIND_IP` (default `127.0.0.1`).
+- **Enforced HTTPS in production (closes R2):** when `TS_ENV=production`
+  (default), the Hub refuses to start unless **either** native TLS
+  (`TS_TLS_CERT_FILE` and `TS_TLS_KEY_FILE`) **or** `TS_TRUSTED_PROXIES` is
+  configured, and any stored or submitted `public_endpoint` must use `https://`.
+  The node CLI (`doppel`) and both sensor SDKs (Go and Python) also refuse
+  plain `http://` Hub endpoints unless `TS_DEV_ALLOW_HTTP=true` is explicitly
+  set for local development or E2E testing.
+- **Native TLS and hot reload:** set `TS_TLS_CERT_FILE` and `TS_TLS_KEY_FILE`
+  (PEM files readable by uid `65532`). The listener enforces TLS 1.2+ with
+  modern AEAD cipher suites. Send `SIGHUP` to reload rotated certificates
+  without restarting the Hub; if a reload fails, the previous valid certificate
+  remains active and an error is logged.
+- **Health probes:** `GET /healthz` (process alive) and `GET /readyz` (SQLite
+  ping + schema version current) are unauthenticated and return `200 OK`
+  (`{"status":"ok"}`) or `503 Service Unavailable` (`{"status":"unavailable"}`)
+  with no internal detail in the response body.
+- **Prometheus `/metrics`:** exposed on a dedicated loopback listener
+  (`TS_METRICS_ADDR`, default `127.0.0.1:9090`, set to `off` to disable) and
+  **never** on the public Hub port. Exports `doppel_events_ingested_total`,
+  `doppel_ingest_rejected_total`, `doppel_siem_queue_depth`,
+  `doppel_siem_sent_total`, `doppel_siem_dropped_total`,
+  `doppel_notify_sent_total`, `doppel_notify_failed_total`, `doppel_nodes`,
+  `doppel_sensors`, `doppel_sensor_dropped_events`,
+  `doppel_legacy_drills_total`, `doppel_heartbeat_lag_seconds`,
+  `doppel_http_requests_total`, `doppel_http_request_seconds`,
+  `doppel_db_query_seconds`, and `doppel_build_info`.
+- **Self-health dashboards:** ready-to-import dashboards ship in
+  `deploy/observability/`:
+  - Grafana (Prometheus): `deploy/observability/grafana-hub-health.json`
+  - Elastic / Kibana (ECS): `deploy/observability/elastic-hub-health.ndjson`
+  - CrowdStrike Falcon LogScale: `deploy/observability/logscale-hub-health.yaml`
+
+### F5 BIG-IP (off-host TLS termination and server-side re-encryption)
+
+An off-host F5 BIG-IP must **not** talk plain HTTP to the Hub across the
+network (that hop carries node keys and admin session cookies). Configure
+server-side re-encryption:
+
+1. **Hub binding and native TLS:** bind the Hub to the VDC-internal interface
+   (not loopback and not a public NIC), enable native TLS with
+   `TS_TLS_CERT_FILE` and `TS_TLS_KEY_FILE` (internal PKI cert), and set
+   `TS_TRUSTED_PROXIES` to the **self-IPs of both HA units** (never the
+   floating IP, because outbound connections from the BIG-IP to pool members
+   source from each unit's non-floating self-IP unless SNAT-mapped to a
+   specific pool).
+2. **SSL profiles:** attach both a **Client SSL profile** (external cert,
+   TLS 1.2+) and a **Server SSL profile** (TLS 1.2+, verifying the Hub's
+   internal certificate against your internal CA) to the virtual server.
+3. **HTTP profile / iRule (overwrite forwarding headers):** configure the HTTP
+   profile or an iRule to **overwrite** (not append) `X-Forwarded-For` and
+   `X-Forwarded-Proto`:
+   ```tcl
+   when HTTP_REQUEST {
+       HTTP::header remove X-Forwarded-For
+       HTTP::header insert X-Forwarded-For [IP::client_addr]
+       HTTP::header remove X-Forwarded-Proto
+       HTTP::header insert X-Forwarded-Proto "https"
+   }
+   ```
+4. **WebSocket (`/api/v3/live`):** enable a WebSocket profile (or HTTP profile
+   permitting `Upgrade: websocket`) with an idle timeout of at least 300–3600 s
+   so the live event feed does not disconnect prematurely.
+5. **Health monitor:** attach an HTTPS monitor polling `GET /readyz` and
+   expecting `200 OK` with receive string `"status":"ok"`.
+6. **ASM / WAF policy:** relax or bypass attack-signature blocking on
+   `POST /v3/ingest/events` — event payloads contain real attacker SQLi, XSS,
+   and command-injection strings by design. Run ASM in signature staging first,
+   then enforce blocking on `/api/v3/*` admin paths only.
+7. **Persistence:** not required — admin sessions are opaque tokens validated
+   server-side in SQLite (and the Hub is single-instance).
+8. **Validation boundary:** CI can only test the Hub side (native TLS, SIGHUP
+   reload, `/readyz`, header handling); the F5 BIG-IP configuration itself must
+   be validated by the operator in staging. A digest-pinned nginx TLS
+   re-encryption fixture is provided in `deploy/nginx-reencrypt/` as a local
+   staging/CI stand-in.
+
 ## 3. Upgrade the Hub
 
 1. Read the release notes; verify the new digest (§1).

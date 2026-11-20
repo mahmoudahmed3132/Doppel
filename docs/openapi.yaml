@@ -91,6 +91,19 @@ components:
 security:
   - session: []
 paths:
+  /healthz:
+    get:
+      security: []
+      summary: Unauthenticated liveness probe (process alive; minimal body, no internal detail)
+      responses:
+        '200': {description: '{"status":"ok"}'}
+  /readyz:
+    get:
+      security: []
+      summary: Unauthenticated readiness probe (SQLite reachable and schema current; minimal body, no internal detail)
+      responses:
+        '200': {description: '{"status":"ok"}'}
+        '503': {description: '{"status":"unavailable"}'}
   /v3/ingest/events:
     post:
       security: [{nodeKey: []}]
