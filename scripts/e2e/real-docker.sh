@@ -288,6 +288,30 @@ for _ in $(seq 60); do
 done
 [ "$n" = 3 ] || fail "sensors did not come back online after the Hub restart"
 
+step "silence window and docker stop tamper detection (F-005)"
+api POST "/nodes/$NODE/sensors/$BURST_SENSOR/silence" -d '{"reason":"e2e maintenance","duration_seconds":3600}' |
+	jq -e '.silenced == true and .silenced_reason == "e2e maintenance" and (.silenced_until | type == "string")' >/dev/null ||
+	fail "silence window rejected (F-005)"
+api POST "/nodes/$NODE/sensors/$BURST_SENSOR/unsilence" |
+	jq -e '.silenced == false' >/dev/null ||
+	fail "unsilence failed (F-005)"
+
+docker stop "$BURST_SENSOR" >/dev/null
+tamper=""
+for _ in $(seq 75); do
+	t=$(api GET '/events?trigger=sensor_tamper_suspected&limit=20&archived=any' | jq --arg s "$BURST_SENSOR" '[.events[] | select(.sensor_id==$s and .severity=="high")] | length')
+	[ "$t" -ge 1 ] && tamper=1 && break
+	sleep 1
+done
+[ -n "$tamper" ] || fail "docker stop on $BURST_SENSOR did not produce sensor_tamper_suspected within 2 intervals (F-005)"
+docker start "$BURST_SENSOR" >/dev/null
+for _ in $(seq 60); do
+	n=$(api GET "/nodes/$NODE" | jq '[.node.sensors[] | select(.status=="online")] | length')
+	[ "$n" = 3 ] && break
+	sleep 1
+done
+[ "$n" = 3 ] || fail "stopped sensor did not recover after docker start (F-005)"
+
 if [ "${KEEP:-0}" = 1 ]; then
 	step "POC mode (KEEP=1): everything stays running"
 	cat <<POC

@@ -45,7 +45,8 @@ Event content is fully attacker-controlled and must never be interpreted.
 |---|---|
 | Key theft at rest on the Hub | Keys stored as SHA-256 only; shown once; rotation/deletion effective immediately (generation-counter cache) |
 | Cross-node access | Every node call scoped to the authenticated node; other node's sensor → 404; compose only for the caller's node (`TestNodeAPI`) |
-| Reserved/forged triggers (e.g. `honeytoken_used`) from a sensor | Reserved triggers rejected with 403 at ingest |
+| Reserved/forged triggers (e.g. `honeytoken_used`, `sensor_tamper_suspected`, `node_offline`, `node_online`, `config_drift`) from a sensor | Reserved triggers rejected with 403 at ingest |
+| Sensor container stopped or crash-looped on a live node (`docker stop`, kill, restart loop) | Liveness sweep raises `sensor_tamper_suspected` (`high`) within `2 × interval` (60 s) when the node keeps heartbeating, or via `/v3/node/status` when a container restarts > 3 times in 5 min; full node loss raises `node_offline` (`high`) at `3 × interval` (90 s); unapplied configuration raises `config_drift` (`medium`) after `config_drift_minutes` (default 15 min) |
 | Key exposure via process list | CLI takes the key from the environment, never argv; config file 0600 |
 | Network MITM | https endpoint with TLS verification (system roots; sensors also accept `TS_CA_BUNDLE`). Plain `http` is **accepted, not refused**: the CLI warns that it sends the node key in clear |
 
@@ -61,7 +62,7 @@ exposes node keys and events on the wire (R2); use https in production.
 | Session theft | Opaque server-side session, `HttpOnly`, `SameSite=Strict`, `Secure` (except development), idle + absolute expiry; live feed rechecks the session every 15 s without refreshing it |
 | CSRF | Origin/Referer must equal the Hub origin on every non-safe method; WebSocket Origin checked |
 | Clickjacking / framing | `frame-ancestors 'none'`, `X-Frame-Options: DENY`, COOP |
-| Destructive actions by mistake or by a hijacked session | Typed confirmations; factory reset requires password re-entry and is refused unless its audit record reaches the SIEM first |
+| Destructive actions by mistake or by a hijacked session | Typed confirmations; factory reset requires password re-entry and is refused unless its audit record reaches the SIEM first; sensor silence windows require a mandatory reason and expire within 30 days with an automatic `sensor.silence_expired` audit record |
 | Secret disclosure via API | Secrets reported only as `*_set`; sensor secret config masked; SIEM token/webhook URL never logged |
 
 **Residual:** an attacker with a live admin session can disarm webhooks,
