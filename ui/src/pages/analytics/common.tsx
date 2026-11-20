@@ -36,6 +36,7 @@ export interface SourceProfile {
   whitelisted: boolean;
   knownScanner: boolean;
   asset: AssetMatch | null;
+  labels?: string[];
 }
 
 export function DaysSelect({ days, onChange }: { days: number; onChange: (d: number) => void }) {

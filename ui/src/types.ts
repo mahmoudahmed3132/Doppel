@@ -12,18 +12,24 @@ export interface Session { user: Me; enrol_only: boolean; created_at: string; ex
 export interface MFAState { available: boolean; enabled: boolean; enrolment_pending: boolean; required: boolean; recovery_codes_remaining: number }
 
 export interface Technique { id: string; name: string; tactics: string[] }
-export interface Location { country_code: string; country: string; region: string; city: string; lat: number; lon: number; basis: string; address: string }
+export interface Location { country_code: string; country: string; region: string; city: string; lat: number; lon: number; basis: string; address: string; asn?: number; as_org?: string }
+export type SourceKind = "ip" | "local" | "drill" | "other";
 export interface EventRecord {
   seq: number; event_id: string; node_id: string; sensor_id: string; trigger: string; severity: Severity;
-  occurred_at: string; received_at: string; source: string; target: string; details: unknown;
+  occurred_at: string; received_at: string; source: string;
+  source_ip?: string; source_port?: number | null; source_kind?: SourceKind; labels?: string[];
+  target: string; details: unknown;
   read: boolean; archived: boolean; whitelisted: boolean; known_scanner: boolean; node_alias: string;
-  enrichment: { attack?: { primary: Technique; secondary?: Technique[] }; source_asset?: { name: string; criticality: string }; location?: Location };
+  enrichment: { attack?: { primary: Technique; secondary?: Technique[] }; source_asset?: { name: string; criticality: string }; location?: Location; asn?: number; as_org?: string };
 }
 
 export interface NodeHealth { online: boolean; in_sync: boolean; sensors_total: number; sensors_online: number; sensors_offline: number; sensors_pending: number }
 export interface NodeSummary {
   id: string; alias: string; tags: string[] | null; created_at: string; last_seen_at: string | null;
   desired_revision: string; applied_revision: string; health: NodeHealth;
+  docker_desktop?: boolean;
+  host_facts?: { docker_desktop?: boolean; [key: string]: unknown } | null;
+  facts?: { docker_desktop?: boolean; [key: string]: unknown } | null;
 }
 export interface SensorView {
   node_id: string; id: string; catalogue_name: string; version: string; config: Record<string, string> | null;
