@@ -75,8 +75,10 @@ func fromSensor(sn *domain.Sensor) store.SensorLiveness {
 
 // Heartbeat records a heartbeat. A heartbeat from an offline sensor that
 // had been online before raises sensor_recovered; the first heartbeat of a
-// new sensor does not.
-func (s *Service) Heartbeat(ctx context.Context, nodeID, sensorID, revision, sdkVersion string) error {
+// new sensor does not. dropped is the SDK's dropped_events since its last
+// acknowledged heartbeat; it is added to the sensor's cumulative count in
+// the same transaction.
+func (s *Service) Heartbeat(ctx context.Context, nodeID, sensorID, revision, sdkVersion string, dropped int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.Now().UTC()
@@ -93,6 +95,7 @@ func (s *Service) Heartbeat(ctx context.Context, nodeID, sensorID, revision, sdk
 	l.StoppedAt = nil
 	l.OutageAlertedAt = nil
 	l.SDKVersion = sdkVersion
+	l.DroppedDelta = dropped
 	if err := s.Store.SaveSensorLiveness(ctx, nodeID, sensorID, l, now); err != nil {
 		return err
 	}

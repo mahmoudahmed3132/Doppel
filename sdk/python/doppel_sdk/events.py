@@ -61,6 +61,29 @@ def encode_details(details: Details) -> dict:
     return out
 
 
+# Per-event limits of contract v3 (§4.2), applied before an event is queued.
+# The Hub enforces the same limits; applying them in the SDK also bounds the
+# queue's memory (at most queue capacity x about 64 KiB).
+MAX_FIELD_BYTES = 256  # source and target, in UTF-8 bytes
+MAX_DETAILS_BYTES = 64 << 10  # encoded details object
+
+
+def clamp_field(s: str) -> str:
+    """Truncates s to MAX_FIELD_BYTES of UTF-8 on a character boundary."""
+    b = str(s).encode("utf-8", "replace")
+    if len(b) <= MAX_FIELD_BYTES:
+        return str(s)
+    return b[:MAX_FIELD_BYTES].decode("utf-8", "ignore")
+
+
+def bound_details(det: dict) -> dict:
+    """Returns det, or the Hub's {"details_dropped": true} marker when its
+    encoding exceeds MAX_DETAILS_BYTES."""
+    if len(dumps(det)) > MAX_DETAILS_BYTES:
+        return {"details_dropped": True}
+    return det
+
+
 def now_rfc3339() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 

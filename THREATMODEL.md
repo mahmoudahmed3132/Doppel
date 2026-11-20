@@ -37,7 +37,7 @@ Event content is fully attacker-controlled and must never be interpreted.
 | Syslog/SIEM injection (fake records, line breaks) | RFC 5424 SD-value escaping; one record per line | `hub/internal/siem/syslog` `TestHostileValueStaysOneLine` |
 | CSV formula injection in exports | `'` prefix for `= + - @ \t \r` | `hub/internal/httpapi/events.go` `CSVSafe` |
 | Webhook mention/markdown injection | Discord `allowed_mentions: {parse: []}` + Markdown escaping; Slack `&<>` escaping | `hub/internal/webhook` |
-| Oversized/invalid input, resource exhaustion | Batch ≤ 100, body limits, details size cap, UTF-8 validation, per-key rate limit (50/s, burst 200), SIEM queue bounded (5000, drop-new, counted) | `hub/internal/ingest`, `httpapi/ingest.go`, `ratelimit` |
+| Oversized/invalid input, resource exhaustion | Batch ≤ 100, body limits, details size cap, UTF-8 validation, per-key rate limit (50/s, burst 200), Hub-wide ingest admission (8 concurrent batches, 1 s wait, then `429 overloaded`; heartbeats not gated so liveness cannot be starved by event floods), node-reported `dropped_events` stored with a saturating add (no integer overflow into an unreadable row), SIEM queue bounded (5000, drop-new, counted). Residual: one authenticated node within its rate limit can occupy admission slots and delay other nodes' events (they retry; nothing acknowledged is lost) | `hub/internal/ingest`, `httpapi/ingest.go`, `ratelimit` |
 | Sensor-side flooding | Per-source limiter and cooldowns with suppressed counts | `sdk/go/sensor/limiter.go`, sensors |
 
 ### B2: Node ↔ Hub (node API)

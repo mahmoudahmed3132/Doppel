@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
@@ -22,6 +23,16 @@ const (
 	maxIngestBody  = 256 << 10
 	maxBatchEvents = 100
 	maxStopReason  = 128
+
+	// IngestMaxInFlight and IngestAdmitWait bound Hub-wide concurrent event
+	// batches (F-603). SQLite serialises writers on one connection, so more
+	// concurrency only queues bodies in memory; a batch that cannot start
+	// within the wait gets 429 overloaded and the SDK retries it.
+	IngestMaxInFlight = 8
+	IngestAdmitWait   = time.Second
+	// overloadRetryAfter is the Retry-After (seconds) sent with 429 overloaded.
+	overloadRetryAfter = 1
+	overloadLogEvery   = 10 * time.Second
 )
 
 // Version information served at /v3/version.
@@ -44,20 +55,26 @@ type EventProcessor interface {
 
 // LivenessRecorder records heartbeats and stop notices.
 type LivenessRecorder interface {
-	Heartbeat(ctx context.Context, nodeID, sensorID, revision, sdkVersion string) error
+	Heartbeat(ctx context.Context, nodeID, sensorID, revision, sdkVersion string, dropped int64) error
 	Stopped(ctx context.Context, nodeID, sensorID, reason string) error
 }
 
 // Ingest serves the sensor contract (§4).
 type Ingest struct {
-	Auth     *nodekey.Authenticator
-	Limiter  *ratelimit.Keyed
-	Store    IngestStore
-	Pipeline EventProcessor
-	Liveness LivenessRecorder
-	Version  Version
-	Log      *slog.Logger
-	Now      func() time.Time
+	Auth    *nodekey.Authenticator
+	Limiter *ratelimit.Keyed
+	// Admission bounds concurrent event batches Hub-wide; nil means
+	// unbounded (tests only).
+	Admission *ratelimit.Gate
+	Store     IngestStore
+	Pipeline  EventProcessor
+	Liveness  LivenessRecorder
+	Version   Version
+	Log       *slog.Logger
+	Now       func() time.Time
+
+	lastOverloadLog atomic.Int64 // unix nanoseconds
+	overloadLogged  atomic.Uint64
 }
 
 // Register mounts the handlers on mux.
@@ -115,7 +132,34 @@ type rejection struct {
 	Error string `json:"error"`
 }
 
+// admit takes an ingest slot or answers 429 overloaded with Retry-After.
+// Events are acknowledged only after they are committed (fsynced), so a
+// refused batch stays in the SDK queue and nothing acknowledged is lost.
+func (h *Ingest) admit(w http.ResponseWriter, r *http.Request, nodeID string) (func(), bool) {
+	if h.Admission == nil {
+		return func() {}, true
+	}
+	release, ok := h.Admission.Enter(r.Context())
+	if ok {
+		return release, true
+	}
+	now := h.Now().UnixNano()
+	if last := h.lastOverloadLog.Load(); now-last >= int64(overloadLogEvery) && h.lastOverloadLog.CompareAndSwap(last, now) {
+		total := h.Admission.Refused()
+		h.Log.Warn("ingest overloaded, event batches refused with 429",
+			"refused_since_last_log", total-h.overloadLogged.Swap(total), "refused_total", total, "node_id", nodeID)
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(overloadRetryAfter))
+	Fail(w, http.StatusTooManyRequests, CodeOverloaded, "hub is overloaded, retry later")
+	return nil, false
+}
+
 func (h *Ingest) events(w http.ResponseWriter, r *http.Request, nodeID string) {
+	release, ok := h.admit(w, r, nodeID)
+	if !ok {
+		return
+	}
+	defer release()
 	var req eventsRequest
 	if err := DecodeStrict(w, r, maxIngestBody, &req); err != nil {
 		FailDecode(w, err)
@@ -250,7 +294,11 @@ func (h *Ingest) heartbeat(w http.ResponseWriter, r *http.Request, nodeID string
 	if req.DroppedEvents != nil && *req.DroppedEvents > 0 {
 		h.Log.Warn("sensor reported dropped events", "node_id", nodeID, "sensor_id", id, "dropped_events", *req.DroppedEvents)
 	}
-	if err := h.Liveness.Heartbeat(r.Context(), nodeID, id, ingest.Clamp(rev), ingest.Clamp(sdk)); err != nil {
+	var dropped int64
+	if req.DroppedEvents != nil {
+		dropped = *req.DroppedEvents
+	}
+	if err := h.Liveness.Heartbeat(r.Context(), nodeID, id, ingest.Clamp(rev), ingest.Clamp(sdk), dropped); err != nil {
 		h.Log.Error("recording heartbeat failed", "error", err.Error())
 		Fail(w, http.StatusInternalServerError, CodeInternal, "heartbeat not recorded")
 		return

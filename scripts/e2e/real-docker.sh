@@ -104,12 +104,15 @@ REGPID=$!
 
 step "start the Hub (secrets sealed under a generated KEK)"
 "$W/hub" kek-generate > "$W/kek"; chmod 600 "$W/kek"
-TS_KEK_FILE="$W/kek" TS_ENV=development TS_SETUP_TOKEN=e2e-setup-token-0123456789abcdef TS_DB_PATH="$W/ts.db" TS_LISTEN_PORT=18080 \
-	TS_REGISTRY_URL=http://127.0.0.1:18081/ TS_DEV_ALLOW_UNSIGNED_MANIFESTS=1 \
-	TS_UPDATE_CHECK_URL=https://127.0.0.1:1/none "$W/hub" serve > "$W/hub.log" 2>&1 &
-echo $! > "$W/hub.pid"
-for _ in $(seq 50); do curl -fsS "$HUB/v3/version" >/dev/null 2>&1 && break; sleep 0.2; done
-curl -fsS "$HUB/v3/version"; echo
+start_hub() {
+	TS_KEK_FILE="$W/kek" TS_ENV=development TS_SETUP_TOKEN=e2e-setup-token-0123456789abcdef TS_DB_PATH="$W/ts.db" TS_LISTEN_PORT=18080 \
+		TS_REGISTRY_URL=http://127.0.0.1:18081/ TS_DEV_ALLOW_UNSIGNED_MANIFESTS=1 \
+		TS_UPDATE_CHECK_URL=https://127.0.0.1:1/none "$W/hub" serve >> "$W/hub.log" 2>&1 &
+	echo $! > "$W/hub.pid"
+	for _ in $(seq 50); do curl -fsS "$HUB/v3/version" >/dev/null 2>&1 && break; sleep 0.2; done
+	curl -fsS "$HUB/v3/version" || fail "hub did not start"; echo
+}
+start_hub
 
 J="$W/jar"
 api() { m=$1 p=$2; shift 2; curl -sS -b "$J" -c "$J" -H "Origin: $HUB" -H 'Content-Type: application/json' -X "$m" "$HUB/api/v3$p" "$@"; }
@@ -193,6 +196,71 @@ $RUN "$CLI" status
 $RUN "$CLI" apply 2>&1 | tee "$W/apply2.txt"
 grep -q "nothing to do" "$W/apply2.txt" || fail "second apply was not a no-op"
 api GET "/nodes/$NODE" | jq -e '.node.health.in_sync' >/dev/null || fail "node not in sync after apply"
+api GET "/nodes/$NODE" | jq -e '[.node.sensors[].dropped_events | type == "number"] | all' >/dev/null ||
+	fail "sensor view lacks dropped_events (F-603)"
+
+step "kill -9 the Hub mid-burst: no acknowledged event is lost (F-603)"
+# Post batches as the node (sensor tcp-tarpit), record every event_id the Hub
+# acknowledged, SIGKILL the Hub while batches are in flight, then count the
+# acknowledged ids in the database after WAL recovery.
+BURST_SENSOR=$(api GET "/nodes/$NODE" | jq -r '[.node.sensors[] | select(.catalogue_name=="tcp-tarpit")][0].id')
+HUB="$HUB" KEY="$KEY" SENSOR="$BURST_SENSOR" PID="$(cat "$W/hub.pid")" DB="$W/ts.db" python3 - <<'PY' || fail "acknowledged events lost after kill -9"
+import json, os, signal, sqlite3, threading, time, urllib.error, urllib.request, uuid
+hub, key, sensor, pid, db = (os.environ[k] for k in ("HUB", "KEY", "SENSOR", "PID", "DB"))
+acked, lock, killed = set(), threading.Lock(), threading.Event()
+cut = [0]
+
+def uuid7():
+    ms = int(time.time() * 1000)
+    r = int.from_bytes(os.urandom(10), "big")
+    v = (ms << 80) | (0x7 << 76) | ((r >> 62) & 0xFFF) << 64 | (0b10 << 62) | (r & ((1 << 62) - 1))
+    return str(uuid.UUID(int=v))
+
+def worker(w):
+    while not killed.is_set():
+        ids = [uuid7() for _ in range(50)]
+        evs = [{"event_id": i, "sensor_id": sensor, "trigger": "tcp_connection", "severity": "low",
+                "occurred_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "source": "192.0.2.77:40000",
+                "target": "e2e burst", "details": {"w": w}} for i in ids]
+        req = urllib.request.Request(hub + "/v3/ingest/events", data=json.dumps({"events": evs}).encode(),
+                                     headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+        try:
+            out = json.load(urllib.request.urlopen(req, timeout=10))
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                time.sleep(0.2)
+                continue
+            raise
+        except Exception:
+            with lock:
+                cut[0] += 1
+            return  # Hub gone: this batch was not acknowledged
+        assert out["accepted"] + out["duplicates"] == len(ids) and not out["rejected"], out
+        with lock:
+            acked.update(ids)
+            if len(acked) >= 1000 and not killed.is_set():
+                os.kill(int(pid), signal.SIGKILL)
+                killed.set()
+
+ts = [threading.Thread(target=worker, args=(w,)) for w in range(6)]
+for t in ts: t.start()
+for t in ts: t.join()
+time.sleep(0.5)
+con = sqlite3.connect(db)
+stored = {r[0] for r in con.execute("SELECT event_id FROM events WHERE sensor_id = ? AND target = 'e2e burst'", (sensor,))}
+con.close()
+lost = acked - stored
+print(f"acknowledged {len(acked)}, stored {len(stored)}, lost acknowledged {len(lost)}, requests cut by the kill {cut[0]}")
+assert killed.is_set() and len(acked) >= 1000, "burst did not reach the kill"
+assert not lost, f"{len(lost)} acknowledged events lost"
+PY
+start_hub
+for _ in $(seq 60); do
+	n=$(api GET "/nodes/$NODE" | jq '[.node.sensors[] | select(.status=="online")] | length')
+	[ "$n" = 3 ] && break
+	sleep 1
+done
+[ "$n" = 3 ] || fail "sensors did not come back online after the Hub restart"
 
 if [ "${KEEP:-0}" = 1 ]; then
 	step "POC mode (KEEP=1): everything stays running"

@@ -29,6 +29,8 @@ export interface SensorView {
   node_id: string; id: string; catalogue_name: string; version: string; config: Record<string, string> | null;
   silenced: boolean; status: string; status_changed_at: string | null; last_heartbeat_at: string | null;
   last_activity_at: string | null; sdk_version: string; created_at: string;
+  /** Cumulative events the sensor's SDK reported as lost (queue overflow or undeliverable batches). */
+  dropped_events: number;
   config_masked: string[]; latest_version?: string; update_available: boolean;
 }
 export interface NodeDetail extends NodeSummary { sensors: SensorView[] }

@@ -190,14 +190,20 @@ func (s *Sensor) build(sev Severity, trigger, source, target string, details Det
 		s.log.Warn("event details not encodable, sending empty details", "trigger", trigger, "error", err.Error())
 		raw = []byte(`{"details_encode_error":true}`)
 	}
+	if len(raw) > MaxDetailsBytes {
+		// The Hub would replace them with the same marker; dropping them here
+		// keeps the queue's memory bounded (see MaxDetailsBytes).
+		s.log.Warn("event details too large, sending marker", "trigger", trigger, "bytes", len(raw), "limit", MaxDetailsBytes)
+		raw = []byte(`{"details_dropped":true}`)
+	}
 	return wireEvent{
 		EventID:    s.ids.next(),
 		SensorID:   s.cfg.SensorID,
 		Trigger:    trigger,
 		Severity:   sev,
 		OccurredAt: s.now().UTC().Format(time.RFC3339Nano),
-		Source:     source,
-		Target:     target,
+		Source:     clampField(source),
+		Target:     clampField(target),
 		Details:    raw,
 	}
 }
