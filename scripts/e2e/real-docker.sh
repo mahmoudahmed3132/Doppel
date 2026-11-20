@@ -5,7 +5,8 @@
 # §14.11/§14.12): sensor images pushed by digest to a local registry, a real
 # Hub, the real CLI applying the Hub-rendered compose with `docker compose`,
 # real connections to the decoys, events and heartbeats arriving, container
-# hardening as rendered (§6.12), fire drill, idempotent re-apply, uninstall.
+# hardening as rendered (§6.12), fire drill (flagged, analytics unchanged:
+# F-001), idempotent re-apply, uninstall.
 # KEEP=1 stops before the uninstall and leaves the POC running (docs/poc.md);
 # it builds the real admin UI first (needs Node 22+, else it fails with a clear message).
 #
@@ -206,7 +207,9 @@ done
 echo "triggers seen: $got"
 [ -z "$missing" ] || fail "events missing:$missing"
 
-step "fire drill reaches the Hub from every sensor"
+step "fire drill reaches the Hub from every sensor, flagged and out of the analytics (F-001)"
+counts() { api GET /analytics/summary | jq -c '.summary | {events_total, events_unread, events_24h, critical_24h}'; }
+before=$(counts)
 $RUN "$CLI" firedrill
 for _ in $(seq 30); do
 	d=$(api GET '/events?limit=200&archived=any' | jq '[.events[] | select(.source=="Fire drill") | .sensor_id] | unique | length')
@@ -214,6 +217,15 @@ for _ in $(seq 30); do
 	sleep 1
 done
 [ "$d" -ge 3 ] || fail "fire drill events from $d of 3 sensors"
+drills=$(api GET '/events?view=drills&limit=200')
+n=$(echo "$drills" | jq '.events | length')
+[ "$n" = 3 ] || fail "view=drills returned $n events, want 3"
+echo "$drills" | jq -e '[.events[] | .drill and .severity == "info" and (.details.original_severity | type == "string")] | all' >/dev/null ||
+	fail "drill events not stored as flagged info events with original_severity"
+api GET '/events?limit=200' | jq -e '[.events[] | select(.drill)] | length == 0' >/dev/null || fail "drills in the Active view"
+after=$(counts)
+[ "$before" = "$after" ] || fail "analytics summary changed after the fire drill: $before -> $after"
+echo "drills: $n flagged; summary unchanged: $after"
 api GET '/analytics/projections/sources' | jq -e '[.data.sources[].source] | index("Fire drill") == null' >/dev/null ||
 	fail "fire drill events should be excluded from /api/v3/analytics/projections/sources (F-002)"
 

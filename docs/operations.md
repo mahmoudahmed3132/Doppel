@@ -132,6 +132,28 @@ secrets; the KEK is not in it (see THREATMODEL.md R1).
 - Schema v5 (`sensors.dropped_events`) is applied on first start; the usual
   `.pre-v5-…bak` snapshot is written first (§3).
 
+### Fire drills (F-001)
+
+- `doppel firedrill` (or a sensor in test mode) sends one drill event per
+  sensor. The Hub stores it flagged (`is_drill`), as `info`, and forwards it to
+  the SIEM labelled `pipeline_test` / `labels.drill: true`. Drills never notify
+  and are left out of the dashboard, report, scans, ATT&CK, attack path, geo
+  and insights figures and the unread badge. They are listed under the
+  **Drills** view of the Events page (`GET /api/v3/events?view=drills`).
+  Analysts and admins can add them back to analytics with `include_drills=true`
+  (the report has an *Include fire drills* toggle).
+- A drill proves the path end to end: expect one `truesignal-drill-received`
+  alert per running sensor in the SIEM. Re-import the SIEM rules after this
+  upgrade (`docs/siem/detection-rules.md`): the alerting rules now exclude
+  drills; with the old rules a drill still pages as a real alert.
+- Sensors built on an SDK older than the drill flag are still recognised by
+  their `Fire drill` source. The Hub logs `deprecated: fire drill without the
+  drill flag` with a running count (`legacy_drills_total`); rebuild those
+  sensors on the current SDK.
+- Schema v6 adds `events.is_drill`, flags every stored event whose source is
+  `Fire drill` and creates the `events_nondrill` index on first start (one
+  table scan; the `.pre-v6-…bak` snapshot is written first, §3).
+
 ## 3. Upgrade the Hub
 
 1. Read the release notes; verify the new digest (§1).
