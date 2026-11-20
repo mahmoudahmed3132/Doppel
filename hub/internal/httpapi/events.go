@@ -57,19 +57,46 @@ func (e *Events) Register(a *Admin) {
 
 func badQuery(w http.ResponseWriter, msg string) { Fail(w, http.StatusBadRequest, CodeInvalid, msg) }
 
+// Event views (F-001). view takes precedence over the older archived
+// parameter, and the two cannot be combined.
+const (
+	ViewActive   = "active"   // unarchived, no fire drills (default)
+	ViewArchived = "archived" // archived, no fire drills
+	ViewDrills   = "drills"   // fire drills only, archived or not
+	ViewAll      = "all"      // everything
+)
+
 // parseFilter reads list/export filters from the query string.
 func parseFilter(q url.Values) (store.EventFilter, string) {
 	f := store.EventFilter{Limit: 100}
-	switch q.Get("archived") {
-	case "", "false":
-		v := false
-		f.Archived = &v
-	case "true":
-		v := true
-		f.Archived = &v
-	case "any":
-	default:
-		return f, "archived must be true, false or any"
+	yes, no := true, false
+	if v := q.Get("view"); v != "" {
+		if q.Get("archived") != "" {
+			return f, "use view or archived, not both"
+		}
+		switch v {
+		case ViewActive:
+			f.Archived, f.Drill = &no, &no
+		case ViewArchived:
+			f.Archived, f.Drill = &yes, &no
+		case ViewDrills:
+			f.Drill = &yes
+		case ViewAll:
+		default:
+			return f, "view must be active, archived, drills or all"
+		}
+	} else {
+		// archived=false/true keep fire drills out, as the Active and
+		// Archived views do; archived=any returns everything.
+		switch q.Get("archived") {
+		case "", "false":
+			f.Archived, f.Drill = &no, &no
+		case "true":
+			f.Archived, f.Drill = &yes, &no
+		case "any":
+		default:
+			return f, "archived must be true, false or any"
+		}
 	}
 	if v := q.Get("node"); v != "" {
 		if !domain.ValidNodeID(v) {
@@ -281,7 +308,7 @@ func (e *Events) export(w http.ResponseWriter, r *http.Request) {
 		attachment(w, "truesignal-events-"+stamp+".csv", "text/csv; charset=utf-8")
 		cw = csv.NewWriter(w)
 		cw.Write([]string{"seq", "event_id", "received_at", "occurred_at", "severity", "trigger", "node_id", "node", "sensor_id",
-			"source", "target", "whitelisted", "known_scanner", "read", "archived", "details"})
+			"source", "target", "whitelisted", "known_scanner", "read", "archived", "details", "drill"})
 	} else {
 		attachment(w, "truesignal-events-"+stamp+".json", "application/json")
 		w.Write([]byte("[\n"))
@@ -300,7 +327,8 @@ func (e *Events) export(w http.ResponseWriter, r *http.Request) {
 				cw.Write([]string{strconv.FormatInt(ev.Seq, 10), ev.EventID, ev.ReceivedAt.Format(time.RFC3339Nano),
 					ev.OccurredAt.Format(time.RFC3339Nano), string(ev.Severity), ev.Trigger, ev.NodeID, CSVSafe(ev.NodeAlias),
 					ev.SensorID, CSVSafe(ev.Source), CSVSafe(ev.Target), strconv.FormatBool(ev.Whitelisted),
-					strconv.FormatBool(ev.KnownScanner), strconv.FormatBool(ev.Read), strconv.FormatBool(ev.Archived), CSVSafe(string(ev.Details))})
+					strconv.FormatBool(ev.KnownScanner), strconv.FormatBool(ev.Read), strconv.FormatBool(ev.Archived), CSVSafe(string(ev.Details)),
+					strconv.FormatBool(ev.Drill)})
 			} else {
 				if !first {
 					w.Write([]byte(",\n"))
