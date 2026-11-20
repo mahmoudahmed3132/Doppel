@@ -141,8 +141,16 @@ func (a *App) flags(name string) *flag.FlagSet {
 	return fs
 }
 
+func (a *App) allowHTTP() bool {
+	switch strings.ToLower(strings.TrimSpace(a.Getenv("TS_DEV_ALLOW_HTTP"))) {
+	case "true", "1", "yes":
+		return true
+	}
+	return false
+}
+
 func (a *App) client(cfg *config.Config) (*hub.Client, error) {
-	u, err := hub.ParseEndpoint(cfg.HubEndpoint)
+	u, err := hub.ParseEndpoint(cfg.HubEndpoint, a.allowHTTP())
 	if err != nil {
 		return nil, err
 	}
@@ -166,12 +174,12 @@ func (a *App) link(ctx context.Context, args []string) int {
 	if !config.ValidKey(key) {
 		return a.fail(errors.New("set TS_NODE_KEY to the node key shown when the node was created (tsk_ + 64 hex)"))
 	}
-	u, err := hub.ParseEndpoint(fs.Arg(0))
+	u, err := hub.ParseEndpoint(fs.Arg(0), a.allowHTTP())
 	if err != nil {
 		return a.fail(err)
 	}
 	if u.Scheme == "http" {
-		a.warn("plain HTTP sends the node key unencrypted; use https outside a lab")
+		a.warn("TS_DEV_ALLOW_HTTP is active: plain HTTP sends the node key unencrypted; do not use in production")
 	}
 	c := hub.New(u, key, a.Version)
 	id, err := c.Identity(ctx)

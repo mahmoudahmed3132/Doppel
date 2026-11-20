@@ -99,10 +99,30 @@ func newApp(t *testing.T, env map[string]string) (*App, *bytes.Buffer, *bytes.Bu
 	os.WriteFile(exe, []byte("binary"), 0o755)
 	a := &App{
 		Version: "3.0.0", Paths: config.Paths{ConfigFile: filepath.Join(dir, "etc", "config.json"), WorkDir: filepath.Join(dir, "opt")},
-		Getenv: func(k string) string { return env[k] }, Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errb,
+		Getenv: func(k string) string {
+			if v, ok := env[k]; ok {
+				return v
+			}
+			if k == "TS_DEV_ALLOW_HTTP" {
+				return "true"
+			}
+			return ""
+		},
+		Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errb,
 		Runner: r, Arch: "amd64", ProcRoot: dir, Exe: func() (string, error) { return exe, nil }, Settle: time.Millisecond,
 	}
 	return a, &out, &errb, r
+}
+
+func TestLinkRefusesPlainHTTPWithoutDevFlag(t *testing.T) {
+	h := newHub(t)
+	a, _, errb, _ := newApp(t, map[string]string{"TS_NODE_KEY": key, "TS_DEV_ALLOW_HTTP": ""})
+	if code := a.Run(context.Background(), []string{"link", h.srv.URL}); code == 0 {
+		t.Fatal("expected link to refuse plain http:// without TS_DEV_ALLOW_HTTP=true")
+	}
+	if !strings.Contains(errb.String(), "TS_DEV_ALLOW_HTTP") {
+		t.Fatalf("unexpected error: %s", errb.String())
+	}
 }
 
 func TestLinkSavesConfig0600(t *testing.T) {

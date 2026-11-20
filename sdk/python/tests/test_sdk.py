@@ -117,7 +117,13 @@ class MockHub:
 
 
 def env(hub, **extra):
-    e = {"TS_HUB_ENDPOINT": hub.url + "/", "TS_NODE_KEY": KEY, "TS_SENSOR_ID": "ts-sensor-x", "TS_CONFIG_REVISION": "rev_12345678"}
+    e = {
+        "TS_HUB_ENDPOINT": hub.url + "/",
+        "TS_NODE_KEY": KEY,
+        "TS_SENSOR_ID": "ts-sensor-x",
+        "TS_CONFIG_REVISION": "rev_12345678",
+        "TS_DEV_ALLOW_HTTP": "true",
+    }
     e.update(extra)
     return e
 
@@ -134,6 +140,14 @@ def fast(hub, **kw):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_http_refused_without_dev_flag(self):
+        base = {"TS_HUB_ENDPOINT": "http://127.0.0.1:8080", "TS_NODE_KEY": KEY, "TS_SENSOR_ID": "ts-sensor-x"}
+        with self.assertRaises(ConfigError) as cm:
+            Config.load(base)
+        self.assertIn("TS_DEV_ALLOW_HTTP", str(cm.exception))
+        cfg = Config.load({**base, "TS_DEV_ALLOW_HTTP": "true"})
+        self.assertTrue(cfg.dev_allow_http)
+
     def test_required_and_validation(self):
         with self.assertRaises(ConfigError) as cm:
             Config.load({})

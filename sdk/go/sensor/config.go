@@ -19,6 +19,7 @@ const (
 	EnvConfigRevision  = "TS_CONFIG_REVISION"
 	EnvTestMode        = "TS_TEST_MODE"
 	EnvCABundle        = "TS_CA_BUNDLE"
+	EnvDevAllowHTTP    = "TS_DEV_ALLOW_HTTP"
 )
 
 // testModeSensorID is used in test mode when TS_SENSOR_ID is unset.
@@ -32,6 +33,7 @@ type Config struct {
 	DefaultSeverity Severity
 	ConfigRevision  string
 	TestMode        bool
+	DevAllowHTTP    bool
 	CABundlePath    string
 
 	getenv func(string) string
@@ -55,6 +57,13 @@ func LoadConfig(getenv func(string) string) (*Config, error) {
 	default:
 		return nil, fmt.Errorf("%s must be true or false, got %q", EnvTestMode, tm)
 	}
+	switch ah := strings.ToLower(get(EnvDevAllowHTTP)); ah {
+	case "", "false", "0", "no":
+	case "true", "1", "yes":
+		c.DevAllowHTTP = true
+	default:
+		return nil, fmt.Errorf("%s must be true or false, got %q", EnvDevAllowHTTP, ah)
+	}
 
 	var errs []error
 	raw := get(EnvHubEndpoint)
@@ -66,7 +75,9 @@ func LoadConfig(getenv func(string) string) (*Config, error) {
 		case err != nil:
 			errs = append(errs, fmt.Errorf("%s: %v", EnvHubEndpoint, err))
 		case u.Scheme != "https" && u.Scheme != "http":
-			errs = append(errs, fmt.Errorf("%s must use https:// (or http:// for lab use)", EnvHubEndpoint))
+			errs = append(errs, fmt.Errorf("%s must use https://", EnvHubEndpoint))
+		case u.Scheme == "http" && !c.DevAllowHTTP:
+			errs = append(errs, fmt.Errorf("%s must use https:// (set %s=true for local development)", EnvHubEndpoint, EnvDevAllowHTTP))
 		case u.Host == "":
 			errs = append(errs, fmt.Errorf("%s has no host", EnvHubEndpoint))
 		case u.User != nil:
@@ -116,7 +127,7 @@ func (c *Config) Setting(name string) (string, bool) {
 
 func isReservedKey(name string) bool {
 	switch name {
-	case EnvHubEndpoint, EnvNodeKey, EnvSensorID, EnvConfigRevision, EnvTestMode, EnvCABundle:
+	case EnvHubEndpoint, EnvNodeKey, EnvSensorID, EnvConfigRevision, EnvTestMode, EnvCABundle, EnvDevAllowHTTP:
 		return true
 	}
 	return false
