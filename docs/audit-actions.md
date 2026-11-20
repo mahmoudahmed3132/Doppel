@@ -23,6 +23,7 @@ Request bodies are never included.
 | `secrets.kek_rotate_cli` | host command `truesignal-hub kek-rotate`; emitted on the next start | — |
 | `secrets.reset_cli` | break-glass `truesignal-hub secrets-reset --destroy-secrets` (KEK lost); emitted on the next start | — |
 | `mfa.reset_cli` | break-glass `truesignal-hub mfa-reset`; emitted on the next Hub start (`method` = `CLI`, `actor_ip` = `local`) | — |
+| `system.restore_cli` | host command `doppel-hub restore --from <dir>`; emitted on the next Hub start (`method` = `CLI`, `actor_ip` = `local`) | — |
 | `system.password_change` | admin password change | `POST /api/v3/system/password` |
 | `node.create` | node created (key issued) | `POST /api/v3/nodes` |
 | `node.update` | alias/tags changed | `PATCH /api/v3/nodes/{node}` |

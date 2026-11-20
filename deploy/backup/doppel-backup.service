@@ -1,0 +1,28 @@
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
+#
+# Example systemd unit for scheduled online backups of the Doppel Hub database.
+# Copy to /etc/systemd/system/doppel-backup.service, adjust paths and
+# --encrypt-to recipient, then enable doppel-backup.timer.
+#
+# Never store TS_KEK_FILE inside the backup output directory; back up the KEK
+# separately from the database snapshots.
+
+[Unit]
+Description=Doppel Hub online SQLite backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=doppel
+Group=doppel
+UMask=0077
+Environment=DOPPEL_DB_PATH=/var/lib/doppel/truesignal.db
+Environment=DOPPEL_KEK_FILE=/etc/doppel/hub.kek
+Environment=BACKUP_ROOT=/var/backups/doppel
+Environment=AGE_RECIPIENT=age1replace_with_your_public_recipient_key
+ExecStart=/bin/sh -eu -c 'out="${BACKUP_ROOT}/snap-$(date -u +%%Y%%m%%dT%%H%%M%%SZ)"; /usr/local/bin/doppel-hub backup --out "$out" --encrypt-to "${AGE_RECIPIENT}" && /usr/local/bin/doppel-hub verify --from "$out"'
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/doppel /etc/doppel
+ReadWritePaths=/var/backups/doppel

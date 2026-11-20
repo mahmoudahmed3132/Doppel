@@ -20,6 +20,8 @@ must state why it is needed.
 | `golang.org/x/sys` | cli (via term) | v0.49.0 | BSD-3-Clause | Transitive |
 | `golang.org/x/crypto` (`ssh`) | `sensors/remote-access-decoy` | v0.58.0 | BSD-3-Clause | SSH 2.0 server transport (RFC 4251–4254); not in the standard library |
 | `golang.org/x/sys` | `sensors/remote-access-decoy` (via crypto) | v0.49.0 | BSD-3-Clause | Transitive |
+| `filippo.io/age` | hub (`internal/backup`) | v1.3.2 | BSD-3-Clause | Optional age encryption at rest for Hub backups (`doppel-hub backup --encrypt-to`, F-003b); not in the standard library |
+| `filippo.io/hpke` | hub (via age) | v0.4.0 | BSD-3-Clause | Transitive: HPKE support required by `filippo.io/age` |
 
 ### Sigstore manifest verifier (hub, PORTED step 1)
 

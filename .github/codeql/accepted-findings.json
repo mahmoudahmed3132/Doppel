@@ -6,6 +6,12 @@
     "reason": "Sink is the audit statusWriter.Write shared by all admin handlers. Every writer is writeJSON (SetEscapeHTML, application/json) or an attachment download (Content-Disposition: attachment; octet-stream/JSON/CSV); every response carries nosniff and CSP script-src 'self'. No text/html response contains request data. Re-traced 2026-11-01 (previously dismissed in code scanning)."
   },
   {
+    "rule": "go/reflected-xss",
+    "file": "hub/internal/metrics/metrics.go",
+    "fingerprint": "1d306064b40bedfa:1",
+    "reason": "Sink is the metrics statusRecorder.Write passthrough wrapper (added in F-003a) wrapping the exact same Hub handlers as httpapi/middleware.go statusWriter.Write. Every dynamic response is application/json (SetEscapeHTML) or an attachment download with X-Content-Type-Options: nosniff and CSP script-src 'self'; no text/html response contains request data."
+  },
+  {
     "rule": "go/log-injection",
     "file": "hub/internal/httpapi/ingest.go",
     "fingerprint": "9ae70dd42b0a1be7:1",

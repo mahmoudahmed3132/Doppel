@@ -5,6 +5,7 @@ go 1.27.0
 toolchain go1.27.4
 
 require (
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -88,6 +89,7 @@ require (
 )
 
 require (
+	filippo.io/age v1.3.2
 	github.com/mahmoudahmed3132/Doppel/sdk/go v0.0.0
 	github.com/oschwald/maxminddb-golang/v2 v2.9.0
 	github.com/sigstore/sigstore-go v1.4.0

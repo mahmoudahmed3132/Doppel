@@ -1,0 +1,70 @@
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
+#
+# Example Kubernetes CronJob for scheduled online backups of Doppel Hub.
+# Replace the image digest with the signed Doppel Hub release digest and set
+# AGE_RECIPIENT to your backup age public key.
+#
+# Security notes:
+# - Mount the Hub data PVC and a separate backup PVC.
+# - Do NOT mount the KEK Secret into the backup destination.
+# - Copy snapshots off-cluster and enforce retention outside this CronJob.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: doppel-hub-backup
+  namespace: doppel
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            runAsNonRoot: true
+          containers:
+            - name: backup
+              # Pin to a verified release digest from ghcr.io/mahmoudahmed3132/ts-hub.
+              image: ghcr.io/mahmoudahmed3132/ts-hub@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              args:
+                - backup
+                - --out
+                - /backups/$(POD_NAME)
+                - --encrypt-to
+                - $(AGE_RECIPIENT)
+              env:
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
+                - name: DOPPEL_DB_PATH
+                  value: /data/truesignal.db
+                - name: AGE_RECIPIENT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: doppel-backup-config
+                      key: age_recipient
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: hub-data
+                  mountPath: /data
+                  readOnly: false
+                - name: backup-dest
+                  mountPath: /backups
+          volumes:
+            - name: hub-data
+              persistentVolumeClaim:
+                claimName: doppel-hub-data
+            - name: backup-dest
+              persistentVolumeClaim:
+                claimName: doppel-hub-backups

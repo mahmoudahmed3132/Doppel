@@ -1,0 +1,16 @@
+# Copyright (c) 2026 TrueSignal Deception. All rights reserved.
+#
+# Example systemd timer for daily Doppel Hub backups.
+# Copy to /etc/systemd/system/doppel-backup.timer and run:
+#   systemctl daemon-reload && systemctl enable --now doppel-backup.timer
+
+[Unit]
+Description=Daily Doppel Hub database backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
