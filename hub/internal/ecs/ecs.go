@@ -16,7 +16,6 @@ package ecs
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -162,9 +161,14 @@ func (r Renderer) ecsEvent(event domain.EnrichedEvent) map[string]any {
 	}
 
 	// source.ip is an ip-typed field: only set it from a parseable address,
-	// or Elastic rejects the whole document.
-	if ip := net.ParseIP(event.Source); ip != nil {
-		doc["source"] = map[string]any{"ip": ip.String()}
+	// or Elastic rejects the whole document. source.port is set separately
+	// whenever the source carries a port (F-002).
+	if ip, port, kind := event.EffectiveSource(); kind == domain.SourceKindIP && ip != "" {
+		src := map[string]any{"ip": ip}
+		if port != nil {
+			src["port"] = *port
+		}
+		doc["source"] = src
 	} else if event.Source != "" {
 		doc["source"] = map[string]any{"address": event.Source}
 	}
@@ -335,8 +339,12 @@ func (r Renderer) ecsAudit(rec domain.AuditRecord) map[string]any {
 		},
 		"tags": []string{"truesignal", "audit"},
 	}
-	if ip := net.ParseIP(rec.ActorIP); ip != nil {
-		doc["source"] = map[string]any{"ip": ip.String()}
+	if ip, port, kind := domain.ParseSource(rec.ActorIP); kind == domain.SourceKindIP && ip != "" {
+		src := map[string]any{"ip": ip}
+		if port != nil {
+			src["port"] = *port
+		}
+		doc["source"] = src
 	}
 	if rec.Actor != "" {
 		doc["user"] = map[string]any{"name": rec.Actor}

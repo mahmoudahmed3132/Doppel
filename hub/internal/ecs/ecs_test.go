@@ -188,3 +188,38 @@ func TestECSUserDomainFromAnyField(t *testing.T) {
 		t.Errorf("DN was split: %v", u)
 	}
 }
+
+func TestECSSourceIPAndPort(t *testing.T) {
+	cases := []struct {
+		source   string
+		wantIP   any
+		wantPort any
+		wantAddr any
+	}{
+		{source: "203.0.113.9:51234", wantIP: "203.0.113.9", wantPort: float64(51234)},
+		{source: "[2001:db8::1]:443", wantIP: "2001:db8::1", wantPort: float64(443)},
+		{source: "[::ffff:192.0.2.1]:8080", wantIP: "192.0.2.1", wantPort: float64(8080)},
+		{source: "[fe80::1%eth0]:22", wantIP: "fe80::1", wantPort: float64(22)},
+		{source: "10.20.30.40", wantIP: "10.20.30.40", wantPort: nil},
+		{source: "scanner.example.com:443", wantIP: nil, wantPort: nil, wantAddr: "scanner.example.com:443"},
+	}
+	for _, tc := range cases {
+		ev := ldapLoginEvent()
+		ev.Source = tc.source
+		ev.SourceIP, ev.SourcePort, ev.SourceKind = domain.ParseSource(tc.source)
+		doc := roundTrip(t, Renderer{}.ecsEvent(ev))
+		if got := get(doc, "source.ip"); got != tc.wantIP {
+			t.Errorf("%q: source.ip = %#v, want %#v", tc.source, got, tc.wantIP)
+		}
+		if got := get(doc, "source.port"); got != tc.wantPort {
+			t.Errorf("%q: source.port = %#v, want %#v", tc.source, got, tc.wantPort)
+		}
+		if got := get(doc, "source.address"); got != tc.wantAddr {
+			t.Errorf("%q: source.address = %#v, want %#v", tc.source, got, tc.wantAddr)
+		}
+		// Raw display value stays in truesignal.source.
+		if got := get(doc, "truesignal.source"); got != tc.source {
+			t.Errorf("%q: truesignal.source = %#v, want %#v", tc.source, got, tc.source)
+		}
+	}
+}

@@ -78,6 +78,8 @@ func (p *Pipeline) RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger 
 	if err != nil {
 		return nil, err
 	}
+	clampedSource := Clamp(source)
+	sourceIP, sourcePort, sourceKind := domain.ParseSource(clampedSource)
 	ev := &domain.Event{
 		EventID:    ids.UUIDv7(now),
 		NodeID:     nodeID,
@@ -86,7 +88,11 @@ func (p *Pipeline) RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger 
 		Severity:   sev,
 		OccurredAt: now,
 		ReceivedAt: now,
-		Source:     Clamp(source),
+		Source:     clampedSource,
+		SourceIP:   sourceIP,
+		SourcePort: sourcePort,
+		SourceKind: sourceKind,
+		Labels:     domain.SourceLabels(sourceIP),
 		Target:     Clamp(target),
 		Details:    raw,
 		HubRaised:  true,
@@ -98,6 +104,12 @@ func (p *Pipeline) RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger 
 // Process runs a normalised sensor event through the pipeline.
 func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error) {
 	var res Result
+	if ev.SourceKind == "" {
+		ev.SourceIP, ev.SourcePort, ev.SourceKind = domain.ParseSource(ev.Source)
+		if len(ev.Labels) == 0 {
+			ev.Labels = domain.SourceLabels(ev.SourceIP)
+		}
+	}
 
 	// Step 2: beacon resolution.
 	knownBeacon := false

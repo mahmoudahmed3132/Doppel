@@ -45,6 +45,21 @@ func TestNormalize(t *testing.T) {
 	if code != "" || len(warns) != 0 || ev.Severity != "high" || ev.Source != "203.0.113.9:51234" {
 		t.Fatalf("%+v %v %s", ev, warns, code)
 	}
+	if ev.SourceIP != "203.0.113.9" || ev.SourcePort == nil || *ev.SourcePort != 51234 || ev.SourceKind != domain.SourceKindIP || len(ev.Labels) != 0 {
+		t.Fatalf("normalized source = ip:%q port:%v kind:%q labels:%v", ev.SourceIP, ev.SourcePort, ev.SourceKind, ev.Labels)
+	}
+	hostEv, _, _ := Normalize(raw(func(r *RawEvent) { r.Source = "192.168.65.1:43210" }), "node-00000001", now)
+	if hostEv.SourceIP != "192.168.65.1" || hostEv.SourcePort == nil || *hostEv.SourcePort != 43210 || len(hostEv.Labels) != 1 || hostEv.Labels[0] != "host_local" {
+		t.Fatalf("host_local source = %+v", hostEv)
+	}
+	drillEv, _, _ := Normalize(raw(func(r *RawEvent) { r.Source = "Fire drill" }), "node-00000001", now)
+	if drillEv.SourceIP != "" || drillEv.SourcePort != nil || drillEv.SourceKind != domain.SourceKindDrill {
+		t.Fatalf("drill source = %+v", drillEv)
+	}
+	localEv, _, _ := Normalize(raw(func(r *RawEvent) { r.Source = "local" }), "node-00000001", now)
+	if localEv.SourceIP != "" || localEv.SourcePort != nil || localEv.SourceKind != domain.SourceKindLocal {
+		t.Fatalf("local source = %+v", localEv)
+	}
 
 	cases := map[string]struct {
 		mod  func(*RawEvent)

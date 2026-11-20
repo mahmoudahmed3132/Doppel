@@ -14,6 +14,8 @@ type Location struct {
 	Lon         float64 `json:"lon"`
 	Basis       string  `json:"basis"` // "source" | "client_subnet"
 	Address     string  `json:"address"`
+	ASN         uint    `json:"asn,omitempty"`
+	ASOrg       string  `json:"as_org,omitempty"`
 }
 
 // AssetMatch is the asset-inventory enrichment of a source.
@@ -40,6 +42,8 @@ type Enrichment struct {
 	Attack   *AttackMapping `json:"attack,omitempty"`
 	Asset    *AssetMatch    `json:"source_asset,omitempty"`
 	Location *Location      `json:"location,omitempty"`
+	ASN      uint           `json:"asn,omitempty"`
+	ASOrg    string         `json:"as_org,omitempty"`
 }
 
 // EnrichedEvent is an event with output-only enrichment and display names.
