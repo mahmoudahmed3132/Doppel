@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -361,8 +362,10 @@ func (s *Sensor) heartbeat(ctx context.Context) {
 	}
 }
 
-// runSender batches queued events and delivers them until ctx ends. After
-// flush is closed it drains the queue without waiting and returns.
+// runSender batches queued events and delivers them until ctx ends. A batch
+// holds at most BatchSize events and maxBatchBytes of encoded events, so it
+// stays under the Hub's request body limit. After flush is closed it drains
+// the queue without waiting and returns.
 func (s *Sensor) runSender(ctx context.Context, flush <-chan struct{}) {
 	flushing := false
 	for {
@@ -383,7 +386,7 @@ func (s *Sensor) runSender(ctx context.Context, flush <-chan struct{}) {
 			if !flushing {
 				timer := time.NewTimer(s.opts.BatchDelay)
 			fill:
-				for s.q.len() < s.opts.BatchSize {
+				for !s.q.full(s.opts.BatchSize, maxBatchBytes) {
 					select {
 					case <-ctx.Done():
 						timer.Stop()
@@ -399,7 +402,7 @@ func (s *Sensor) runSender(ctx context.Context, flush <-chan struct{}) {
 				timer.Stop()
 			}
 		}
-		batch := s.q.pop(s.opts.BatchSize)
+		batch := s.q.pop(s.opts.BatchSize, maxBatchBytes)
 		if len(batch) == 0 {
 			if flushing {
 				return
@@ -429,6 +432,17 @@ func (s *Sensor) deliver(ctx context.Context, batch []wireEvent) {
 			}
 			return
 		}
+		var he *hubError
+		if errors.As(err, &he) && he.Status == http.StatusRequestEntityTooLarge && len(batch) > 1 {
+			// The batch budget keeps bodies under the Hub's limit, but a proxy
+			// in front of the Hub may enforce a lower one. Halve rather than
+			// drop; only a single event that is still too large is lost.
+			mid := len(batch) / 2
+			s.log.Warn("event batch too large, splitting", "events", len(batch))
+			s.deliver(ctx, batch[:mid])
+			s.deliver(ctx, batch[mid:])
+			return
+		}
 		if !retryable(err) {
 			s.log.Error("event batch refused, dropping", "events", len(batch), "error", err.Error())
 			s.q.addDropped(uint64(len(batch)))
@@ -440,7 +454,6 @@ func (s *Sensor) deliver(ctx context.Context, batch []wireEvent) {
 			return
 		}
 		wait := s.backoff(attempt)
-		var he *hubError
 		if errors.As(err, &he) && he.RetryAfter > wait {
 			wait = min(he.RetryAfter, s.opts.BackoffCap)
 		}

@@ -79,9 +79,40 @@ def clamp_field(s: str) -> str:
 def bound_details(det: dict) -> dict:
     """Returns det, or the Hub's {"details_dropped": true} marker when its
     encoding exceeds MAX_DETAILS_BYTES."""
-    if len(dumps(det)) > MAX_DETAILS_BYTES:
-        return {"details_dropped": True}
-    return det
+    return bound_details_sized(det)[0]
+
+
+_DROPPED = {"details_dropped": True}
+
+
+def bound_details_sized(det: dict) -> "tuple[dict, int]":
+    """bound_details, plus the encoded size of the returned object."""
+    n = len(dumps(det))
+    if n > MAX_DETAILS_BYTES:
+        return dict(_DROPPED), len(dumps(_DROPPED))
+    return det, n
+
+
+# The Hub refuses request bodies over 256 KiB with 413 body_too_large, which
+# is not retried. A batch is capped at this many bytes of wire_size; the
+# 16 KiB margin covers the {"events":[...]} envelope.
+MAX_BATCH_BYTES = 240 << 10
+
+# Upper bound on an event's fixed parts: key names and punctuation (about
+# 110 bytes), event_id (36), severity (at most 8), occurred_at (at most 35)
+# and the comma separating it from the next event.
+EVENT_OVERHEAD = 256
+
+
+def wire_size(ev: dict, details_size: int) -> int:
+    """Upper bound on the encoded size of ev inside a batch, given the exact
+    encoded size of its details. json.dumps(ensure_ascii=False) writes each
+    character of a string as at most 6 bytes (\\uXXXX for control characters;
+    otherwise its UTF-8 form, at most 4), so string fields count at 6 bytes
+    per character. Source and target often carry attacker-supplied text; a
+    plain length estimate could be pushed past the Hub limit on purpose."""
+    chars = sum(len(str(ev[k])) for k in ("sensor_id", "trigger", "source", "target"))
+    return EVENT_OVERHEAD + details_size + 6 * chars
 
 
 def now_rfc3339() -> str:

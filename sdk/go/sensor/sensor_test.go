@@ -91,7 +91,7 @@ func TestRingDropsOldest(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		r.push(wireEvent{Trigger: string(rune('a' + i))})
 	}
-	got := r.pop(10)
+	got := r.pop(10, maxBatchBytes)
 	if len(got) != 3 || got[0].Trigger != "c" || got[2].Trigger != "e" {
 		t.Fatalf("unexpected contents %+v", got)
 	}
@@ -109,6 +109,8 @@ type mockHub struct {
 	mu sync.Mutex
 
 	eventStatus []int // consumed per events request; empty = 200
+	maxBody     int   // events bodies larger than this get 413; 0 = no limit
+	tooLarge    int   // events requests answered 413 because of maxBody
 	batches     [][]wireEvent
 	heartbeats  []heartbeatBody
 	stops       []stoppingBody
@@ -134,6 +136,12 @@ func (h *mockHub) serve(w http.ResponseWriter, r *http.Request) {
 		status := 200
 		if len(h.eventStatus) > 0 {
 			status, h.eventStatus = h.eventStatus[0], h.eventStatus[1:]
+		}
+		if h.maxBody > 0 && len(body) > h.maxBody {
+			h.tooLarge++
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			io.WriteString(w, `{"ok":false,"error":"body_too_large","message":"request body too large"}`)
+			return
 		}
 		var b eventBatch
 		if err := json.Unmarshal(body, &b); err != nil {

@@ -10,6 +10,7 @@ type ring struct {
 	buf     []wireEvent
 	head    int // index of oldest element
 	n       int
+	bytes   int // sum of wireSize over the queued elements
 	dropped uint64
 	notify  chan struct{} // 1-buffered; signalled on push
 }
@@ -24,12 +25,15 @@ func newRing(capacity int) *ring {
 func (r *ring) push(e wireEvent) {
 	r.mu.Lock()
 	if r.n == len(r.buf) {
+		r.bytes -= r.buf[r.head].wireSize()
+		r.buf[r.head] = wireEvent{}
 		r.head = (r.head + 1) % len(r.buf)
 		r.n--
 		r.dropped++
 	}
 	r.buf[(r.head+r.n)%len(r.buf)] = e
 	r.n++
+	r.bytes += e.wireSize()
 	r.mu.Unlock()
 	select {
 	case r.notify <- struct{}{}:
@@ -37,21 +41,38 @@ func (r *ring) push(e wireEvent) {
 	}
 }
 
-// pop removes and returns up to max of the oldest elements.
-func (r *ring) pop(max int) []wireEvent {
+// pop removes and returns the oldest elements: at most max of them, and no
+// more than budget bytes of wireSize in total. It always takes at least one
+// element from a non-empty ring, so an event that alone exceeds budget is
+// still sent (it cannot exceed the Hub's limit; see wireSize).
+func (r *ring) pop(max, budget int) []wireEvent {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if max > r.n {
-		max = r.n
-	}
-	out := make([]wireEvent, max)
-	for i := range out {
-		out[i] = r.buf[r.head]
+	out := make([]wireEvent, 0, min(max, r.n))
+	used := 0
+	for r.n > 0 && len(out) < max {
+		e := r.buf[r.head]
+		sz := e.wireSize()
+		if len(out) > 0 && used+sz > budget {
+			break
+		}
+		out = append(out, e)
+		used += sz
 		r.buf[r.head] = wireEvent{}
 		r.head = (r.head + 1) % len(r.buf)
+		r.n--
 	}
-	r.n -= max
+	r.bytes -= used
 	return out
+}
+
+// full reports whether the queue already holds a complete batch: max
+// elements, or at least budget bytes, so waiting cannot make the next pop
+// larger.
+func (r *ring) full(max, budget int) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.n >= max || r.bytes >= budget
 }
 
 func (r *ring) len() int {
