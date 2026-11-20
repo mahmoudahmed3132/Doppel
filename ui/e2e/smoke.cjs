@@ -163,8 +163,11 @@ const PW = 'correct-horse-battery-staple-42';
       await page.getByRole('tab', { name: t }).click();
       await page.waitForTimeout(150);
     }
+    // TOTP is built in: the Security tab loads the MFA state (disabled on a fresh Hub).
     await page.getByRole('tab', { name: 'Security' }).click();
-    await page.getByText('The TOTP module is not installed').waitFor();
+    await page.getByRole('heading', { name: 'Two-factor authentication' }).waitFor();
+    await page.getByRole('button', { name: 'Enable MFA' }).waitFor();
+    if (await page.locator('.alert-error').count()) throw new Error('Security tab error: ' + await page.locator('.alert-error').first().textContent());
     await page.getByRole('tab', { name: 'Retention' }).click();
     await page.getByLabel('Archive events after (days)').fill('90');
     await page.getByRole('button', { name: 'Save retention' }).click();
@@ -178,9 +181,18 @@ const PW = 'correct-horse-battery-staple-42';
     await page.keyboard.press('Escape');
   });
   await step('module shells', async () => {
-    for (const [l, txt] of [['Beacons', 'module not installed'], ['ATT&CK', 'module not installed'], ['Geo map', 'module not installed'], ['Honeytokens', 'No honeytokens']]) {
+    // Built-in modules: wait for the page heading plus a section that only renders
+    // once the page's data has loaded, then require no error box.
+    for (const [l, loaded] of [
+      ['Beacons', page.getByRole('heading', { name: 'Create beacon' })],
+      ['ATT&CK', page.getByRole('heading', { name: 'Enterprise matrix' })],
+      ['Geo map', page.getByRole('heading', { name: 'World activity map' })],
+      ['Honeytokens', page.getByText('No honeytokens')],
+    ]) {
       await page.getByRole('link', { name: l, exact: true }).click();
-      await page.getByText(txt).first().waitFor();
+      await page.getByRole('heading', { level: 1, name: l, exact: true }).waitFor();
+      await loaded.first().waitFor();
+      if (await page.locator('.alert-error').count()) throw new Error(`${l}: ` + await page.locator('.alert-error').first().textContent());
     }
   });
   await step('light theme', async () => {
