@@ -12,6 +12,7 @@
 package projections
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/geoip"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 )
 
 // Rollup modes for the group_by projection parameter (F-002).
@@ -99,13 +101,15 @@ func normalizeQuerySource(raw, groupBy string, geo *geoip.Service) string {
 }
 
 // attacker excludes what the Hub raises about its own fleet (liveness and
-// apply failures) and synthetic fire drills; honeytoken and beacon use are
-// attacker activity.
-func attacker(e domain.Event) bool {
+// apply failures) and fire drills unless the request opted in with
+// include_drills (F-001); honeytoken and beacon use are attacker activity.
+// Drills are recognised by the stored flag, not the source text, so a real
+// event whose source merely reads "Fire drill" stays counted.
+func attacker(ctx context.Context, e domain.Event) bool {
 	if e.Source == domain.HubSource {
 		return false
 	}
-	if _, _, kind := e.EffectiveSource(); kind == domain.SourceKindDrill {
+	if e.Drill && !ported.IncludeDrills(ctx) {
 		return false
 	}
 	switch e.Trigger {

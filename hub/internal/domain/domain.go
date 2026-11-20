@@ -64,6 +64,11 @@ func IsReservedTrigger(t string) bool {
 	return false
 }
 
+// DrillSource is the source every SDK puts on fire-drill events
+// (sdk/go/sensor.DrillSource). The Hub treats it as a drill when an older SDK
+// does not send the drill flag (F-001 compatibility shim).
+const DrillSource = "Fire drill"
+
 // HubSource is the source of Hub-raised liveness events.
 const HubSource = "truesignal-hub"
 
@@ -103,7 +108,10 @@ type Event struct {
 	Archived     bool            `json:"archived"`
 	Whitelisted  bool            `json:"whitelisted"`
 	KnownScanner bool            `json:"known_scanner"`
-	HubRaised    bool            `json:"-"`
+	// Drill marks a fire-drill event (F-001): stored and forwarded to the
+	// SIEM, labelled, never notified and excluded from analytics by default.
+	Drill     bool `json:"drill"`
+	HubRaised bool `json:"-"`
 }
 
 // Node is a managed host.

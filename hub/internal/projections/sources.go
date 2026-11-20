@@ -73,7 +73,7 @@ type Sources struct {
 
 func (Sources) Name() string { return "sources" }
 
-func (s Sources) Build(_ context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+func (s Sources) Build(ctx context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
 	groupBy, err := parseGroupBy(params)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func (s Sources) Build(_ context.Context, events []domain.EnrichedEvent, params 
 	}
 	by := map[string]*agg{}
 	for _, e := range oldestFirst(events) {
-		if !attacker(e.Event) || e.Source == "" {
+		if !attacker(ctx, e.Event) || e.Source == "" {
 			continue
 		}
 		key := sourceKey(e, groupBy, s.GeoIP)

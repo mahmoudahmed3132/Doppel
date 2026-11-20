@@ -22,7 +22,7 @@ change them only deliberately, with a QUESTIONS entry.
 
 | Record | `event.kind` / `event.dataset` | Main fields |
 |---|---|---|
-| Event | `alert` (`event` when the source is whitelisted or a known scanner, and for Hub liveness `sensor_*`) / `truesignal.alert` | `event.action` (trigger), `event.severity` (critical 99, high 73, medium 47, low 21, info 1), `event.category` (`intrusion_detection` plus `authentication`, `file`, `web` or `network`; `host` for liveness), `event.outcome: failure` for logins, `event.id` (event UUID), `source.ip` (canonical IP when parseable, including `ip:port` and `[v6]:port`; otherwise `source.address`), `source.port` (when an ephemeral source port is present), `source.geo.*` (GeoIP, basis `source` only), `destination.port`, `user.name` / `user.domain` (`DOMAIN\user` split), `file.path` or `url.path`, `user_agent.original`, `http.request.method`, `host.{name,id}`, `observer.{type: honeypot, vendor, product}`, `threat.*` (ATT&CK, `docs/siem/attack-mapping.md`), `tags` (`whitelisted`, `known_scanner`) |
+| Event | `alert` (`event` when the source is whitelisted or a known scanner, and for Hub liveness `sensor_*`; `pipeline_test` for a fire drill) / `truesignal.alert` | `event.action` (trigger), `event.severity` (critical 99, high 73, medium 47, low 21, info 1), `event.category` (`intrusion_detection` plus `authentication`, `file`, `web` or `network`; `host` for liveness), `event.outcome: failure` for logins, `event.id` (event UUID), `source.ip` (canonical IP when parseable, including `ip:port` and `[v6]:port`; otherwise `source.address`), `source.port` (when an ephemeral source port is present), `source.geo.*` (GeoIP, basis `source` only), `destination.port`, `user.name` / `user.domain` (`DOMAIN\user` split), `file.path` or `url.path`, `user_agent.original`, `http.request.method`, `host.{name,id}`, `observer.{type: honeypot, vendor, product}`, `threat.*` (ATT&CK, `docs/siem/attack-mapping.md`), `tags` (`whitelisted`, `known_scanner`, `drill`), `labels.drill: true` on fire drills only (no `threat.*` on drills) |
 | Audit | `event` / `truesignal.audit` | `event.action`, `event.outcome`, `event.category` (`authentication` for login, logout and setup; otherwise `configuration`), `url.path`, `http.response.status_code`, `source.ip`, `source.port` (when present) |
 | Honeytoken inventory | `enrichment` / `truesignal.honeytoken` | `user.name`, `threat.indicator.type: user-account` (watchlist for real authentication logs; never the secret) |
 | Hub heartbeat | `metric` / `truesignal.heartbeat` | `service.version`, `truesignal.heartbeat.*` (node, sensor and SIEM queue counters) |
@@ -94,7 +94,7 @@ As an alternative, `tcp`/`tls` with format `ecs` works with the LogScale Collect
 
 | MSGID | SD-ID | Parameters (in order; new ones only appended) |
 |---|---|---|
-| `EVENT` | `truesignal@<PEN>` | `event_id, trigger, severity, source, target, node, node_id, sensor, whitelisted, known_scanner, mitre_technique, mitre_tactic, source_asset, source_asset_criticality, source_country, source_geo_basis` |
+| `EVENT` | `truesignal@<PEN>` | `event_id, trigger, severity, source, target, node, node_id, sensor, whitelisted, known_scanner, mitre_technique, mitre_tactic, source_asset, source_asset_criticality, source_country, source_geo_basis`, then `drill="1"` on fire drills only |
 | `AUDIT` | `truesignal-audit@<PEN>` | `action, route, path, status, actor_ip` (`route` = `METHOD template`) |
 | `HONEYTOKEN` | `truesignal-honeytoken@<PEN>` | `honeytoken_id, username, planted_node_id, planted_sensor_id, status` |
 | `HEARTBEAT` | `truesignal-hub@<PEN>` | `version, uptime_seconds, nodes_total, nodes_online, sensors_total, sensors_online, siem_queue_depth, siem_dropped` |
@@ -110,6 +110,12 @@ PEN defaults to 32473 (`TS_SYSLOG_PEN`). Audit action names: [`audit-actions.md`
   configuration and rolled back or failed — its decoys may not be running as
   configured; `sensor` is empty, `target` is the node id; once per node and
   revision).
+* Fire drills (`doppel firedrill`, sensor test mode), labelled so they never
+  page anyone: ECS `event.kind: pipeline_test`, `labels.drill: true`, tag
+  `drill`, severity `info` (the sensor's severity in
+  `truesignal.details.original_severity`), no ATT&CK mapping; syslog
+  `drill="1"`. The shipped rules exclude them and `truesignal-drill-received`
+  records each one (F-001).
 * Every audit record (state-changing admin requests, logins, setup attempts,
   `mfa.reset_cli`).
 * Honeytoken inventory (username and planting location, never the secret):

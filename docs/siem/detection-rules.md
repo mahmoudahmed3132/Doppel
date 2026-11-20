@@ -2,7 +2,7 @@
 
 Imported from Doppel (merge import R1, `PROVENANCE.md`); Hub audit rules re-keyed to Doppel audit actions (`docs/audit-actions.md`).
 
-Doppel ships 16 Elastic Security rules (`docs/siem/elastic/`) and a LogScale query for each (`docs/siem/logscale/`). They cover every alert the Hub forwards, plus correlation, liveness and Hub audit. They read only fields the Hub emits (`hub/internal/ecs`, `docs/siem-integration.md`). A test fails if a rule references a field no emitted document carries.
+Doppel ships 17 Elastic Security rules (`docs/siem/elastic/`) and a LogScale query for each (`docs/siem/logscale/`). They cover every alert the Hub forwards, plus correlation, liveness, Hub audit and fire-drill receipt. They read only fields the Hub emits (`hub/internal/ecs`, `docs/siem-integration.md`). A test fails if a rule references a field no emitted document carries.
 
 The honeytoken rule for **real** systems (`truesignal-honeytoken-authentication`) is separate. It matches other products' logs: `docs/siem/honeytoken-detection.md`.
 
@@ -10,6 +10,7 @@ The honeytoken rule for **real** systems (`truesignal-honeytoken-authentication`
 
 - **One primary alert per decoy event.** Each forwarded alert matches exactly one of: a beacon rule, `honeytoken-used`, `lateral-movement` (SSH/RDP, TA0008), `decoy-login` (other logins), or the baseline `decoy-interaction` (everything else). Receiver saturation alerts only when sustained.
 - **Escalations on top.** These add an alert to one already raised: `scan-then-touch` (correlation), `critical-asset-source` (asset criticality), `beacon-unexpected-country` (GeoIP, opt-in), `sensor-dark` (liveness) and `hub-login-bruteforce`.
+- **Fire drills.** A drill (`doppel firedrill`, sensor test mode) reaches the SIEM labelled: `event.kind: pipeline_test`, `labels.drill: true`, tag `drill`, severity `info` (the sensor's severity is in `truesignal.details.original_severity`), no `threat.*`. Every alerting rule drops it: rules that already require `event.kind: alert` by that filter, the others with an explicit `event.kind` exclusion (`event.kind` is always mapped, so the EQL and ES|QL rules cannot fail on an unmapped field). `truesignal-drill-received` records each drill instead (F-001, used by F-802).
 - **Source lists.** Every rule drops `truesignal.whitelisted: true` and `truesignal.known_scanner: true`. The Hub never sets either flag on `honeytoken_used` or on a known beacon (`hub/internal/ingest/pipeline.go`). The filter is therefore safe on those rules too, and a test enforces it. `honeytoken-used` carries no list filter at all, to make that explicit.
 - **Internal sources** are `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` and `fc00::/7` (the Hub's GeoIP "not public" set), plus any address on the Hub's **Assets** page (`truesignal.source_asset`). Put the corporate resolvers' and proxies' public egress addresses on the Assets page. Without them, a beacon resolved through your own resolvers looks external. [NOT IN PROJECT: the egress addresses.]
 - **GeoIP** is trusted only when it describes the client. That means `truesignal.source_geo.basis: client_subnet` (a DNS beacon's EDNS Client Subnet), or `basis: source` on an HTTP beacon. On a DNS beacon, `source.ip` is the recursive resolver, so its country says nothing about who opened the beacon. `source.geo.*` only ever describes `source.ip`.
@@ -33,6 +34,7 @@ The honeytoken rule for **real** systems (`truesignal-honeytoken-authentication`
 | [`truesignal-hub-mfa-reset`](#truesignal-hub-mfa-reset) | query (KQL) | high | 73 | yes |
 | [`truesignal-hub-defense-change`](#truesignal-hub-defense-change) | query (KQL) | low (mapped) | 21 | yes |
 | [`truesignal-hub-login-bruteforce`](#truesignal-hub-login-bruteforce) | threshold | medium | 47 | yes |
+| [`truesignal-drill-received`](#truesignal-drill-received) | query (KQL) | low | 21 | yes |
 
 ## Deploying
 
@@ -73,7 +75,7 @@ The honeytoken rule for **real** systems (`truesignal-honeytoken-authentication`
 | Files | `elastic/truesignal-beacon-triggered.json`, `logscale/truesignal-beacon-triggered.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesignal.details.beacon.id:* and not (source.ip:("10.0.0.0/8" or "172.16.0.0/12" or "192.168.0.0/16" or "100.64.0.0/10" or "fc00::/7") or truesignal.source_asset.name:*)
+event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesignal.details.beacon.id:* and not (source.ip:("10.0.0.0/8" or "172.16.0.0/12" or "192.168.0.0/16" or "100.64.0.0/10" or "fc00::/7") or truesignal.source_asset.name:*) and not event.kind:"pipeline_test"
 ```
 
 **Triage**
@@ -86,7 +88,7 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 
 **Expected false positives**
 
-- A fire drill (`doppel firedrill`) on the Token Receiver uses token `firedrill`, which is unknown to the Hub and raises truesignal-beacon-unknown-token instead.
+- None from fire drills: a drill is labelled `pipeline_test` and excluded (truesignal-drill-received records it).
 - Security tooling that opens planted documents or resolves names in them (sandbox detonation, DLP crawlers, mail link scanners). Identify it, then move or re-plant the beacon; do not whitelist the resolver, the Hub ignores the lists for known beacons.
 
 ### truesignal-beacon-internal-source
@@ -101,7 +103,7 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 | Files | `elastic/truesignal-beacon-internal-source.json`, `logscale/truesignal-beacon-internal-source.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesignal.details.beacon.id:* and (source.ip:("10.0.0.0/8" or "172.16.0.0/12" or "192.168.0.0/16" or "100.64.0.0/10" or "fc00::/7") or truesignal.source_asset.name:*)
+event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesignal.details.beacon.id:* and (source.ip:("10.0.0.0/8" or "172.16.0.0/12" or "192.168.0.0/16" or "100.64.0.0/10" or "fc00::/7") or truesignal.source_asset.name:*) and not event.kind:"pipeline_test"
 ```
 
 **Triage**
@@ -128,18 +130,16 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 | Files | `elastic/truesignal-beacon-unknown-token.json`, `logscale/truesignal-beacon-unknown-token.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesignal.details.beacon_known:false and not truesignal.whitelisted:true and not truesignal.known_scanner:true
+event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesignal.details.beacon_known:false and not truesignal.whitelisted:true and not truesignal.known_scanner:true and not event.kind:"pipeline_test"
 ```
 
 **Triage**
 
 1. Check the Hub audit trail for `beacon.delete` before `@timestamp`; a deleted beacon still firing means its copies are still being opened.
-2. Token `firedrill` (the fire drill) is a test.
-3. Otherwise treat it as a forged report: the Token Receiver node (`host.name`) holds `TS_BEACON_KEY`; check that host's integrity.
+2. Otherwise treat it as a forged report: the Token Receiver node (`host.name`) holds `TS_BEACON_KEY`; check that host's integrity.
 
 **Expected false positives**
 
-- Fire drill (`truesignal.details.token: firedrill`).
 - Beacons deleted on the Hub whose planted copies are still opened.
 
 ### truesignal-beacon-unexpected-country
@@ -154,7 +154,7 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 | Files | `elastic/truesignal-beacon-unexpected-country.json`, `logscale/truesignal-beacon-unexpected-country.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesignal.details.beacon.id:* and (truesignal.source_geo.basis:"client_subnet" or (truesignal.source_geo.basis:"source" and truesignal.details.channel:"http")) and not truesignal.source_geo.country_code:("EG")
+event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesignal.details.beacon.id:* and (truesignal.source_geo.basis:"client_subnet" or (truesignal.source_geo.basis:"source" and truesignal.details.channel:"http")) and not truesignal.source_geo.country_code:("EG") and not event.kind:"pipeline_test"
 ```
 
 **Triage**
@@ -180,7 +180,7 @@ event.dataset:"truesignal.alert" and event.action:"beacon_triggered" and truesig
 | Files | `elastic/truesignal-receiver-saturated-sustained.json`, `logscale/truesignal-receiver-saturated-sustained.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and event.action:"receiver_saturated" and not truesignal.whitelisted:true and not truesignal.known_scanner:true
+event.dataset:"truesignal.alert" and event.action:"receiver_saturated" and not truesignal.whitelisted:true and not truesignal.known_scanner:true and not event.kind:"pipeline_test"
 ```
 
 Threshold: `host.id, truesignal.details.listener` ≥ 3.
@@ -208,7 +208,7 @@ Threshold: `host.id, truesignal.details.listener` ≥ 3.
 | Files | `elastic/truesignal-honeytoken-used.json`, `logscale/truesignal-honeytoken-used.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and event.action:"honeytoken_used"
+event.dataset:"truesignal.alert" and event.action:"honeytoken_used" and not event.kind:"pipeline_test"
 ```
 
 **Triage**
@@ -234,7 +234,7 @@ event.dataset:"truesignal.alert" and event.action:"honeytoken_used"
 | Files | `elastic/truesignal-lateral-movement.json`, `logscale/truesignal-lateral-movement.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and threat.tactic.id:"TA0008" and not truesignal.whitelisted:true and not truesignal.known_scanner:true
+event.dataset:"truesignal.alert" and threat.tactic.id:"TA0008" and not truesignal.whitelisted:true and not truesignal.known_scanner:true and not event.kind:"pipeline_test"
 ```
 
 **Triage**
@@ -259,7 +259,7 @@ event.dataset:"truesignal.alert" and threat.tactic.id:"TA0008" and not truesigna
 | Files | `elastic/truesignal-decoy-login.json`, `logscale/truesignal-decoy-login.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and event.category:"authentication" and not event.action:"honeytoken_used" and not threat.tactic.id:"TA0008" and not truesignal.whitelisted:true and not truesignal.known_scanner:true
+event.dataset:"truesignal.alert" and event.category:"authentication" and not event.action:"honeytoken_used" and not threat.tactic.id:"TA0008" and not truesignal.whitelisted:true and not truesignal.known_scanner:true and not event.kind:"pipeline_test"
 ```
 
 **Triage**
@@ -272,7 +272,7 @@ event.dataset:"truesignal.alert" and event.category:"authentication" and not eve
 **Expected false positives**
 
 - Vulnerability scanners and asset-discovery tools with credential checks: add them to the Hub's known scanners.
-- Administrators testing a decoy. Use `doppel firedrill` instead.
+- Administrators testing a decoy. Use `doppel firedrill` instead: drills are excluded from this rule.
 
 ### truesignal-decoy-interaction
 
@@ -298,7 +298,6 @@ event.dataset:"truesignal.alert" and event.kind:"alert" and not event.category:"
 **Expected false positives**
 
 - Monitoring (ICMP/uptime checks, SNMP pollers), backup and inventory agents reaching the decoys: add them to the whitelist or known scanners on the Hub.
-- Fire drills (`doppel firedrill`): each sensor's drill event.
 
 ### truesignal-scan-then-touch
 
@@ -313,7 +312,7 @@ event.dataset:"truesignal.alert" and event.kind:"alert" and not event.category:"
 
 ```text
 sequence by source.ip with maxspan=1h
-  [any where event.dataset == "truesignal.alert" and event.action in ("network_scan_detected", "icmp_scan_received") and truesignal.whitelisted == false and truesignal.known_scanner == false]
+  [any where event.dataset == "truesignal.alert" and event.kind != "pipeline_test" and event.action in ("network_scan_detected", "icmp_scan_received") and truesignal.whitelisted == false and truesignal.known_scanner == false]
   [any where event.dataset == "truesignal.alert" and event.kind == "alert" and event.severity >= 47 and not event.action in ("network_scan_detected", "icmp_scan_received") and not event.action like "*_connection" and truesignal.whitelisted == false and truesignal.known_scanner == false]
 ```
 
@@ -365,7 +364,7 @@ event.dataset:"truesignal.alert" and event.kind:"alert" and truesignal.source_as
 | Files | `elastic/truesignal-sensor-heartbeat-lost.json`, `logscale/truesignal-sensor-heartbeat-lost.logscale` |
 
 ```text
-event.dataset:"truesignal.alert" and event.action:"sensor_heartbeat_lost" and not truesignal.whitelisted:true and not truesignal.known_scanner:true
+event.dataset:"truesignal.alert" and event.action:"sensor_heartbeat_lost" and not truesignal.whitelisted:true and not truesignal.known_scanner:true and not event.kind:"pipeline_test"
 ```
 
 **Triage**
@@ -392,7 +391,7 @@ event.dataset:"truesignal.alert" and event.action:"sensor_heartbeat_lost" and no
 
 ```text
 FROM logs-truesignal-*
-| WHERE event.dataset == "truesignal.alert" AND event.action IN ("sensor_heartbeat_lost", "sensor_recovered") AND truesignal.whitelisted == false AND truesignal.known_scanner == false
+| WHERE event.dataset == "truesignal.alert" AND event.kind != "pipeline_test" AND event.action IN ("sensor_heartbeat_lost", "sensor_recovered") AND truesignal.whitelisted == false AND truesignal.known_scanner == false
 | EVAL lost = CASE(event.action == "sensor_heartbeat_lost", @timestamp, null), recovered = CASE(event.action == "sensor_recovered", @timestamp, null)
 | STATS last_lost = MAX(lost), last_recovered = MAX(recovered) BY host.id, host.name, truesignal.sensor_id
 | WHERE last_lost IS NOT NULL AND (last_recovered IS NULL OR last_recovered < last_lost) AND last_lost <= NOW() - 30 minutes
@@ -490,21 +489,47 @@ Threshold: `source.ip` ≥ 5.
 - An admin with a wrong saved password or a script with a stale `TS_DASHBOARD_PASSWORD`.
 - MFA logins (one 401 before the code is entered).
 
+### truesignal-drill-received
+
+**Doppel fire drill received.** A fire drill reached the SIEM. `doppel firedrill` (SIGUSR1 to every sensor) and a sensor in test mode send one synthetic event per sensor to prove the sensor → Hub → SIEM path. The Hub labels it (`event.kind: pipeline_test`, `labels.drill: true`, tag `drill`) and stores it as `info`. Every alerting rule above excludes drills; this rule records each one so a drill can be checked end to end (drill-success tracking, F-802).
+
+| | |
+|---|---|
+| Type / schedule | query (KQL), every 5m, lookback `now-6m` |
+| Severity / risk | low / 21 |
+| ATT&CK | none (pipeline test) |
+| Files | `elastic/truesignal-drill-received.json`, `logscale/truesignal-drill-received.logscale` |
+
+```text
+event.dataset:"truesignal.alert" and event.kind:"pipeline_test" and labels.drill:true
+```
+
+**Triage**
+
+1. Expected after `doppel firedrill` on `host.name`: one alert per running sensor (`truesignal.sensor_id`). Fewer than the node's sensor count means the path is broken for the missing ones (sensor, node, Hub or SIEM output).
+2. `truesignal.details.original_severity` is the severity the sensor would have reported.
+3. No drill was planned: someone with Docker or root access on the node ran `doppel firedrill` or sent SIGUSR1. Check the node.
+
+**Expected false positives**
+
+- None: every match is a drill. Route it to a low-priority queue, not to on-call.
+
 ## Testing
 
 The rules are tested against what the Hub really emits, not hand-written JSON.
 
 1. `TestSIEMDetectionSamples` (`hub/internal/siemrules/samples_test.go`, part of `go test ./...`) runs the scenarios through the real ingest pipeline: source lists, beacon resolution, the `honeytoken_used` raise, asset and GeoIP enrichment (DB-IP test fixture). Each scenario then goes through the real SIEM service's ECS output, captured over TCP. The result is `docs/siem/testdata/detection-samples.ndjson`. The test fails when the output drifts from that file, so any change to the event shape or the ECS mapping forces the rules to be re-checked. Regenerate with `TS_UPDATE_SIEM_SAMPLES=1 go test ./internal/siemrules -run TestSIEMDetectionSamples` (in `hub/`).
 2. `TestSIEMRuleFieldsExist` checks every field referenced in the Elastic queries and the LogScale queries against the sample documents, using LogScale's JSON-parser names for the latter. `TestSIEMRulesDocumented` checks that every rule has a LogScale twin and a section here.
-3. `scripts/siem-rules/run-elastic.sh` starts Elasticsearch and Kibana 8.19.22 (digest-pinned) and replays the samples on a timeline (`offset_sec`). It imports every rule into the detection engine (including the disabled one), waits for one execution of each and compares the alerts with `scripts/siem-rules/expected-elastic.json`: exact source documents, plus severities where the rule maps them. The **SIEM Rules** workflow runs it when `docs/siem/**` or `scripts/siem-rules/**` change. Negative cases are in the corpus: whitelisted and known-scanner sources, a scan with only connections after it, a touch before the scan, a sensor that recovered, a recent loss, a failed MFA disable, a denied settings change, and a source with only three login failures.
+3. `scripts/siem-rules/run-elastic.sh` starts Elasticsearch and Kibana 8.19.22 (digest-pinned) and replays the samples on a timeline (`offset_sec`). It imports every rule into the detection engine (including the disabled one), waits for one execution of each and compares the alerts with `scripts/siem-rules/expected-elastic.json`: exact source documents, plus severities where the rule maps them. The **SIEM Rules** workflow runs it when `docs/siem/**` or `scripts/siem-rules/**` change. Negative cases are in the corpus: fire drills (an SSH login, a beacon, a connection; only `truesignal-drill-received` may match them), whitelisted and known-scanner sources, a scan with only connections after it, a touch before the scan, a sensor that recovered, a recent loss, a failed MFA disable, a denied settings change, and a source with only three login failures.
 
 **Not executed: the LogScale queries.** No LogScale instance is available to the project. They are field-checked against the samples and written to mirror the tested Elastic logic, but their syntax and results are unverified. Run each once against real data before relying on it, then record the result here.
 
 ## Known gaps
 
 - **A dead Hub needs a "no data" check.** Doppel emits a Hub heartbeat record (`truesignal.heartbeat`, every §6.6 interval); no shipped rule alerts on its absence yet. Add a "no data for 15 minutes" check on `event.dataset: truesignal.heartbeat` in your SIEM.
-- Fire drills (`doppel firedrill`) raise real alerts by design; they test the path to the SOC. Expect them during node rollout.
+- Fire drills (`doppel firedrill`) no longer raise alerts: they reach the SIEM as `pipeline_test` and only `truesignal-drill-received` matches them. A Hub older than F-001 sends drills unlabelled (as `alert`), so upgrade the Hub before importing these rules.
 - `truesignal-sensor-dark` looks back 24 hours. A sensor dark for longer stops re-alerting; the Hub's Fleet page still shows it.
 - Internal ranges are fixed in the queries. If your organisation uses public address space internally, add it to the Assets page (preferred) or to the CIDR lists. [NOT IN PROJECT]
 - Not covered here: index or repository naming, alert routing and on-call: site decisions.
+- **Verified on Doppel output (2026-11-20, F-001):** `scripts/siem-rules/run-elastic.sh` ingested the 62 sample documents (three of them fire drills) without mapping errors, imported all 17 rules and every rule raised exactly the expected alerts; the drills matched only `truesignal-drill-received` (PASS).
 - **Verified on Doppel output (2026-11-15):** `scripts/siem-rules/run-elastic.sh` ingested the 59 sample documents without mapping errors, imported all 16 rules and every rule raised exactly the expected alerts (PASS).

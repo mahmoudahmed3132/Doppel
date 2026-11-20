@@ -11,12 +11,14 @@ import { Link, navigate, useLocation } from "../router";
 import { type EventRecord, type NodeSummary, SEVERITIES, type Severity } from "../types";
 import { Alert, Button, Card, Confirm, Empty, ErrorBox, KV, Loading, Modal, PageHead, Pill, SeverityBadge, toast, useAction, useAsync } from "../ui";
 
-interface Filter { archived: "false" | "true" | "any"; severity: Severity[]; node: string; sensor: string; trigger: string; from: string; to: string; q: string }
-const emptyFilter: Filter = { archived: "false", severity: [], node: "", sensor: "", trigger: "", from: "", to: "", q: "" };
+/** Event views (F-001): fire drills are only in Drills and All. */
+type View = "active" | "archived" | "drills" | "all";
+interface Filter { view: View; severity: Severity[]; node: string; sensor: string; trigger: string; from: string; to: string; q: string }
+const emptyFilter: Filter = { view: "active", severity: [], node: "", sensor: "", trigger: "", from: "", to: "", q: "" };
 
 function filterQuery(f: Filter): Record<string, string> {
   return {
-    archived: f.archived, severity: f.severity.join(","), node: f.node, sensor: f.sensor.trim(), trigger: f.trigger.trim(),
+    view: f.view, severity: f.severity.join(","), node: f.node, sensor: f.sensor.trim(), trigger: f.trigger.trim(),
     from: localToRFC3339(f.from), to: localToRFC3339(f.to), q: f.q.trim(),
   };
 }
@@ -51,7 +53,12 @@ export function Events() {
   }
 
   useEffect(() => { load(filter); }, [filter]);
-  useEffect(() => onLive((m) => { if (m.type === "event") setFresh((n) => n + 1); }), []);
+  useEffect(() => onLive((m) => {
+    if (m.type !== "event") return;
+    // A drill only belongs in the Drills and All views.
+    const showsDrills = filter.view === "drills" || filter.view === "all";
+    if (m.data.drill ? showsDrills : filter.view !== "drills") setFresh((n) => n + 1);
+  }), [filter.view]);
 
   const apply = (e?: Event) => {
     e?.preventDefault();
@@ -83,10 +90,11 @@ export function Events() {
         <form class="filters" onSubmit={apply}>
           <label class="filter">
             <span>View</span>
-            <select class="input" value={draft.archived} onChange={(e) => setDraft({ ...draft, archived: e.currentTarget.value as Filter["archived"] })}>
-              <option value="false">Active</option>
-              <option value="true">Archived</option>
-              <option value="any">All</option>
+            <select class="input" value={draft.view} onChange={(e) => setDraft({ ...draft, view: e.currentTarget.value as View })}>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+              <option value="drills">Drills</option>
+              <option value="all">All</option>
             </select>
           </label>
           <label class="filter">
@@ -147,6 +155,7 @@ export function Events() {
                 <td class="mono trunc">{e.source}</td>
                 <td class="mono trunc">{e.target}</td>
                 <td class="nowrap">
+                  {e.drill ? <Pill kind="warn" title="Fire drill: excluded from analytics and notifications">DRILL</Pill> : null}
                   {e.whitelisted ? <Pill kind="info">whitelisted</Pill> : null}
                   {e.known_scanner ? <Pill kind="neutral">scanner</Pill> : null}
                   {e.archived ? <Pill kind="neutral">archived</Pill> : null}
@@ -233,7 +242,7 @@ function EventDrawer({ seq, known, onClose, onChange }: { seq: number; known?: E
             ["Sensor", <span class="mono">{ev.sensor_id}</span>],
             ["Source", <span class="mono break">{ev.source}</span>],
             ["Target", <span class="mono break">{ev.target}</span>],
-            ["State", <>{ev.read ? "read" : "unread"}{ev.archived ? ", archived" : ""}{ev.whitelisted ? ", whitelisted source" : ""}{ev.known_scanner ? ", known scanner" : ""}</>],
+            ["State", <>{ev.read ? "read" : "unread"}{ev.drill ? ", fire drill" : ""}{ev.archived ? ", archived" : ""}{ev.whitelisted ? ", whitelisted source" : ""}{ev.known_scanner ? ", known scanner" : ""}</>],
           ]} />
           <h3>ATT&amp;CK</h3>
           {attack ? (

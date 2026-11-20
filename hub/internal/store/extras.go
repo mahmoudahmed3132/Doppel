@@ -154,9 +154,20 @@ func (db *DB) IncrementHoneytokenUse(ctx context.Context, id string, at time.Tim
 
 // --- analytics -------------------------------------------------------------
 
-// SeverityCounts counts unarchived events by severity since t.
-func (db *DB) SeverityCounts(ctx context.Context, since time.Time) (map[domain.Severity]int64, error) {
-	rows, err := db.sql.QueryContext(ctx, `SELECT severity, COUNT(*) FROM events WHERE received_at >= ? AND archived = 0 GROUP BY severity`, ms(since))
+// drillCond is the analytics filter for fire drills (F-001): excluded
+// unless the caller asked for them.
+func drillCond(includeDrills bool) string {
+	if includeDrills {
+		return ""
+	}
+	return " AND is_drill = 0"
+}
+
+// SeverityCounts counts unarchived events by severity since t. Fire drills
+// are excluded unless includeDrills.
+func (db *DB) SeverityCounts(ctx context.Context, since time.Time, includeDrills bool) (map[domain.Severity]int64, error) {
+	rows, err := db.sql.QueryContext(ctx, `SELECT severity, COUNT(*) FROM events WHERE received_at >= ? AND archived = 0`+
+		drillCond(includeDrills)+` GROUP BY severity`, ms(since))
 	if err != nil {
 		return nil, err
 	}
@@ -177,14 +188,15 @@ func (db *DB) SeverityCounts(ctx context.Context, since time.Time) (map[domain.S
 }
 
 // Velocity counts unarchived events per bucket since t. Buckets without
-// events are absent; the caller fills gaps.
-func (db *DB) Velocity(ctx context.Context, since time.Time, bucket time.Duration) (map[int64]int64, error) {
+// events are absent; the caller fills gaps. Fire drills are excluded unless
+// includeDrills.
+func (db *DB) Velocity(ctx context.Context, since time.Time, bucket time.Duration, includeDrills bool) (map[int64]int64, error) {
 	b := bucket.Milliseconds()
 	if b <= 0 {
 		return nil, errors.New("bucket must be positive")
 	}
 	rows, err := db.sql.QueryContext(ctx, `SELECT (received_at / ?) * ? AS b, COUNT(*) FROM events
-		WHERE received_at >= ? AND archived = 0 GROUP BY b`, b, b, ms(since))
+		WHERE received_at >= ? AND archived = 0`+drillCond(includeDrills)+` GROUP BY b`, b, b, ms(since))
 	if err != nil {
 		return nil, err
 	}
@@ -201,12 +213,13 @@ func (db *DB) Velocity(ctx context.Context, since time.Time, bucket time.Duratio
 }
 
 // EventCounts returns total, unread and since-t counts of unarchived events.
-func (db *DB) EventCounts(ctx context.Context, since time.Time) (total, unread, recent, recentCritical int64, err error) {
+// Fire drills are excluded unless includeDrills.
+func (db *DB) EventCounts(ctx context.Context, since time.Time, includeDrills bool) (total, unread, recent, recentCritical int64, err error) {
 	err = db.sql.QueryRowContext(ctx, `SELECT COUNT(*),
 		COALESCE(SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN received_at >= ? THEN 1 ELSE 0 END), 0),
 		COALESCE(SUM(CASE WHEN received_at >= ? AND severity = 'critical' THEN 1 ELSE 0 END), 0)
-		FROM events WHERE archived = 0`, ms(since), ms(since)).Scan(&total, &unread, &recent, &recentCritical)
+		FROM events WHERE archived = 0`+drillCond(includeDrills), ms(since), ms(since)).Scan(&total, &unread, &recent, &recentCritical)
 	return
 }
 

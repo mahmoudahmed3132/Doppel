@@ -228,7 +228,7 @@ func (in *Insights) Build(ctx context.Context, events []domain.EnrichedEvent, pa
 	allowedEvents := 0
 
 	for _, e := range events {
-		if !attacker(e.Event) {
+		if !attacker(ctx, e.Event) {
 			continue
 		}
 		if e.Whitelisted || e.KnownScanner {

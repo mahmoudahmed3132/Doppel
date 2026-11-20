@@ -1,0 +1,7 @@
+// truesignal-drill-received: a fire drill reached the SIEM (low, informational). Every alerting query excludes drills.
+// One result per sensor per drill; compare with the node's sensor count for drill-success tracking (F-802).
+// Elastic twin: Docs/siem/elastic/truesignal-drill-received.json. Docs: Docs/siem/detection-rules.md
+// Schedule: every 5m over the last 6m.
+event.module="truesignal" event.dataset="truesignal.alert"
+| event.kind="pipeline_test" labels.drill="true"
+| table([@timestamp, host.name, truesignal.sensor_id, event.action, truesignal.details.original_severity])

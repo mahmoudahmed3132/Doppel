@@ -39,19 +39,21 @@ Event content is fully attacker-controlled and must never be interpreted.
 | Webhook mention/markdown injection | Discord `allowed_mentions: {parse: []}` + Markdown escaping; Slack `&<>` escaping | `hub/internal/webhook` |
 | Oversized/invalid input, resource exhaustion | Batch ≤ 100, body limits, details size cap, UTF-8 validation, per-key rate limit (50/s, burst 200), Hub-wide ingest admission (8 concurrent batches, 1 s wait, then `429 overloaded`; heartbeats not gated so liveness cannot be starved by event floods), node-reported `dropped_events` stored with a saturating add (no integer overflow into an unreadable row), SIEM queue bounded (5000, drop-new, counted). Residual: one authenticated node within its rate limit can occupy admission slots and delay other nodes' events (they retry; nothing acknowledged is lost) | `hub/internal/ingest`, `httpapi/ingest.go`, `ratelimit` |
 | Sensor-side flooding | Per-source limiter and cooldowns with suppressed counts | `sdk/go/sensor/limiter.go`, sensors |
+| Attack hidden as a fire drill (drills are info, unnotified, excluded from analytics and alerting rules) | A drill is only an event that sets `"drill": true` or, with **no** `drill` key (SDK older than capability `event.drill`), has source `Fire drill`; current SDKs send `drill` on every event, `false` unless it is the SIGUSR1/test-mode drill, so attacker-influenced source text cannot select the shim. Drills are still stored and sent to the SIEM (`truesignal-drill-received`), never Hub-raised, and skip beacon/honeytoken side effects. Residual: sensors on a pre-F-001 SDK whose `source` an attacker could make read exactly `Fire drill` (the Hub logs every shim use as deprecated) | `hub/internal/ingest` `TestNormalizeDrill`, `TestPipelineDrill`; SDK `TestDrillFlagCapableHub` |
 
 ### B2: Node ↔ Hub (node API)
 | Threat | Control |
 |---|---|
 | Key theft at rest on the Hub | Keys stored as SHA-256 only; shown once; rotation/deletion effective immediately (generation-counter cache) |
 | Cross-node access | Every node call scoped to the authenticated node; other node's sensor → 404; compose only for the caller's node (`TestNodeAPI`) |
-| Reserved/forged triggers (e.g. `honeytoken_used`, `sensor_tamper_suspected`, `node_offline`, `node_online`, `config_drift`) from a sensor | Reserved triggers rejected with 403 at ingest |
-| Sensor container stopped or crash-looped on a live node (`docker stop`, kill, restart loop) | Liveness sweep raises `sensor_tamper_suspected` (`high`) within `2 × interval` (60 s) when the node keeps heartbeating, or via `/v3/node/status` when a container restarts > 3 times in 5 min; full node loss raises `node_offline` (`high`) at `3 × interval` (90 s); unapplied configuration raises `config_drift` (`medium`) after `config_drift_minutes` (default 15 min) |
+| Reserved/forged triggers (e.g. `honeytoken_used`) from a sensor | Reserved triggers rejected with 403 at ingest |
+| Drills injected through the admin API | Drills enter only through the node API (node key); the admin API has no route that creates events (`TestDrillsOnlyFromAuthenticatedSensors`) |
 | Key exposure via process list | CLI takes the key from the environment, never argv; config file 0600 |
 | Network MITM | https endpoint with TLS verification (system roots; sensors also accept `TS_CA_BUNDLE`). Plain `http` is **accepted, not refused**: the CLI warns that it sends the node key in clear |
 
 **Residual:** a compromised node can forge events *as itself* (any
-non-reserved trigger, any severity) and read its own unredacted compose
+non-reserved trigger, any severity, and can mark real events as fire drills to
+keep them out of alerting; they still reach the SIEM as `pipeline_test`) and read its own unredacted compose
 (including derived keys for its sensors). It cannot act as other nodes. A Hub endpoint configured as `http://`
 exposes node keys and events on the wire (R2); use https in production.
 

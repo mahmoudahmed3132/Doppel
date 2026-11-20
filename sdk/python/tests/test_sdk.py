@@ -36,10 +36,30 @@ class MockHub:
         self.scripts: dict = {}
         self.max_body = 0  # events bodies larger than this get 413; 0 = no limit
         self.too_large = 0  # events requests answered 413 because of max_body
+        # None: no GET /v3/version handler (probe fails); [] : a Hub without
+        # capabilities; ["event.drill"]: a Hub that accepts the drill flag.
+        self.caps = None
+        self.version_calls = 0
         self.lock = threading.Lock()
         hub = self
 
         class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path != "/v3/version" or hub.caps is None:
+                    self.send_error(404)
+                    return
+                with hub.lock:
+                    hub.version_calls += 1
+                v = {"product": "truesignal-hub", "version": "3.0.0", "contract": 3}
+                if hub.caps:
+                    v["capabilities"] = hub.caps
+                data = json.dumps(v).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
             def do_POST(self):
                 n = int(self.headers.get("Content-Length", "0"))
                 raw = self.rfile.read(n)
@@ -444,6 +464,83 @@ sys.exit(run(Spec(Drill("x_trigger", "X"), body), Options(batch_delay=0.05)))
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DrillFlagTests(unittest.TestCase):
+    """F-001: the drill flag is sent only to a Hub advertising event.drill,
+    true on drill-path events and explicitly false on all others."""
+
+    def setUp(self):
+        self.hub = MockHub()
+
+    def tearDown(self):
+        self.hub.close()
+
+    def _service(self, **kw):
+        o = fast(self.hub, **kw)
+
+        def body(s, stop):
+            s.report("x_trigger", "Fire drill", "X")  # a real event whose source reads like a drill
+            stop.wait()
+
+        self.hub.requests.clear()
+        t = threading.Thread(target=lambda: setattr(self, "rc", run(Spec(DRILL, body), o)), daemon=True)
+        t.start()
+        try:
+            self.assertTrue(self.hub.wait(lambda: len(self.hub.events()) == 1))
+            o.signal_queue.put("USR1")
+            self.assertTrue(self.hub.wait(lambda: len(self.hub.events()) == 2))
+        finally:
+            o.signal_queue.put("TERM")
+            t.join(10)
+        self.assertEqual(self.rc, 0)
+        return self.hub.events()
+
+    def test_capable_hub(self):
+        self.hub.caps = ["event.drill"]
+        self.assertEqual(run(Spec(DRILL), fast(self.hub, env={"TS_TEST_MODE": "true"})), 0)
+        (ev,) = self.hub.events()
+        self.assertIs(ev["drill"], True)
+        self.assertEqual(ev["source"], "Fire drill")
+        self.assertNotIn("_drill", ev)
+        real, drill = self._service()
+        self.assertIs(real["drill"], False)
+        self.assertIs(drill["drill"], True)
+        self.assertEqual(self.hub.version_calls, 2)  # once per run, then cached
+
+    def test_old_hub(self):
+        for caps in (None, []):  # probe fails / no capabilities
+            self.hub.caps = caps
+            self.hub.requests.clear()
+            self.assertEqual(run(Spec(DRILL), fast(self.hub, env={"TS_TEST_MODE": "true"})), 0)
+            test_mode = self.hub.events()
+            self.assertEqual(len(test_mode), 1)
+            for ev in test_mode + self._service():
+                self.assertNotIn("drill", ev)
+                self.assertNotIn("_drill", ev)
+
+    def test_split_batch_keeps_drill_flag(self):
+        # A proxy refusing large bodies forces the 413 split; the drill must
+        # still arrive with drill=true.
+        self.hub.caps = ["event.drill"]
+        self.hub.max_body = 600
+        o = fast(self.hub, batch_delay=0.3)
+
+        def body(s, stop):
+            s.report("x_trigger", "10.0.0.1", "X", {"pad": "p" * 200})
+            stop.wait()
+
+        t = threading.Thread(target=lambda: setattr(self, "rc", run(Spec(DRILL, body), o)), daemon=True)
+        t.start()
+        try:
+            o.signal_queue.put("USR1")
+            self.assertTrue(self.hub.wait(lambda: len(self.hub.events()) == 2))
+        finally:
+            o.signal_queue.put("TERM")
+            t.join(10)
+        self.assertGreater(self.hub.too_large, 0)
+        flags = {e["trigger"] + ":" + e["source"]: e["drill"] for e in self.hub.events()}
+        self.assertEqual(flags, {"x_trigger:10.0.0.1": False, "x_trigger:Fire drill": True})
 
 
 class CompatibilityAliasTest(unittest.TestCase):

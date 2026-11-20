@@ -142,7 +142,8 @@ const maxBatchBytes = 240 << 10
 
 // eventOverhead bounds the encoded size of an event's fixed parts: key names
 // and punctuation (about 110 bytes), event_id (36), severity (at most 8),
-// occurred_at (at most 35) and the comma separating it from the next event.
+// occurred_at (at most 35), the drill flag (at most 14: "drill":false,) and
+// the comma separating it from the next event.
 const eventOverhead = 256
 
 // wireSize is an upper bound on the encoded size of e inside a batch.
@@ -168,6 +169,32 @@ type wireEvent struct {
 	Source     string          `json:"source"`
 	Target     string          `json:"target"`
 	Details    json.RawMessage `json:"details"`
+	// Drill is the contract's optional drill flag (capability event.drill).
+	// It is set on every event, true or false, only when the Hub advertises
+	// the capability: older Hubs refuse unknown fields. Sending false
+	// explicitly also stops a newer Hub from applying its legacy source shim
+	// to a real event whose source happens to read "Fire drill".
+	Drill *bool `json:"drill,omitempty"`
+	// isDrill marks events from the drill path (SIGUSR1, test mode).
+	isDrill bool
+}
+
+var (
+	drillTrue  = true
+	drillFalse = false
+)
+
+// withDrillFlag returns batch with the wire drill flag set on every event
+// (the elements are copies taken off the queue).
+func withDrillFlag(batch []wireEvent) []wireEvent {
+	for i := range batch {
+		if batch[i].isDrill {
+			batch[i].Drill = &drillTrue
+		} else {
+			batch[i].Drill = &drillFalse
+		}
+	}
+	return batch
 }
 
 type eventBatch struct {

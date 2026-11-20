@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "index": [
     "logs-truesignal-*"
@@ -25,12 +25,12 @@
     "https://github.com/mahmoudahmed3132/TrueSignal/blob/main/Docs/siem/detection-rules.md#truesignal-beacon-triggered"
   ],
   "false_positives": [
-    "A fire drill (`truesignal firedrill`) on the Token Receiver uses token `firedrill`, which is unknown to the Hub and raises truesignal-beacon-unknown-token instead.",
+    "None from fire drills: a drill is labelled `pipeline_test` and excluded (truesignal-drill-received records it).",
     "Security tooling that opens planted documents or resolves names in them (sandbox detonation, DLP crawlers, mail link scanners). Identify it, then move or re-plant the beacon; do not whitelist the resolver, the Hub ignores the lists for known beacons."
   ],
   "note": "## Triage\n1. `truesignal.details.beacon.name` / `.type` name the planted object; the Hub's Beacons page shows where it was planted (memo).\n2. Channel: `truesignal.details.channel`. DNS: `source.ip` is the **recursive resolver**, not the person; the client is nearer to `truesignal.details.client_subnet` when present. HTTP: `source.ip` is the client (or `truesignal.details.proxy`).\n3. Location: use `truesignal.source_geo` only with its `basis`. `client_subnet` places the client; `source` on a DNS beacon places the resolver (often a public DNS provider).\n4. Find who could read the planted object (share/repo/bucket access logs, EDR file-open telemetry around `@timestamp`).\n5. `truesignal.details.repeats_since_last` > 0 means repeated use within the receiver cooldown.",
   "threat": [],
-  "query": "event.dataset:\"truesignal.alert\" and event.action:\"beacon_triggered\" and truesignal.details.beacon.id:* and not (source.ip:(\"10.0.0.0/8\" or \"172.16.0.0/12\" or \"192.168.0.0/16\" or \"100.64.0.0/10\" or \"fc00::/7\") or truesignal.source_asset.name:*)",
+  "query": "event.dataset:\"truesignal.alert\" and event.action:\"beacon_triggered\" and truesignal.details.beacon.id:* and not (source.ip:(\"10.0.0.0/8\" or \"172.16.0.0/12\" or \"192.168.0.0/16\" or \"100.64.0.0/10\" or \"fc00::/7\") or truesignal.source_asset.name:*) and not event.kind:\"pipeline_test\"",
   "type": "query",
   "language": "kuery"
 }

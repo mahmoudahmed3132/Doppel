@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "index": [
     "logs-truesignal-*"
@@ -26,7 +26,7 @@
   ],
   "false_positives": [
     "Vulnerability scanners and asset-discovery tools with credential checks: add them to the Hub's known scanners.",
-    "Administrators testing a decoy. Use `truesignal firedrill` instead."
+    "Administrators testing a decoy. Use `doppel firedrill` instead: drills are excluded from this rule."
   ],
   "note": "## Triage\n1. `user.name` / `user.domain` is the account tried. Search your directory and real authentication logs for it from `source.ip`: the same credential is likely being tried on real systems.\n2. `truesignal.source_asset` names the source host when it is inventoried; otherwise identify it via DHCP/EDR.\n3. Passwords are HMAC'd (`truesignal.details.password_hmac`); compare with other decoy events to see whether the same password is sprayed.\n4. Pivot on `source.ip` for other TrueSignal alerts (scan-then-touch, other decoys).",
   "threat": [
@@ -46,7 +46,7 @@
       ]
     }
   ],
-  "query": "event.dataset:\"truesignal.alert\" and event.category:\"authentication\" and not event.action:\"honeytoken_used\" and not threat.tactic.id:\"TA0008\" and not truesignal.whitelisted:true and not truesignal.known_scanner:true",
+  "query": "event.dataset:\"truesignal.alert\" and event.category:\"authentication\" and not event.action:\"honeytoken_used\" and not threat.tactic.id:\"TA0008\" and not truesignal.whitelisted:true and not truesignal.known_scanner:true and not event.kind:\"pipeline_test\"",
   "type": "query",
   "language": "kuery",
   "severity_mapping": [

@@ -25,9 +25,9 @@ import (
 
 // InsightStore is the persistence analytics needs.
 type InsightStore interface {
-	SeverityCounts(ctx context.Context, since time.Time) (map[domain.Severity]int64, error)
-	Velocity(ctx context.Context, since time.Time, bucket time.Duration) (map[int64]int64, error)
-	EventCounts(ctx context.Context, since time.Time) (total, unread, recent, recentCritical int64, err error)
+	SeverityCounts(ctx context.Context, since time.Time, includeDrills bool) (map[domain.Severity]int64, error)
+	Velocity(ctx context.Context, since time.Time, bucket time.Duration, includeDrills bool) (map[int64]int64, error)
+	EventCounts(ctx context.Context, since time.Time, includeDrills bool) (total, unread, recent, recentCritical int64, err error)
 	Nodes(ctx context.Context) ([]domain.Node, error)
 	Sensors(ctx context.Context, nodeID string) ([]domain.Sensor, error)
 	StatusHistory(ctx context.Context, since time.Time) ([]store.StatusChange, error)
@@ -82,14 +82,41 @@ func intParam(r *http.Request, name string, def, min, max int) (int, bool) {
 	return n, true
 }
 
+// IncludeDrillsParam is the analytics query parameter that adds fire drills
+// back into the figures (F-001). Drills are excluded by default.
+const IncludeDrillsParam = "include_drills"
+
+// includeDrills reads include_drills. Asking for drills needs the analyst or
+// admin role (viewers see the default, drill-free figures only). ok is false
+// when the response has been written.
+func includeDrills(w http.ResponseWriter, r *http.Request) (include, ok bool) {
+	switch r.URL.Query().Get(IncludeDrillsParam) {
+	case "", "false":
+		return false, true
+	case "true":
+		if s := sessionFrom(r); s == nil || !needAnalyst.allows(s) {
+			Fail(w, http.StatusForbidden, "forbidden", "include_drills needs the analyst or admin role")
+			return false, false
+		}
+		return true, true
+	default:
+		badQuery(w, "include_drills must be true or false")
+		return false, false
+	}
+}
+
 func (in *Insights) fail(w http.ResponseWriter, err error) {
 	in.Log.Error("analytics failed", "error", err.Error())
 	Fail(w, http.StatusInternalServerError, CodeInternal, "internal error")
 }
 
 func (in *Insights) summary(w http.ResponseWriter, r *http.Request) {
+	drills, ok := includeDrills(w, r)
+	if !ok {
+		return
+	}
 	now := in.Now()
-	total, unread, recent, crit, err := in.Store.EventCounts(r.Context(), now.Add(-24*time.Hour))
+	total, unread, recent, crit, err := in.Store.EventCounts(r.Context(), now.Add(-24*time.Hour), drills)
 	if err != nil {
 		in.fail(w, err)
 		return
@@ -119,7 +146,11 @@ func (in *Insights) severity(w http.ResponseWriter, r *http.Request) {
 		badQuery(w, "days must be 1..365")
 		return
 	}
-	c, err := in.Store.SeverityCounts(r.Context(), in.Now().Add(-time.Duration(days)*24*time.Hour))
+	drills, ok := includeDrills(w, r)
+	if !ok {
+		return
+	}
+	c, err := in.Store.SeverityCounts(r.Context(), in.Now().Add(-time.Duration(days)*24*time.Hour), drills)
 	if err != nil {
 		in.fail(w, err)
 		return
@@ -134,10 +165,14 @@ func (in *Insights) velocity(w http.ResponseWriter, r *http.Request) {
 		badQuery(w, "hours 1..2160, bucket 60..86400 s, at most 1000 buckets")
 		return
 	}
+	drills, ok := includeDrills(w, r)
+	if !ok {
+		return
+	}
 	b := time.Duration(bucket) * time.Second
 	now := in.Now()
 	start := now.Add(-time.Duration(hours) * time.Hour).Truncate(b)
-	m, err := in.Store.Velocity(r.Context(), start, b)
+	m, err := in.Store.Velocity(r.Context(), start, b, drills)
 	if err != nil {
 		in.fail(w, err)
 		return
@@ -181,9 +216,16 @@ func (in *Insights) uptime(w http.ResponseWriter, r *http.Request) {
 
 const maxProjectionEvents = 50_000
 
-// windowEvents loads enriched events of the last days (bounded).
-func (in *Insights) windowEvents(ctx context.Context, days int) ([]domain.EnrichedEvent, error) {
+// windowEvents loads enriched events of the last days (bounded). Every
+// projection (insights, report, attack path, geo, sources, scans) and the
+// ATT&CK layer read through it, so fire drills are excluded from all of them
+// unless includeDrills (F-001).
+func (in *Insights) windowEvents(ctx context.Context, days int, includeDrills bool) ([]domain.EnrichedEvent, error) {
 	f := store.EventFilter{From: in.Now().Add(-time.Duration(days) * 24 * time.Hour), Limit: 1000}
+	if !includeDrills {
+		no := false
+		f.Drill = &no
+	}
 	var out []domain.EnrichedEvent
 	for len(out) < maxProjectionEvents {
 		evs, err := in.Store.Events(ctx, f)
@@ -211,7 +253,11 @@ func (in *Insights) navigator(w http.ResponseWriter, r *http.Request) {
 		badQuery(w, "days must be 1..365")
 		return
 	}
-	evs, err := in.windowEvents(r.Context(), days)
+	drills, ok := includeDrills(w, r)
+	if !ok {
+		return
+	}
+	evs, err := in.windowEvents(r.Context(), days, drills)
 	if err != nil {
 		in.fail(w, err)
 		return
@@ -241,18 +287,26 @@ func (in *Insights) projection(w http.ResponseWriter, r *http.Request) {
 		badQuery(w, "days must be 1..365")
 		return
 	}
+	drills, ok := includeDrills(w, r)
+	if !ok {
+		return
+	}
 	params := map[string]string{}
 	for k, v := range r.URL.Query() {
-		if k != "days" && len(params) < 16 && len(k) <= 32 && len(v) > 0 && len(v[0]) <= 256 {
+		if k != "days" && k != IncludeDrillsParam && len(params) < 16 && len(k) <= 32 && len(v) > 0 && len(v[0]) <= 256 {
 			params[k] = v[0]
 		}
 	}
-	evs, err := in.windowEvents(r.Context(), days)
+	evs, err := in.windowEvents(r.Context(), days, drills)
 	if err != nil {
 		in.fail(w, err)
 		return
 	}
-	dto, err := p.Build(ported.WithWindowDays(r.Context(), days), evs, params)
+	ctx := ported.WithWindowDays(r.Context(), days)
+	if drills {
+		ctx = ported.WithIncludeDrills(ctx)
+	}
+	dto, err := p.Build(ctx, evs, params)
 	if err != nil {
 		Fail(w, http.StatusBadRequest, CodeInvalid, err.Error())
 		return

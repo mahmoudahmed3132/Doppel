@@ -102,8 +102,18 @@ func (p *Pipeline) RaiseHubEvent(ctx context.Context, nodeID, sensorID, trigger 
 }
 
 // Process runs a normalised sensor event through the pipeline.
+//
+// Fire drills (ev.Drill, F-001) are stored, enriched and sent to the SIEM
+// (labelled there), but skip beacon resolution (a drill must not count as a
+// beacon use or change its severity), honeytoken matching (a drill must not
+// raise honeytoken_used) and notifications. They are published to the live
+// feed so the UI can show them in the Drills view.
 func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error) {
 	var res Result
+	if ev.HubRaised {
+		// Drills come only from authenticated sensors through ingest.
+		ev.Drill = false
+	}
 	if ev.SourceKind == "" {
 		ev.SourceIP, ev.SourcePort, ev.SourceKind = domain.ParseSource(ev.Source)
 		if len(ev.Labels) == 0 {
@@ -114,7 +124,7 @@ func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error
 	// Step 2: beacon resolution.
 	knownBeacon := false
 	var beaconID string
-	if ev.Trigger == domain.TriggerBeaconTriggered && !ev.HubRaised {
+	if ev.Trigger == domain.TriggerBeaconTriggered && !ev.HubRaised && !ev.Drill {
 		b, err := p.resolveBeacon(ctx, ev)
 		if err != nil {
 			return res, err
@@ -175,7 +185,7 @@ func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error
 	}
 
 	// Step 9: honeytoken matching, even for suppressed events.
-	if p.Honeytokens != nil && ev.Trigger != domain.TriggerHoneytokenUsed {
+	if p.Honeytokens != nil && ev.Trigger != domain.TriggerHoneytokenUsed && !ev.Drill {
 		p.matchHoneytokens(ctx, ev)
 	}
 
@@ -184,8 +194,9 @@ func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error
 		return res, nil
 	}
 
-	// Step 11: webhook unless the sensor is silenced (and the silence window has not expired).
-	if p.Notifier != nil {
+	// Step 11: webhook unless the sensor is silenced. Drills never notify:
+	// no notification route opts in to drills until F-301 (include_drills).
+	if p.Notifier != nil && !ev.Drill {
 		silenced := false
 		s, err := p.Store.Sensor(ctx, ev.NodeID, ev.SensorID)
 		switch {

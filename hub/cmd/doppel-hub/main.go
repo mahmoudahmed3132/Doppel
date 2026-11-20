@@ -508,7 +508,7 @@ func serve(log *slog.Logger) error {
 		Store:     db,
 		Pipeline:  pipe,
 		Liveness:  live,
-		Version:   httpapi.Version{Product: "truesignal-hub", Version: Version, Contract: contractVersion},
+		Version:   httpapi.Version{Product: "truesignal-hub", Version: Version, Contract: contractVersion, Capabilities: httpapi.Capabilities()},
 		Log:       log,
 		Now:       time.Now,
 	}

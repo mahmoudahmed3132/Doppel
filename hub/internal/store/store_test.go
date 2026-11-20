@@ -391,12 +391,12 @@ func TestBeaconHoneytokenStoresAndFactoryReset(t *testing.T) {
 	db.PutSettings(ctx, map[string]*string{"public_endpoint": &v})
 	db.CreateAdmin(ctx, "h", nil)
 
-	sev, _ := db.SeverityCounts(ctx, now.Add(-time.Hour))
-	total, unread, recent, crit, _ := db.EventCounts(ctx, now.Add(-time.Hour))
+	sev, _ := db.SeverityCounts(ctx, now.Add(-time.Hour), false)
+	total, unread, recent, crit, _ := db.EventCounts(ctx, now.Add(-time.Hour), false)
 	if sev["critical"] != 1 || sev["low"] != 0 || total != 1 || unread != 1 || recent != 1 || crit != 1 {
 		t.Fatalf("%v %d %d %d %d", sev, total, unread, recent, crit)
 	}
-	vel, _ := db.Velocity(ctx, now.Add(-time.Hour), time.Hour)
+	vel, _ := db.Velocity(ctx, now.Add(-time.Hour), time.Hour, false)
 	if len(vel) != 1 {
 		t.Fatalf("%v", vel)
 	}

@@ -9,7 +9,13 @@ import math
 from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping, Tuple, Union
 
+# Source of every drill event. Kept for Hubs and SIEM content that predate
+# the drill flag (capability event.drill); a capable Hub also gets
+# "drill": true.
 DRILL_SOURCE = "Fire drill"
+
+# Queue-internal marker of drill-path events; never sent to the Hub.
+DRILL_MARK = "_drill"
 
 Details = Union[Mapping[str, Any], Iterable[Tuple[str, Any]], None]
 
@@ -99,8 +105,9 @@ def bound_details_sized(det: dict) -> "tuple[dict, int]":
 MAX_BATCH_BYTES = 240 << 10
 
 # Upper bound on an event's fixed parts: key names and punctuation (about
-# 110 bytes), event_id (36), severity (at most 8), occurred_at (at most 35)
-# and the comma separating it from the next event.
+# 110 bytes), event_id (36), severity (at most 8), occurred_at (at most 35),
+# the drill flag (at most 14: "drill":false,) and the comma separating it
+# from the next event.
 EVENT_OVERHEAD = 256
 
 

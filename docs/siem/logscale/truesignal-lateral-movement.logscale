@@ -2,6 +2,7 @@
 // Elastic twin: Docs/siem/elastic/truesignal-lateral-movement.json
 // Schedule: every 5m over the last 6m.
 event.module="truesignal" event.dataset="truesignal.alert"
+| event.kind!="pipeline_test"
 | array:contains("threat.tactic.id[]", value="TA0008")
 | truesignal.whitelisted!="true" truesignal.known_scanner!="true"
 | table([@timestamp, truesignal.severity, host.name, event.action, source.ip, user.domain, user.name, truesignal.details.key_fingerprint, truesignal.source_asset.name])

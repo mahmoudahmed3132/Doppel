@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "index": [
     "logs-truesignal-*"
@@ -68,7 +68,7 @@
       ]
     }
   ],
-  "query": "event.dataset:\"truesignal.alert\" and event.action:\"honeytoken_used\"",
+  "query": "event.dataset:\"truesignal.alert\" and event.action:\"honeytoken_used\" and not event.kind:\"pipeline_test\"",
   "type": "query",
   "language": "kuery"
 }

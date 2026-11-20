@@ -57,7 +57,7 @@ func TestNodeAPI(t *testing.T) {
 
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now}
 	ing := &Ingest{Auth: keys, Limiter: ratelimit.NewKeyed(100, 100), Store: db, Pipeline: pipe,
-		Liveness: &liveness.Service{Store: db, Raiser: pipe, Log: log, Now: time.Now}, Version: Version{"truesignal-hub", "3.0.0", 3}, Log: log, Now: time.Now}
+		Liveness: &liveness.Service{Store: db, Raiser: pipe, Log: log, Now: time.Now}, Version: Version{"truesignal-hub", "3.0.0", 3, Capabilities()}, Log: log, Now: time.Now}
 	mux := http.NewServeMux()
 	(&NodeAPI{Ingest: ing, Fleet: fs, Store: db, Raiser: pipe, HubMajor: 3}).Register(mux)
 	srv := httptest.NewServer(mux)

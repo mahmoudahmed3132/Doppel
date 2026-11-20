@@ -95,6 +95,11 @@ func (r Renderer) ecsEvent(event domain.EnrichedEvent) map[string]any {
 	}
 
 	kind, category := ecsClassify(event.Trigger, event.Whitelisted || event.KnownScanner)
+	if event.Drill {
+		// A fire drill tests the path to the SOC (F-001): ECS "pipeline_test"
+		// keeps it out of every alerting rule that filters on event.kind.
+		kind = "pipeline_test"
+	}
 	ev := map[string]any{
 		"kind":     kind,
 		"category": category,
@@ -127,7 +132,7 @@ func (r Renderer) ecsEvent(event domain.EnrichedEvent) map[string]any {
 			"hostname": nodeAlias,
 		},
 		"host": map[string]any{"name": nodeAlias, "id": event.NodeID},
-		"tags": ecsTags(event.Whitelisted, event.KnownScanner),
+		"tags": ecsTags(event.Whitelisted, event.KnownScanner, event.Drill),
 		"truesignal": map[string]any{
 			"event_id":    event.EventID,
 			"seq":         event.Seq,
@@ -145,6 +150,9 @@ func (r Renderer) ecsEvent(event domain.EnrichedEvent) map[string]any {
 		},
 	}
 
+	if event.Drill {
+		doc["labels"] = map[string]any{"drill": true}
+	}
 	if event.Enrichment.Asset != nil {
 		doc["truesignal"].(map[string]any)["source_asset"] = event.Enrichment.Asset
 	}
@@ -292,13 +300,16 @@ func ecsGeo(g *domain.Location) map[string]any {
 	return out
 }
 
-func ecsTags(whitelisted, knownScanner bool) []string {
+func ecsTags(whitelisted, knownScanner, drill bool) []string {
 	tags := []string{"truesignal", "deception"}
 	if whitelisted {
 		tags = append(tags, "whitelisted")
 	}
 	if knownScanner {
 		tags = append(tags, "known_scanner")
+	}
+	if drill {
+		tags = append(tags, "drill")
 	}
 	return tags
 }

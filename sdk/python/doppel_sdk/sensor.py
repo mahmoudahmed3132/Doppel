@@ -19,9 +19,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional, Protocol
 
-from .client import PATH_EVENTS, PATH_HEARTBEATS, PATH_STOPPING, REQUEST_TIMEOUT, HubClient, HubError, ingest_response, retryable
+from .client import CAP_DRILL, PATH_EVENTS, PATH_HEARTBEATS, PATH_STOPPING, REQUEST_TIMEOUT, HubClient, HubError, ingest_response, retryable
 from .config import Config, ConfigError
 from .events import (
+    DRILL_MARK,
     DRILL_SOURCE,
     MAX_BATCH_BYTES,
     MAX_DETAILS_BYTES,
@@ -114,6 +115,14 @@ class Sensor:
         self._log = log
         self._q = EventQueue(opts.queue_size)
         self._ids = UUID7()
+        self._cap_lock = threading.Lock()
+        self._drill_cap = False
+        self._cap_next = 0.0  # monotonic time of the next capability probe
+
+    # Capability probe intervals: a Hub without event.drill is asked again
+    # hourly (it may be upgraded); a failed probe is retried after a minute.
+    CAP_RECHECK_MISSING = 3600.0
+    CAP_RECHECK_FAILED = 60.0
 
     # ---- public API -------------------------------------------------------
 
@@ -172,13 +181,48 @@ class Sensor:
         return self._drill_sized(d)[0]
 
     def _drill_sized(self, d: Drill) -> "tuple[dict, int]":
-        return self._build_sized(d.severity or self.config.default_severity, d.trigger, DRILL_SOURCE, d.target, d.details)
+        ev, size = self._build_sized(d.severity or self.config.default_severity, d.trigger, DRILL_SOURCE, d.target, d.details)
+        ev[DRILL_MARK] = True
+        return ev, size
+
+    def _hub_accepts_drill(self) -> bool:
+        """Whether the Hub advertises capability event.drill (cached). A failed
+        probe counts as no: the event goes without the flag, and a capable
+        Hub still recognises drills by their source."""
+        with self._cap_lock:
+            if self._drill_cap or time.monotonic() < self._cap_next:
+                return self._drill_cap
+            try:
+                self._drill_cap = CAP_DRILL in self._client.capabilities()
+                self._cap_next = time.monotonic() + self.CAP_RECHECK_MISSING
+            except Exception as e:  # HubError or network/TLS error
+                self._cap_next = time.monotonic() + self.CAP_RECHECK_FAILED
+                self.log(logging.WARNING, "hub capability check failed, sending events without the drill flag", error=str(e))
+            return self._drill_cap
+
+    def _wire(self, batch: list) -> list:
+        """Wire copies of batch: the internal drill marker removed and, when the
+        Hub accepts it, the drill flag set on every event (true or false).
+        Older Hubs refuse unknown fields; an explicit false stops a capable
+        Hub's legacy source shim from flagging a real event."""
+        flag = self._hub_accepts_drill()
+        out = []
+        for e in batch:
+            w = {k: v for k, v in e.items() if k != DRILL_MARK}
+            if flag:
+                w["drill"] = bool(e.get(DRILL_MARK))
+            out.append(w)
+        return out
 
     def _backoff(self, attempt: int) -> float:
         d = min(self._opts.backoff_base * (2 ** (attempt - 1)), self._opts.backoff_cap)
         return d / 2 + random.uniform(0, d / 2)
 
     def _deliver(self, batch: list, abort: threading.Event) -> None:
+        self._send(self._wire(batch), abort)
+
+    def _send(self, batch: list, abort: threading.Event) -> None:
+        """Sends one wire-ready batch with retries (see _deliver)."""
         attempt = 0
         while True:
             attempt += 1
@@ -192,8 +236,8 @@ class Sensor:
                     # too large is lost.
                     mid = len(batch) // 2
                     self.log(logging.WARNING, "event batch too large, splitting", events=len(batch))
-                    self._deliver(batch[:mid], abort)
-                    self._deliver(batch[mid:], abort)
+                    self._send(batch[:mid], abort)
+                    self._send(batch[mid:], abort)
                     return
                 if not retryable(err):
                     self.log(logging.ERROR, "event batch refused, dropping", events=len(batch), error=str(err))
@@ -261,7 +305,7 @@ class Sensor:
     def _test_mode(self, drill: Drill) -> int:
         ev = self._drill_event(drill)
         try:
-            out = self._client.post(PATH_EVENTS, {"events": [ev]}, timeout=self._opts.test_mode_timeout)
+            out = self._client.post(PATH_EVENTS, {"events": self._wire([ev])}, timeout=self._opts.test_mode_timeout)
         except Exception as e:
             self.log(logging.ERROR, "test mode: delivery failed", error=str(e))
             return 1

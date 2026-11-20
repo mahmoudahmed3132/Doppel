@@ -29,6 +29,12 @@ func mk(min int, node, sensor, trigger, sev, source string) domain.EnrichedEvent
 	return e
 }
 
+// drillEv marks e as a fire drill the way ingest stores one (F-001 flag).
+func drillEv(e domain.EnrichedEvent) domain.EnrichedEvent {
+	e.Drill = true
+	return e
+}
+
 func fixture() []domain.EnrichedEvent {
 	jump := &domain.AssetMatch{Name: "jump", Criticality: "critical"}
 	evs := []domain.EnrichedEvent{
@@ -141,7 +147,7 @@ func TestWalkthroughDistinctSourcesAndHostLocalLabels(t *testing.T) {
 		mk(1, "n1", "ts-sensor-template", "template_connection", "medium", "192.168.65.1:51002"),
 		mk(2, "n1", "ts-sensor-web-router-decoy", "web_page_view", "low", "192.168.65.1"),
 		mk(3, "n1", "ts-sensor-tcp-tarpit", "tcp_connection", "medium", "[::1]:54321"),
-		mk(4, "n1", "ts-sensor-tcp-tarpit", "tcp_connection", "high", "Fire drill"),
+		drillEv(mk(4, "n1", "ts-sensor-tcp-tarpit", "tcp_connection", "high", "Fire drill")),
 	}
 	ctx := context.Background()
 

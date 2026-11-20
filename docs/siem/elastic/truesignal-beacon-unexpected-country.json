@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": false,
   "index": [
     "logs-truesignal-*"
@@ -30,7 +30,7 @@
   ],
   "note": "## Before enabling\nReplace the country list in the query (`EG` is a placeholder) with every country your staff, VPN egress and cloud regions legitimately use. [NOT IN PROJECT]\n\n## Triage\n1. This always accompanies truesignal-beacon-triggered for the same event; triage that alert and use this one as context.\n2. `truesignal.source_geo.address` is the address that was located (the subnet network for `client_subnet`).",
   "threat": [],
-  "query": "event.dataset:\"truesignal.alert\" and event.action:\"beacon_triggered\" and truesignal.details.beacon.id:* and (truesignal.source_geo.basis:\"client_subnet\" or (truesignal.source_geo.basis:\"source\" and truesignal.details.channel:\"http\")) and not truesignal.source_geo.country_code:(\"EG\")",
+  "query": "event.dataset:\"truesignal.alert\" and event.action:\"beacon_triggered\" and truesignal.details.beacon.id:* and (truesignal.source_geo.basis:\"client_subnet\" or (truesignal.source_geo.basis:\"source\" and truesignal.details.channel:\"http\")) and not truesignal.source_geo.country_code:(\"EG\") and not event.kind:\"pipeline_test\"",
   "type": "query",
   "language": "kuery"
 }

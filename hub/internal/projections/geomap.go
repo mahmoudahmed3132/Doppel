@@ -78,7 +78,7 @@ func internalSource(e domain.EnrichedEvent) bool {
 	return err == nil && !geoip.Public(a)
 }
 
-func (g GeoMap) Build(_ context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+func (g GeoMap) Build(ctx context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
 	groupBy, err := parseGroupBy(params)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func (g GeoMap) Build(_ context.Context, events []domain.EnrichedEvent, params m
 	countrySources := map[string]map[string]bool{}
 
 	for _, e := range oldestFirst(events) {
-		if !attacker(e.Event) {
+		if !attacker(ctx, e.Event) {
 			continue
 		}
 		dto.Events++

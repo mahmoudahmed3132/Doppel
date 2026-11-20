@@ -132,38 +132,27 @@ secrets; the KEK is not in it (see THREATMODEL.md R1).
 - Schema v5 (`sensors.dropped_events`) is applied on first start; the usual
   `.pre-v5-…bak` snapshot is written first (§3).
 
-### Liveness alerting and silence windows (F-005, PCI DSS 10.7.2)
+### Fire drills (F-001)
 
-- **Node-level liveness:** when no heartbeat arrives from any sensor on an
-  online node for `3 × interval` (90 s), the Hub emits `node_offline`
-  (`severity: high`), and emits `node_online` (`severity: info`) once any
-  sensor on that node resumes heartbeating.
-- **Sensor tamper vs. sensor offline:** if a sensor misses heartbeats for
-  `2 × interval` (60 s) without a stop notice while its node continues
-  heartbeating — or if a sensor container is stopped (`docker stop`) and not
-  restarted within `2 × interval` (60 s) while its node continues heartbeating —
-  the Hub emits `sensor_tamper_suspected` (`severity: high`). It also emits
-  `sensor_tamper_suspected` (`severity: high`) when a node reports via
-  `POST /v3/node/status` that a sensor container restarted more than 3 times in
-  5 minutes (`reason: container_restart_loop`). When an entire node goes silent,
-  per-sensor timeouts emit `sensor_heartbeat_lost` (`severity: medium`) at
-  `2 × interval` followed by `node_offline` (`severity: high`) at
-  `3 × interval`.
-- **Configuration drift:** when a node's `applied_revision` differs from its
-  `desired_revision` for longer than `config_drift_minutes` (default 15 minutes,
-  configurable under **Settings → General** or `PATCH /api/v3/settings`), the
-  Hub emits `config_drift` (`severity: medium`) once per drift episode until the
-  revisions converge.
-- **Silence windows:** silencing a sensor from the node page
-  (`POST /api/v3/nodes/{node}/sensors/{sensor}/silence`) requires a mandatory
-  reason (≤ 256 characters) and an expiry (`until`, `expires_at`, or
-  `duration_seconds`, at most 30 days). Silenced sensors still record events and
-  forward to the SIEM, but suppress webhook notifications until the window
-  expires. When the window expires, the Hub's liveness sweep automatically
-  unsilences the sensor and emits a `sensor.silence_expired` audit record.
-- Schema v7 (`nodes.ever_online`, `nodes.offline_alerted_at`,
-  `nodes.drift_since`, `nodes.drift_alerted_at`, `sensors.silenced_reason`,
-  `sensors.silenced_until`) is applied on first start after `.pre-v7-…bak`.
+- `doppel firedrill` (or a sensor in test mode) sends one drill event per
+  sensor. The Hub stores it flagged (`is_drill`), as `info`, and forwards it to
+  the SIEM labelled `pipeline_test` / `labels.drill: true`. Drills never notify
+  and are left out of the dashboard, report, scans, ATT&CK, attack path, geo
+  and insights figures and the unread badge. They are listed under the
+  **Drills** view of the Events page (`GET /api/v3/events?view=drills`).
+  Analysts and admins can add them back to analytics with `include_drills=true`
+  (the report has an *Include fire drills* toggle).
+- A drill proves the path end to end: expect one `truesignal-drill-received`
+  alert per running sensor in the SIEM. Re-import the SIEM rules after this
+  upgrade (`docs/siem/detection-rules.md`): the alerting rules now exclude
+  drills; with the old rules a drill still pages as a real alert.
+- Sensors built on an SDK older than the drill flag are still recognised by
+  their `Fire drill` source. The Hub logs `deprecated: fire drill without the
+  drill flag` with a running count (`legacy_drills_total`); rebuild those
+  sensors on the current SDK.
+- Schema v7 adds `events.is_drill`, flags every stored event whose source is
+  `Fire drill` and creates the `events_nondrill` index on first start (one
+  table scan; the `.pre-v7-…bak` snapshot is written first, §3).
 
 ## 3. Upgrade the Hub
 

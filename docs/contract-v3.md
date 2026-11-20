@@ -20,10 +20,17 @@ specification leaves open (see `QUESTIONS.md` for the open items).
 
 | Method | Path | Body | Success reply |
 |---|---|---|---|
-| GET | `/v3/version` | — | `{"product":"truesignal-hub","version":"3.0.0","contract":3}` |
+| GET | `/v3/version` | — | `{"product":"truesignal-hub","version":"3.0.0","contract":3,"capabilities":["event.drill"]}` |
 | POST | `/v3/ingest/events` | `{"events":[<event>…]}` (1..100) | `{"ok":true,"accepted":n,"duplicates":m,"rejected":[{"index":i,"error":"<code>"}]}` |
 | POST | `/v3/ingest/heartbeats` | `{"sensor_id","config_revision","sdk_version","dropped_events"?}` | `{"ok":true}` |
 | POST | `/v3/ingest/stopping` | `{"sensor_id","reason"}` (reason ≤ 128 chars) | `{"ok":true}` |
+
+`capabilities` lists the contract additions the Hub accepts, so a newer SDK can
+feature-detect them. Hubs that predate the list omit it; treat that as empty.
+
+| Capability | Meaning |
+|---|---|
+| `event.drill` | the event object accepts the optional boolean `drill` (F-001) |
 
 `dropped_events` (optional, integer ≥ 0): events the SDK lost since the last
 acknowledged heartbeat (queue overflow or undeliverable batches). See Q3. The
@@ -52,6 +59,19 @@ the Hub had already stored come back as `duplicates` (idempotency by
 | `source` | string | IP, IP:port, or short name |
 | `target` | string | what was touched |
 | `details` | object | sensor-specific, ≤ 64 KiB |
+| `drill` | boolean, optional | capability `event.drill`. `true` marks a fire drill (SIGUSR1 or test mode). Send it only to a Hub that advertises the capability: older Hubs refuse unknown fields (`invalid_event`). |
+
+**Fire drills (F-001).** The Hub stores a drill with `severity` `info` (the
+sensor's severity moves to `details.original_severity`), forwards it to the
+SIEM labelled (ECS `event.kind: pipeline_test`, `labels.drill: true`; syslog
+`drill="1"`), never notifies on it and leaves it out of every analytic by
+default. Compatibility shim: an event **without** the `drill` key whose
+`source` is `Fire drill` is treated as a drill (SDKs older than the flag); the
+Hub counts and logs each use as deprecated. An SDK that knows the capability
+therefore sends `drill` on every event, `false` when it is not a drill, so a
+real event whose `source` happens to read `Fire drill` is never downgraded.
+Drills come only through this endpoint (node key); the admin API cannot create
+events.
 
 ### Error codes
 
@@ -107,6 +127,10 @@ the Hub had already stored come back as `duplicates` (idempotency by
 - Heartbeat: immediately at start, then every 30 s.
 - SIGTERM/SIGINT: stop the sensor body, flush ≤ 5 s, send stop notice, exit 0.
 - SIGUSR1: queue the sensor's synthetic event with `source = "Fire drill"`.
+- Drill flag: before sending, the SDK reads `/v3/version` (cached; asked again
+  hourly while the capability is absent, after a minute when the request
+  fails). With `event.drill`, every event carries `drill` (`true` on the
+  synthetic event, `false` otherwise); without it the field is omitted.
 - Test mode: send the synthetic event once; exit 0 when the Hub counts it as
   accepted or duplicate within 10 s, else 1.
 
