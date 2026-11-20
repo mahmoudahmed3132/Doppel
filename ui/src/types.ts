@@ -27,13 +27,15 @@ export interface NodeHealth { online: boolean; in_sync: boolean; sensors_total: 
 export interface NodeSummary {
   id: string; alias: string; tags: string[] | null; created_at: string; last_seen_at: string | null;
   desired_revision: string; applied_revision: string; health: NodeHealth;
+  ever_online?: boolean; offline_alerted_at?: string | null; drift_since?: string | null; drift_alerted_at?: string | null;
   docker_desktop?: boolean;
   host_facts?: { docker_desktop?: boolean; [key: string]: unknown } | null;
   facts?: { docker_desktop?: boolean; [key: string]: unknown } | null;
 }
 export interface SensorView {
   node_id: string; id: string; catalogue_name: string; version: string; config: Record<string, string> | null;
-  silenced: boolean; status: string; status_changed_at: string | null; last_heartbeat_at: string | null;
+  silenced: boolean; silenced_reason?: string; silenced_until?: string | null;
+  status: string; status_changed_at: string | null; last_heartbeat_at: string | null;
   last_activity_at: string | null; sdk_version: string; created_at: string;
   /** Cumulative events the sensor's SDK reported as lost (queue overflow or undeliverable batches). */
   dropped_events: number;
@@ -57,6 +59,7 @@ export interface Manifest {
 
 export interface Settings {
   public_endpoint: string; registry_url: string; catalogue_refresh_hours: number; update_check_hours: number;
+  config_drift_minutes?: number;
   retention: { archive_after_days: number; purge_archived_after_days: number; history_days: number };
   whitelist: string[] | null; known_scanners: string[] | null; source_lists_active: boolean;
 }
