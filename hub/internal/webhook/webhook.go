@@ -129,6 +129,8 @@ type Notifier struct {
 	Now       func() time.Time
 	Client    *http.Client  // default: no redirects, 10 s timeout
 	Backoff   time.Duration // base retry delay (default 1 s)
+	OnSent    func(route string)
+	OnFailed  func(route string)
 
 	mu      sync.RWMutex
 	cfg     Config
@@ -234,8 +236,14 @@ func (n *Notifier) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case ev := <-n.queue:
-				if err := n.deliver(ctx, n.Config(), ev); err != nil {
-					n.Log.Warn("webhook notification failed", "type", n.Config().Type, "event_id", ev.EventID, "error", err.Error())
+				c := n.Config()
+				if err := n.deliver(ctx, c, ev); err != nil {
+					if n.OnFailed != nil {
+						n.OnFailed(string(c.Type))
+					}
+					n.Log.Warn("webhook notification failed", "type", c.Type, "event_id", ev.EventID, "error", err.Error())
+				} else if n.OnSent != nil {
+					n.OnSent(string(c.Type))
 				}
 			}
 		}
@@ -265,6 +273,9 @@ func (n *Notifier) Notify(ev domain.EnrichedEvent) {
 	case n.queue <- ev:
 	default:
 		n.dropped.Add(1)
+		if n.OnFailed != nil {
+			n.OnFailed(string(c.Type))
+		}
 		n.Log.Warn("webhook queue full; notification dropped", "event_id", ev.EventID)
 	}
 }

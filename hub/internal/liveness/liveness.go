@@ -93,6 +93,7 @@ type Service struct {
 	SensorOfflineSev domain.Severity                     // default medium
 	TamperSev        domain.Severity                     // default high
 	ConfigDriftSev   domain.Severity                     // default medium
+	OnHeartbeatLag   func(time.Duration)
 
 	mu       sync.Mutex
 	restarts map[string]*restartHistory
@@ -188,6 +189,9 @@ func (s *Service) Heartbeat(ctx context.Context, nodeID, sensorID, revision, sdk
 	sn, err := s.Store.Sensor(ctx, nodeID, sensorID)
 	if err != nil {
 		return err
+	}
+	if s.OnHeartbeatLag != nil && sn.LastHeartbeatAt != nil {
+		s.OnHeartbeatLag(now.Sub(*sn.LastHeartbeatAt))
 	}
 	l := fromSensor(sn)
 	recovered := sn.Status == domain.StatusOffline && sn.EverOnline

@@ -28,7 +28,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -47,6 +46,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/livefeed"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/liveness"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/manifest"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/metrics"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/nodekey"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ratelimit"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/seal"
@@ -55,6 +55,7 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/signing"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/sourcelist"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/tlsreload"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/totp"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/updatecheck"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/webhook"
@@ -101,7 +102,7 @@ func main() {
 // KEK file every secret is sealed (existing plaintext is migrated); without
 // one the Hub refuses to start in production, and refuses a database that is
 // already encrypted.
-func openStore(ctx context.Context, cfg *config.Config, log *slog.Logger) (*store.DB, error) {
+func openStore(ctx context.Context, cfg *config.Config, log *slog.Logger, observeQuery func(time.Duration)) (*store.DB, error) {
 	if err := cfg.SecretsPolicy(); err != nil {
 		return nil, err
 	}
@@ -115,7 +116,7 @@ func openStore(ctx context.Context, cfg *config.Config, log *slog.Logger) (*stor
 			return nil, fmt.Errorf("secrets at rest: %w (the Hub user, uid 65532 in the container, must be able to read %s: chown 65532:65532 and chmod 400)", err, cfg.KEKFile)
 		}
 	}
-	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log})
+	db, err := store.Open(ctx, cfg.DBPath, store.Options{Logger: log, ObserveQuery: observeQuery})
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +226,7 @@ func mfaReset(log *slog.Logger) error {
 		return fmt.Errorf("database %s: %w", cfg.DBPath, err)
 	}
 	ctx := context.Background()
-	db, err := openStore(ctx, cfg, log)
+	db, err := openStore(ctx, cfg, log, nil)
 	if err != nil {
 		return err
 	}
@@ -245,6 +246,16 @@ func serve(log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
+	if err := cfg.TransportPolicy(""); err != nil {
+		return err
+	}
+	var tlsReloader *tlsreload.Reloader
+	if cfg.TLSEnabled() {
+		tlsReloader, err = tlsreload.New(cfg.TLSCertFile, cfg.TLSKeyFile, log)
+		if err != nil {
+			return err
+		}
+	}
 	for _, w := range cfg.DevWarnings() {
 		log.Warn("DEVELOPMENT RELAXATION ACTIVE — DO NOT USE IN PRODUCTION", "detail", w)
 	}
@@ -252,12 +263,22 @@ func serve(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
+	reg := metrics.New(Version, store.SchemaVersion())
+
 	startedAt := time.Now().UTC()
-	db, err := openStore(ctx, cfg, log)
+	db, err := openStore(ctx, cfg, log, reg.ObserveDBQuery)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+
+	if ep, ok, err := db.Setting(ctx, auth.SettingEndpoint); err != nil {
+		return err
+	} else if ok {
+		if err := cfg.TransportPolicy(ep); err != nil {
+			return err
+		}
+	}
 
 	// SIEM output first, so every later audit record reaches it.
 	// ECS renderer and Elastic / LogScale transports: merged modules
@@ -266,7 +287,23 @@ func serve(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	siemSvc := &siem.Service{PEN: cfg.SyslogPEN, CABundle: cfg.SIEMCABundle, Log: log, Renderer: ecs.Renderer{}, HTTP: httpSIEM}
+	siemSvc := &siem.Service{
+		PEN:       cfg.SyslogPEN,
+		CABundle:  cfg.SIEMCABundle,
+		Log:       log,
+		Renderer:  ecs.Renderer{},
+		HTTP:      httpSIEM,
+		OnSent:    reg.RecordSIEMSent,
+		OnDropped: reg.RecordSIEMDropped,
+	}
+	reg.SIEM = func() metrics.SIEMSnapshot {
+		depth, _ := siemSvc.Stats()
+		return metrics.SIEMSnapshot{Output: string(siemSvc.Config().Protocol), QueueDepth: depth}
+	}
+	reg.LegacyDrills = ingest.LegacyDrills
+	reg.Fleet = func(ctx context.Context) (metrics.FleetSnapshot, error) {
+		return fleetMetricsSnapshot(ctx, db, time.Now().UTC())
+	}
 	siemCfg, err := siem.LoadConfig(ctx, db)
 	if err == nil {
 		siemCfg, err = siemCfg.Normalize()
@@ -312,6 +349,7 @@ func serve(log *slog.Logger) error {
 		SessionTTL:         cfg.SessionTTL,
 		SessionIdle:        cfg.SessionIdle,
 		RequireMFA:         cfg.RequireMFA,
+		RequireHTTPS:       !cfg.Development,
 		PasswordOverride:   cfg.DashboardPassword,
 		SetupTokenOverride: cfg.SetupToken,
 	})
@@ -326,7 +364,14 @@ func serve(log *slog.Logger) error {
 	}
 	go purgeSessions(ctx, authSvc, log)
 
-	notifier := &webhook.Notifier{Store: db, AllowHTTP: cfg.Development, Log: log, Now: time.Now}
+	notifier := &webhook.Notifier{
+		Store:     db,
+		AllowHTTP: cfg.Development,
+		Log:       log,
+		Now:       time.Now,
+		OnSent:    reg.RecordNotifySent,
+		OnFailed:  reg.RecordNotifyFailed,
+	}
 	if err := notifier.Load(ctx); err != nil {
 		return err
 	}
@@ -387,18 +432,20 @@ func serve(log *slog.Logger) error {
 
 	broker := livefeed.NewBroker()
 	pipe := &ingest.Pipeline{Store: db, Log: log, Now: time.Now, Lists: settingsSvc,
-		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker, Honeytokens: honeytokens, Beacons: beacons}
+		Enricher: enricher, SIEM: siemSvc, Notifier: notifier, Live: broker, Honeytokens: honeytokens, Beacons: beacons,
+		OnEventIngested: reg.RecordEventIngested}
 	go (&siem.Heartbeat{Sink: siemSvc, Fleet: db, Version: Version, StartedAt: startedAt, Log: log, Now: time.Now}).
 		Run(ctx, siem.HeartbeatInterval)
 	live := &liveness.Service{
-		Store:        db,
-		Raiser:       pipe,
-		Publisher:    broker,
-		Audit:        auditor,
-		Log:          log,
-		Now:          time.Now,
-		StartedAt:    startedAt,
-		DriftTimeout: settingsSvc.ConfigDriftTimeout,
+		Store:          db,
+		Raiser:         pipe,
+		Publisher:      broker,
+		Audit:          auditor,
+		Log:            log,
+		Now:            time.Now,
+		StartedAt:      startedAt,
+		DriftTimeout:   settingsSvc.ConfigDriftTimeout,
+		OnHeartbeatLag: reg.ObserveHeartbeatLag,
 	}
 	go live.Run(ctx, 5*time.Second)
 
@@ -447,6 +494,7 @@ func serve(log *slog.Logger) error {
 		Keys:        hubKeys,
 		Honeytokens: honeytokens,
 		Options:     manifest.Options{AllowUnpinned: cfg.DevAllowUnpinned},
+		AllowHTTP:   cfg.Development,
 		Log:         log,
 	}
 	fleetSvc := &fleet.Service{Store: db, Compiler: compiler, Catalogue: cat, Keys: keys, Log: log, Now: time.Now}
@@ -501,23 +549,29 @@ func serve(log *slog.Logger) error {
 		log.Warn("admin UI not embedded in this build; serving a placeholder page")
 	}
 	mux.Handle("/", ui)
+	(&httpapi.Health{Ready: db, Log: log}).Register(mux)
 	ingestAPI := &httpapi.Ingest{
-		Auth:      keys,
-		Limiter:   ratelimit.NewKeyed(50, 200),
-		Admission: ratelimit.NewGate(httpapi.IngestMaxInFlight, httpapi.IngestAdmitWait),
-		Store:     db,
-		Pipeline:  pipe,
-		Liveness:  live,
-		Version:   httpapi.Version{Product: "truesignal-hub", Version: Version, Contract: contractVersion, Capabilities: httpapi.Capabilities()},
-		Log:       log,
-		Now:       time.Now,
+		Auth:       keys,
+		Limiter:    ratelimit.NewKeyed(50, 200),
+		Admission:  ratelimit.NewGate(httpapi.IngestMaxInFlight, httpapi.IngestAdmitWait),
+		Store:      db,
+		Pipeline:   pipe,
+		Liveness:   live,
+		Version:    httpapi.Version{Product: "truesignal-hub", Version: Version, Contract: contractVersion, Capabilities: httpapi.Capabilities()},
+		Log:        log,
+		Now:        time.Now,
+		OnRejected: reg.RecordIngestRejected,
 	}
 	ingestAPI.Register(mux)
 	(&httpapi.NodeAPI{Ingest: ingestAPI, Fleet: fleetSvc, Store: db, Raiser: pipe, HubMajor: 3}).Register(mux)
 
+	mainLn, err := net.Listen("tcp", cfg.ListenEndpoint())
+	if err != nil {
+		return fmt.Errorf("listening on %s: %w", cfg.ListenEndpoint(), err)
+	}
 	srv := &http.Server{
-		Addr:              net.JoinHostPort("", strconv.Itoa(cfg.ListenPort)),
-		Handler:           httpapi.SecurityHeaders(network, mux),
+		Addr:              cfg.ListenEndpoint(),
+		Handler:           reg.Instrument(httpapi.SecurityHeaders(network, mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -525,20 +579,120 @@ func serve(log *slog.Logger) error {
 		MaxHeaderBytes:    32 << 10,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
-	errc := make(chan error, 1)
+	if tlsReloader != nil {
+		srv.TLSConfig = tlsReloader.TLSConfig()
+		sighup := make(chan os.Signal, 1)
+		signal.Notify(sighup, syscall.SIGHUP)
+		defer signal.Stop(sighup)
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-sighup:
+					if err := tlsReloader.Reload(); err != nil {
+						log.Error("TLS certificate reload failed; keeping previous certificate", "error", err.Error())
+					}
+				}
+			}
+		}()
+	}
+
+	var metricsSrv *http.Server
+	var metricsLn net.Listener
+	if cfg.MetricsAddr != "" {
+		metricsLn, err = net.Listen("tcp", cfg.MetricsAddr)
+		if err != nil {
+			mainLn.Close()
+			return fmt.Errorf("listening for metrics on %s: %w", cfg.MetricsAddr, err)
+		}
+		metricsSrv = &http.Server{
+			Addr:              cfg.MetricsAddr,
+			Handler:           reg.Handler(),
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      15 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			MaxHeaderBytes:    16 << 10,
+			ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+		}
+	}
+
+	errc := make(chan error, 2)
 	go func() {
-		log.Info("hub listening", "port", cfg.ListenPort, "version", Version, "schema", store.SchemaVersion())
-		errc <- srv.ListenAndServe()
+		log.Info("hub listening", "addr", mainLn.Addr().String(), "tls", tlsReloader != nil, "version", Version, "schema", store.SchemaVersion())
+		if tlsReloader != nil {
+			errc <- srv.ServeTLS(mainLn, "", "")
+		} else {
+			errc <- srv.Serve(mainLn)
+		}
 	}()
+	if metricsSrv != nil {
+		go func() {
+			log.Info("metrics listening", "addr", metricsLn.Addr().String())
+			if err := metricsSrv.Serve(metricsLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errc <- err
+			}
+		}()
+	}
+
 	select {
 	case err := <-errc:
+		if metricsSrv != nil {
+			_ = metricsSrv.Close()
+		}
 		return err
 	case <-ctx.Done():
 	}
 	log.Info("shutting down")
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return srv.Shutdown(shutCtx)
+	var shutErr error
+	if metricsSrv != nil {
+		shutErr = errors.Join(shutErr, metricsSrv.Shutdown(shutCtx))
+	}
+	shutErr = errors.Join(shutErr, srv.Shutdown(shutCtx))
+	return shutErr
+}
+
+func fleetMetricsSnapshot(ctx context.Context, db *store.DB, now time.Time) (metrics.FleetSnapshot, error) {
+	nodes, err := db.Nodes(ctx)
+	if err != nil {
+		return metrics.FleetSnapshot{}, err
+	}
+	var snap metrics.FleetSnapshot
+	for _, n := range nodes {
+		if n.Online(now) {
+			snap.NodesOnline++
+		} else {
+			snap.NodesOffline++
+		}
+		sensors, err := db.Sensors(ctx, n.ID)
+		if err != nil {
+			return metrics.FleetSnapshot{}, err
+		}
+		for _, sn := range sensors {
+			switch sn.Status {
+			case domain.StatusOnline:
+				snap.SensorsOnline++
+			case domain.StatusOffline:
+				snap.SensorsOffline++
+			default:
+				snap.SensorsPending++
+			}
+			if sn.Silenced {
+				snap.SensorsSilenced++
+			}
+			if sn.DroppedEvents > 0 {
+				snap.SensorDropped = append(snap.SensorDropped, metrics.SensorDropped{
+					NodeID:   n.ID,
+					SensorID: sn.ID,
+					Dropped:  sn.DroppedEvents,
+				})
+			}
+		}
+	}
+	return snap, nil
 }
 
 func purgeSessions(ctx context.Context, a *auth.Service, log *slog.Logger) {

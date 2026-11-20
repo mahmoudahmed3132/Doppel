@@ -78,16 +78,23 @@ type Ingest struct {
 	Limiter *ratelimit.Keyed
 	// Admission bounds concurrent event batches Hub-wide; nil means
 	// unbounded (tests only).
-	Admission *ratelimit.Gate
-	Store     IngestStore
-	Pipeline  EventProcessor
-	Liveness  LivenessRecorder
-	Version   Version
-	Log       *slog.Logger
-	Now       func() time.Time
+	Admission  *ratelimit.Gate
+	Store      IngestStore
+	Pipeline   EventProcessor
+	Liveness   LivenessRecorder
+	Version    Version
+	Log        *slog.Logger
+	Now        func() time.Time
+	OnRejected func(code string)
 
 	lastOverloadLog atomic.Int64 // unix nanoseconds
 	overloadLogged  atomic.Uint64
+}
+
+func (h *Ingest) recordRejected(code string) {
+	if h.OnRejected != nil && code != "" {
+		h.OnRejected(code)
+	}
 }
 
 // Register mounts the handlers on mux.
@@ -110,6 +117,7 @@ func (h *Ingest) authenticated(next nodeHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok || key == "" {
+			h.recordRejected(CodeUnauthorized)
 			Fail(w, http.StatusUnauthorized, CodeUnauthorized, "missing node key")
 			return
 		}
@@ -120,10 +128,12 @@ func (h *Ingest) authenticated(next nodeHandler) http.HandlerFunc {
 				Fail(w, http.StatusInternalServerError, CodeInternal, "authentication unavailable")
 				return
 			}
+			h.recordRejected(CodeUnauthorized)
 			Fail(w, http.StatusUnauthorized, CodeUnauthorized, "invalid node key")
 			return
 		}
 		if ok, wait := h.Limiter.Allow(nodeID); !ok {
+			h.recordRejected(CodeRateLimited)
 			secs := int(wait/time.Second) + 1
 			w.Header().Set("Retry-After", strconv.Itoa(secs))
 			Fail(w, http.StatusTooManyRequests, CodeRateLimited, "rate limit exceeded")
@@ -162,6 +172,7 @@ func (h *Ingest) admit(w http.ResponseWriter, r *http.Request, nodeID string) (f
 		h.Log.Warn("ingest overloaded, event batches refused with 429",
 			"refused_since_last_log", total-h.overloadLogged.Swap(total), "refused_total", total, "node_id", nodeID)
 	}
+	h.recordRejected(CodeOverloaded)
 	w.Header().Set("Retry-After", strconv.Itoa(overloadRetryAfter))
 	Fail(w, http.StatusTooManyRequests, CodeOverloaded, "hub is overloaded, retry later")
 	return nil, false
@@ -175,10 +186,12 @@ func (h *Ingest) events(w http.ResponseWriter, r *http.Request, nodeID string) {
 	defer release()
 	var req eventsRequest
 	if err := DecodeStrict(w, r, maxIngestBody, &req); err != nil {
+		h.recordRejected(CodeInvalidJSON)
 		FailDecode(w, err)
 		return
 	}
 	if len(req.Events) < 1 || len(req.Events) > maxBatchEvents {
+		h.recordRejected("invalid_batch")
 		Fail(w, http.StatusBadRequest, "invalid_batch", "a batch holds 1 to 100 events")
 		return
 	}
@@ -193,11 +206,13 @@ func (h *Ingest) events(w http.ResponseWriter, r *http.Request, nodeID string) {
 	for i, rawEv := range req.Events {
 		re, ok := ingest.DecodeRawEvent(rawEv)
 		if !ok {
+			h.recordRejected(ingest.CodeInvalidEvent)
 			rejected = append(rejected, rejection{i, ingest.CodeInvalidEvent})
 			continue
 		}
 		ev, warns, code := ingest.Normalize(re, nodeID, now)
 		if code != "" {
+			h.recordRejected(code)
 			rejected = append(rejected, rejection{i, code})
 			continue
 		}
@@ -213,6 +228,7 @@ func (h *Ingest) events(w http.ResponseWriter, r *http.Request, nodeID string) {
 			belongs[ev.SensorID] = mine
 		}
 		if !mine {
+			h.recordRejected(ingest.CodeSensorNotRegistered)
 			rejected = append(rejected, rejection{i, ingest.CodeSensorNotRegistered})
 			continue
 		}

@@ -44,6 +44,9 @@ type Service struct {
 	// the previous destination (default 10 s).
 	SwitchAuditTimeout time.Duration
 
+	OnSent    func(output string)
+	OnDropped func(output string)
+
 	mu       sync.Mutex
 	queue    []domain.Record
 	cfg      Config
@@ -115,7 +118,11 @@ func (s *Service) Enqueue(rec domain.Record) {
 		return
 	}
 	if len(s.queue) >= s.QueueSize {
+		proto := string(s.cfg.Protocol)
 		s.mu.Unlock()
+		if s.OnDropped != nil {
+			s.OnDropped(proto)
+		}
 		if s.dropped.Add(1)%100 == 1 {
 			s.Log.Warn("SIEM queue full; dropping new records", "dropped_total", s.dropped.Load())
 		}
@@ -295,21 +302,34 @@ func (s *Service) deliver(ctx context.Context, rec domain.Record) *switchReq {
 	if tr == nil {
 		return nil
 	}
+	proto := string(cfg.Protocol)
 	line, err := s.Render(cfg, rec)
 	if err != nil {
+		if s.OnDropped != nil {
+			s.OnDropped(proto)
+		}
 		s.Log.Error("SIEM record could not be rendered; dropped", append(describe(rec), "error", err.Error())...)
 		return nil
 	}
 	for attempt := 1; ; attempt++ {
 		err := tr.Send(ctx, line)
 		if err == nil {
+			if s.OnSent != nil {
+				s.OnSent(proto)
+			}
 			return nil
 		}
 		if IsTerminal(err) {
+			if s.OnDropped != nil {
+				s.OnDropped(proto)
+			}
 			s.Log.Error("SIEM rejected record; dropped", append(describe(rec), "error", err.Error())...)
 			return nil
 		}
 		if attempt >= s.MaxAttempts {
+			if s.OnDropped != nil {
+				s.OnDropped(proto)
+			}
 			s.Log.Error("SIEM record undeliverable after retries; dropped", append(describe(rec), "attempts", attempt, "error", err.Error())...)
 			return nil
 		}
