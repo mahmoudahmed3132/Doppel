@@ -19,6 +19,12 @@
   },
   {
     "rule": "go/log-injection",
+    "file": "hub/internal/httpapi/ingest.go",
+    "fingerprint": "ccc23a3927db5ba1:1",
+    "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/doppel-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries."
+  },
+  {
+    "rule": "go/log-injection",
     "file": "hub/internal/httpapi/node.go",
     "fingerprint": "62ae6a1aa631379f:1",
     "reason": "slog structured attribute only; the Hub's only production handler is slog.NewJSONHandler (hub/cmd/truesignal-hub/main.go), which JSON-escapes values, so CR/LF cannot forge log entries. Re-traced 2026-11-01 (previously dismissed in code scanning)."
