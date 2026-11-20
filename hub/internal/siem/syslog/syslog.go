@@ -137,7 +137,7 @@ func eventParams(e *domain.EnrichedEvent) []param {
 	if l := e.Enrichment.Location; l != nil {
 		country, basis = l.CountryCode, l.Basis
 	}
-	return []param{
+	params := []param{
 		{"event_id", e.EventID},
 		{"trigger", e.Trigger},
 		{"severity", string(e.Severity)},
@@ -155,6 +155,12 @@ func eventParams(e *domain.EnrichedEvent) []param {
 		{"source_country", country},
 		{"source_geo_basis", basis},
 	}
+	if e.Drill {
+		// Fire drill (F-001); present only on drills, so other records keep
+		// their exact parameter list.
+		params = append(params, param{"drill", "1"})
+	}
+	return params
 }
 
 // EscapeParamValue sanitises a PARAM-VALUE (RFC 5424 §6.3.3): invalid UTF-8

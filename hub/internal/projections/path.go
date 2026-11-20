@@ -75,10 +75,10 @@ func (ap AttackPath) Build(ctx context.Context, events []domain.EnrichedEvent, p
 	} else {
 		source = normalizeQuerySource(source, groupBy, ap.GeoIP)
 	}
-	return buildPath(source, groupBy, ap.GeoIP, events), nil
+	return buildPath(ctx, source, groupBy, ap.GeoIP, events), nil
 }
 
-func buildPath(source, groupBy string, geo *geoip.Service, events []domain.EnrichedEvent) *PathDTO {
+func buildPath(ctx context.Context, source, groupBy string, geo *geoip.Service, events []domain.EnrichedEvent) *PathDTO {
 	d := &PathDTO{Source: source, Steps: []Step{}, Progression: []ProgressStep{}, Timeline: []domain.EnrichedEvent{}}
 	type key struct{ node, sensor string }
 	index := map[key]int{}
@@ -87,7 +87,7 @@ func buildPath(source, groupBy string, geo *geoip.Service, events []domain.Enric
 	seenTactic := map[string]bool{}
 
 	for _, e := range oldestFirst(events) {
-		if source == "" || !attacker(e.Event) || sourceKey(e, groupBy, geo) != source {
+		if source == "" || !attacker(ctx, e.Event) || sourceKey(e, groupBy, geo) != source {
 			continue
 		}
 		if d.Events >= MaxPathEvents {

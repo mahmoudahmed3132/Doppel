@@ -99,7 +99,7 @@ func parseWhen(s string) (time.Time, error) {
 	return time.Parse("2006-01-02", s)
 }
 
-func (r Report) Build(_ context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+func (r Report) Build(ctx context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
 	groupBy, err := parseGroupBy(params)
 	if err != nil {
 		return nil, err
@@ -129,13 +129,13 @@ func (r Report) Build(_ context.Context, events []domain.EnrichedEvent, params m
 	if to.Sub(from) > MaxReportRange {
 		return nil, errors.New("a report covers at most 366 days")
 	}
-	return buildReport(sorted, from, to, now, groupBy, r.GeoIP), nil
+	return buildReport(ctx, sorted, from, to, now, groupBy, r.GeoIP), nil
 }
 
 // buildReport covers events with from <= time < to. Active events are the
 // figures; archived ones are only counted, since archiving is a triage
 // decision.
-func buildReport(sorted []domain.EnrichedEvent, from, to, now time.Time, groupBy string, geo *geoip.Service) *ReportDTO {
+func buildReport(ctx context.Context, sorted []domain.EnrichedEvent, from, to, now time.Time, groupBy string, geo *geoip.Service) *ReportDTO {
 	in := func(e domain.EnrichedEvent) bool { return !e.OccurredAt.Before(from) && e.OccurredAt.Before(to) }
 	var events []domain.EnrichedEvent
 	d := &ReportDTO{
@@ -143,7 +143,7 @@ func buildReport(sorted []domain.EnrichedEvent, from, to, now time.Time, groupBy
 		Daily: []Day{}, TopSources: []ReportSource{}, Assets: []AssetActivity{}, Techniques: []attack.TechniqueStat{}, HoneytokenUses: []HoneytokenUse{},
 	}
 	for _, e := range sorted {
-		if !in(e) || !attacker(e.Event) {
+		if !in(e) || !attacker(ctx, e.Event) {
 			continue
 		}
 		if e.Archived {

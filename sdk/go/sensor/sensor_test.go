@@ -116,6 +116,11 @@ type mockHub struct {
 	stops       []stoppingBody
 	auth        []string
 	srv         *httptest.Server
+	// caps are the capabilities /v3/version advertises; nil emulates a Hub
+	// that predates them (and refuses the unknown drill field).
+	caps         []string
+	versionCalls int
+	drillKeySeen bool
 }
 
 func newMockHub(t *testing.T) *mockHub {
@@ -132,7 +137,22 @@ func (h *mockHub) serve(w http.ResponseWriter, r *http.Request) {
 	h.auth = append(h.auth, r.Header.Get("Authorization"))
 	w.Header().Set("Content-Type", "application/json")
 	switch r.URL.Path {
+	case pathVersion:
+		h.versionCalls++
+		v := map[string]any{"product": "truesignal-hub", "version": "3.0.0", "contract": 3}
+		if h.caps != nil {
+			v["capabilities"] = h.caps
+		}
+		json.NewEncoder(w).Encode(v)
 	case pathEvents:
+		var top struct{ Events []map[string]json.RawMessage }
+		if json.Unmarshal(body, &top) == nil {
+			for _, e := range top.Events {
+				if _, ok := e["drill"]; ok {
+					h.drillKeySeen = true
+				}
+			}
+		}
 		status := 200
 		if len(h.eventStatus) > 0 {
 			status, h.eventStatus = h.eventStatus[0], h.eventStatus[1:]

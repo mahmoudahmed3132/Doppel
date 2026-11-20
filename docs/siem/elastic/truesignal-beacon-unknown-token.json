@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "index": [
     "logs-truesignal-*"
@@ -25,12 +25,11 @@
     "https://github.com/mahmoudahmed3132/TrueSignal/blob/main/Docs/siem/detection-rules.md#truesignal-beacon-unknown-token"
   ],
   "false_positives": [
-    "Fire drill (`truesignal.details.token: firedrill`).",
     "Beacons deleted on the Hub whose planted copies are still opened."
   ],
-  "note": "## Triage\n1. Check the Hub audit trail for `beacon.delete` before `@timestamp`; a deleted beacon still firing means its copies are still being opened.\n2. Token `firedrill` (the fire drill) is a test.\n3. Otherwise treat it as a forged report: the Token Receiver node (`host.name`) holds `TS_BEACON_KEY`; check that host's integrity.",
+  "note": "## Triage\n1. Check the Hub audit trail for `beacon.delete` before `@timestamp`; a deleted beacon still firing means its copies are still being opened.\n2. Otherwise treat it as a forged report: the Token Receiver node (`host.name`) holds `TS_BEACON_KEY`; check that host's integrity.",
   "threat": [],
-  "query": "event.dataset:\"truesignal.alert\" and event.action:\"beacon_triggered\" and truesignal.details.beacon_known:false and not truesignal.whitelisted:true and not truesignal.known_scanner:true",
+  "query": "event.dataset:\"truesignal.alert\" and event.action:\"beacon_triggered\" and truesignal.details.beacon_known:false and not truesignal.whitelisted:true and not truesignal.known_scanner:true and not event.kind:\"pipeline_test\"",
   "type": "query",
   "language": "kuery"
 }

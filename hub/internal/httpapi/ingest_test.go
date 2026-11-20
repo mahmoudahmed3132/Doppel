@@ -60,7 +60,7 @@ func newHub(t *testing.T, rate float64, burst int) *hubFixture {
 	auth := nodekey.NewAuthenticator(db)
 	lim := ratelimit.NewKeyed(rate, burst)
 	h := &Ingest{Auth: auth, Limiter: lim, Store: db, Pipeline: pipe, Liveness: live,
-		Version: Version{"truesignal-hub", "3.0.0", 3}, Log: log, Now: time.Now}
+		Version: Version{"truesignal-hub", "3.0.0", 3, Capabilities()}, Log: log, Now: time.Now}
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := httptest.NewServer(mux)
@@ -96,7 +96,7 @@ func TestVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := io.ReadAll(resp.Body)
-	if strings.TrimSpace(string(b)) != `{"product":"truesignal-hub","version":"3.0.0","contract":3}` {
+	if strings.TrimSpace(string(b)) != `{"product":"truesignal-hub","version":"3.0.0","contract":3,"capabilities":["event.drill"]}` {
 		t.Fatalf("%s", b)
 	}
 }
@@ -295,6 +295,8 @@ func TestSDKEndToEnd(t *testing.T) {
 	drill := sensor.Drill{Trigger: "demo_drill", Target: "demo"}
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 
+	legacyBefore := ingest.LegacyDrills()
+
 	// Test mode.
 	env[sensor.EnvTestMode] = "true"
 	if code := sensor.Run(ctx, sensor.Spec{Drill: drill}, sensor.Options{Getenv: getenv, Logger: quiet}); code != 0 {
@@ -335,12 +337,20 @@ func TestSDKEndToEnd(t *testing.T) {
 	counts := map[string]int{}
 	for _, e := range all {
 		counts[e.Trigger]++
-		if e.Trigger == "demo_drill" && e.Source != "Fire drill" {
-			t.Fatalf("drill source %q", e.Source)
+		if e.Trigger == "demo_drill" && (e.Source != "Fire drill" || !e.Drill || e.Severity != domain.SeverityInfo) {
+			t.Fatalf("drill %+v", e)
+		}
+		if e.Trigger == "tcp_connection" && e.Drill {
+			t.Fatalf("real event stored as a drill: %+v", e)
 		}
 	}
 	if counts["demo_drill"] != 2 || counts["tcp_connection"] != 5 || counts["sensor_stopped"] != 1 {
 		t.Fatalf("counts %v", counts)
+	}
+	// The SDK feature-detected event.drill and sent the flag: the legacy
+	// source shim was never needed (F-001).
+	if n := ingest.LegacyDrills() - legacyBefore; n != 0 {
+		t.Fatalf("legacy drill shim used %d times by the current SDK", n)
 	}
 	s, _ := f.db.Sensor(ctx, "node-0000000a", "ts-sensor-demo")
 	if s.Status != domain.StatusOffline || !s.EverOnline {

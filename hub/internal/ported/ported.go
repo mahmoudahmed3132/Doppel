@@ -196,6 +196,23 @@ type Projection interface {
 
 type windowDaysKey struct{}
 
+type includeDrillsKey struct{}
+
+// WithIncludeDrills marks a projection request that opted in to fire drills
+// (include_drills=true, F-001). Without it projections leave drills out.
+func WithIncludeDrills(ctx context.Context) context.Context {
+	return context.WithValue(ctx, includeDrillsKey{}, true)
+}
+
+// IncludeDrills reports whether the projection request opted in to drills.
+func IncludeDrills(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(includeDrillsKey{}).(bool)
+	return v
+}
+
 // WithWindowDays attaches the Hub's projection window length (in days) to ctx
 // so projections can report the window without adding "days" to pass-through
 // query parameters.

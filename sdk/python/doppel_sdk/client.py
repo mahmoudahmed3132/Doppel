@@ -14,6 +14,8 @@ from typing import Any, Optional
 PATH_EVENTS = "/v3/ingest/events"
 PATH_HEARTBEATS = "/v3/ingest/heartbeats"
 PATH_STOPPING = "/v3/ingest/stopping"
+PATH_VERSION = "/v3/version"
+CAP_DRILL = "event.drill"  # the event object accepts the optional boolean "drill"
 MAX_RESPONSE = 64 << 10
 REQUEST_TIMEOUT = 15.0
 
@@ -54,10 +56,20 @@ class HubClient:
         self._ua = f"truesignal-sdk-python/{sdk_version}"
         self._opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx), _NoRedirect())
 
+    def capabilities(self, timeout: float = REQUEST_TIMEOUT) -> "set[str]":
+        """The contract capabilities the Hub advertises in /v3/version."""
+        out = self._request("GET", PATH_VERSION, None, timeout)
+        caps = out.get("capabilities") or []
+        return {str(c) for c in caps} if isinstance(caps, list) else set()
+
     def post(self, path: str, body: Any, timeout: float = REQUEST_TIMEOUT) -> dict:
         data = json.dumps(body, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
-        req = urllib.request.Request(self._base + path, data=data, method="POST")
-        req.add_header("Content-Type", "application/json")
+        return self._request("POST", path, data, timeout)
+
+    def _request(self, method: str, path: str, data: Optional[bytes], timeout: float) -> dict:
+        req = urllib.request.Request(self._base + path, data=data, method=method)
+        if data is not None:
+            req.add_header("Content-Type", "application/json")
         req.add_header("User-Agent", self._ua)
         if self._key:
             req.add_header("Authorization", "Bearer " + self._key)

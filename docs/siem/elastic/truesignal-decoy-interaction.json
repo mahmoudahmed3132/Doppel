@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "index": [
     "logs-truesignal-*"
@@ -25,8 +25,7 @@
     "https://github.com/mahmoudahmed3132/TrueSignal/blob/main/Docs/siem/detection-rules.md#truesignal-decoy-interaction"
   ],
   "false_positives": [
-    "Monitoring (ICMP/uptime checks, SNMP pollers), backup and inventory agents reaching the decoys: add them to the whitelist or known scanners on the Hub.",
-    "Fire drills (`truesignal firedrill`): the sensor's drill event."
+    "Monitoring (ICMP/uptime checks, SNMP pollers), backup and inventory agents reaching the decoys: add them to the whitelist or known scanners on the Hub."
   ],
   "note": "## Triage\n1. `event.action` and `truesignal.details` say what was done; `threat.*` carries the ATT&CK mapping.\n2. File Canary (`decoy_file_accessed`/`decoy_file_tampered`): `file.path` is the lure; find the process via EDR file telemetry on `host.name`.\n3. Network decoys: identify `source.ip` and look for other TrueSignal alerts from it (scan-then-touch fires when it escalates).",
   "threat": [],

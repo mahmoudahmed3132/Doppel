@@ -12,7 +12,7 @@ import (
 )
 
 const eventCols = `seq, event_id, node_id, sensor_id, trigger, severity, occurred_at, received_at, source,
-	source_ip, source_port, source_kind, target, details, is_read, archived, whitelisted, known_scanner`
+	source_ip, source_port, source_kind, target, details, is_read, archived, whitelisted, known_scanner, is_drill`
 
 // SourceBackfillBatchSize is the batch size used when backfilling source_ip,
 // source_port and source_kind across existing events (F-002).
@@ -34,16 +34,16 @@ func nullInt(p *int) sql.NullInt64 {
 
 func scanEvent(row interface{ Scan(...any) error }) (*domain.Event, error) {
 	var (
-		e                       domain.Event
-		sev, details            string
-		occ, rec                int64
-		srcIP                   sql.NullString
-		srcPort                 sql.NullInt64
-		srcKind                 string
-		read, arch, wl, scanner int
+		e                              domain.Event
+		sev, details                   string
+		occ, rec                       int64
+		srcIP                          sql.NullString
+		srcPort                        sql.NullInt64
+		srcKind                        string
+		read, arch, wl, scanner, drill int
 	)
 	if err := row.Scan(&e.Seq, &e.EventID, &e.NodeID, &e.SensorID, &e.Trigger, &sev, &occ, &rec, &e.Source,
-		&srcIP, &srcPort, &srcKind, &e.Target, &details, &read, &arch, &wl, &scanner); err != nil {
+		&srcIP, &srcPort, &srcKind, &e.Target, &details, &read, &arch, &wl, &scanner, &drill); err != nil {
 		return nil, err
 	}
 	e.Severity = domain.Severity(sev)
@@ -59,6 +59,7 @@ func scanEvent(row interface{ Scan(...any) error }) (*domain.Event, error) {
 	e.Labels = domain.SourceLabels(e.SourceIP)
 	e.Details = []byte(details)
 	e.Read, e.Archived, e.Whitelisted, e.KnownScanner = read != 0, arch != 0, wl != 0, scanner != 0
+	e.Drill = drill != 0
 	return &e, nil
 }
 
@@ -132,12 +133,12 @@ func (db *DB) InsertEvent(ctx context.Context, e *domain.Event) (bool, error) {
 	}
 	var seq int64
 	err := db.sql.QueryRowContext(ctx, `INSERT INTO events (event_id, node_id, sensor_id, trigger, severity, occurred_at,
-		received_at, source, source_ip, source_port, source_kind, target, details, is_read, archived, whitelisted, known_scanner)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		received_at, source, source_ip, source_port, source_kind, target, details, is_read, archived, whitelisted, known_scanner, is_drill)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (node_id, event_id) DO NOTHING RETURNING seq`,
 		e.EventID, e.NodeID, e.SensorID, e.Trigger, string(e.Severity), ms(e.OccurredAt), ms(e.ReceivedAt),
 		e.Source, nullStr(e.SourceIP), nullInt(e.SourcePort), string(e.SourceKind), e.Target, string(e.Details),
-		boolInt(e.Read), boolInt(e.Archived), boolInt(e.Whitelisted), boolInt(e.KnownScanner)).Scan(&seq)
+		boolInt(e.Read), boolInt(e.Archived), boolInt(e.Whitelisted), boolInt(e.KnownScanner), boolInt(e.Drill)).Scan(&seq)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
@@ -150,7 +151,10 @@ func (db *DB) InsertEvent(ctx context.Context, e *domain.Event) (bool, error) {
 
 // EventFilter selects events. Zero values mean "any".
 type EventFilter struct {
-	Archived   *bool
+	Archived *bool
+	// Drill selects fire-drill events (true) or excludes them (false).
+	// Analytics and the default events views pass false (F-001).
+	Drill      *bool
 	NodeID     string
 	SensorID   string
 	SourceIP   string
@@ -170,6 +174,10 @@ func (f EventFilter) where() (string, []any) {
 	if f.Archived != nil {
 		conds = append(conds, "archived = ?")
 		args = append(args, boolInt(*f.Archived))
+	}
+	if f.Drill != nil {
+		conds = append(conds, "is_drill = ?")
+		args = append(args, boolInt(*f.Drill))
 	}
 	if f.NodeID != "" {
 		conds = append(conds, "node_id = ?")
@@ -256,10 +264,11 @@ func (db *DB) Event(ctx context.Context, seq int64) (*domain.Event, error) {
 	return e, err
 }
 
-// UnreadCount counts unread, unarchived events.
+// UnreadCount counts unread, unarchived events. Fire drills are not
+// counted: the unread badge is the SOC's to-do list (F-001).
 func (db *DB) UnreadCount(ctx context.Context) (int64, error) {
 	var n int64
-	err := db.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE is_read = 0 AND archived = 0`).Scan(&n)
+	err := db.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE is_read = 0 AND archived = 0 AND is_drill = 0`).Scan(&n)
 	return n, err
 }
 

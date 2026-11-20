@@ -133,6 +133,23 @@ const PW = 'correct-horse-battery-staple-42';
     const sevs = await page.locator('.events-table tbody .sev').allTextContents();
     if (!sevs.length || sevs.some((s) => s !== 'critical')) throw new Error('filter ' + sevs);
   });
+  await step('fire drill: hidden from Active, DRILL pill in the Drills view (F-001)', async () => {
+    const drill = { event_id: uuid7(), sensor_id: sensorId, trigger: 'tcp_connection', severity: 'critical', drill: true,
+      occurred_at: new Date().toISOString(), source: 'Fire drill', target: '10.0.0.5:2222', details: { phase: 'drill' } };
+    const r = await fetch(base + '/v3/ingest/events', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({ events: [drill] }) });
+    if (!r.ok) throw new Error('drill ingest ' + r.status + ' ' + await r.text());
+    await page.getByRole('button', { name: 'Reset' }).click();
+    await page.waitForTimeout(400);
+    if (await page.locator('.events-table .pill', { hasText: 'DRILL' }).count()) throw new Error('drill shown in Active view');
+    await page.locator('label.filter', { hasText: 'View' }).locator('select').selectOption('drills');
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await page.locator('.events-table tbody tr .pill', { hasText: 'DRILL' }).first().waitFor({ timeout: 5000 });
+    const rows = await page.locator('.events-table tbody tr').count();
+    const sevs = await page.locator('.events-table tbody .sev').allTextContents();
+    if (rows !== 1 || sevs.some((s) => s !== 'info')) throw new Error(`drills view: ${rows} rows, severities ${sevs}`);
+    await shot('05b-drills');
+    await page.getByRole('button', { name: 'Reset' }).click();
+  });
   await step('dashboard renders charts', async () => {
     await page.getByRole('link', { name: 'Dashboard' }).click();
     await page.locator('svg.chart').waitFor();

@@ -46,7 +46,8 @@ func (e *Enricher) Enrich(ctx context.Context, ev *domain.Event) domain.Enriched
 			out.NodeAlias = n.Alias
 		}
 	}
-	if e.Attack != nil {
+	if e.Attack != nil && !ev.Drill {
+		// A fire drill is not an attacker technique (F-001).
 		out.Enrichment.Attack = e.Attack.For(ev.Trigger)
 	}
 	if e.Assets != nil {

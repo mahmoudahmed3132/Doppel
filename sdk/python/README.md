@@ -23,7 +23,7 @@ main(Spec(drill=Drill("my_trigger", "My decoy (fire drill)"), run=run))
 | Batches ≤ 100 / 1 s; 7 attempts, exponential backoff with jitter, cap 60 s; 4xx except 408/429 not retried; `Retry-After` honoured | `Sensor._sender`, `_deliver`; retries resend the same `event_id` |
 | Heartbeat every 30 s with the config revision | `Sensor._heartbeats` |
 | SIGTERM/SIGINT: flush ≤ 5 s, stop notice, exit 0 | `Sensor._service` (signals handled on the main thread) |
-| SIGUSR1 fire drill (`source` = `Fire drill`) | `Spec.drill` |
+| SIGUSR1 fire drill (`source` = `Fire drill`; `"drill": true` when the Hub advertises capability `event.drill` in `/v3/version`, and `"drill": false` on every other event) | `Spec.drill`, `Sensor._wire` |
 | Test mode (`TS_TEST_MODE=true`): send the drill, wait ≤ 10 s, exit 0/1 | `Sensor._test_mode` |
 | TLS: system roots + optional CA bundle; never disabled; redirects not followed | `client.py` |
 | Decoy-helper seam (PORTED) | `Reporter` protocol: `report_severity`, `setting` |

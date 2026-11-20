@@ -136,6 +136,10 @@ paths:
                   product: {const: truesignal-hub}
                   version: {type: string}
                   contract: {const: 3}
+                  capabilities:
+                    type: array
+                    items: {type: string}
+                    description: 'Contract additions this Hub accepts (event.drill: the optional boolean drill on events). Absent on older Hubs.'
   /api/v3/setup:
     get:
       security: []
@@ -642,7 +646,7 @@ paths:
         '200': {description: '{"armed": bool}'}
   /api/v3/events:
     get:
-      summary: 'Events newest first, enriched (each event includes raw source plus parsed source_ip, source_port, source_kind in ip|local|drill|other, and optional labels such as host_local). Query: archived (false|true|any), node, sensor, severity (comma list), trigger, from/to (RFC 3339), q (source/target substring), before (cursor), limit (1..500)'
+      summary: 'Events newest first, enriched (each event includes raw source plus parsed source_ip, source_port, source_kind in ip|local|drill|other, and optional labels such as host_local). Query: view (active|archived|drills|all; active = unarchived non-drill, drills = fire drills only) or the older archived (false|true hide drills, any = all; not both), node, sensor, severity (comma list), trigger, from/to (RFC 3339), q (source/target substring), before (cursor), limit (1..500)'
       responses:
         '200': {description: '{"events": [EnrichedEvent], "next_cursor": string|null}'}
         '400': {$ref: '#/components/responses/Error'}
@@ -650,7 +654,7 @@ paths:
     parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
     get: {summary: One event with enrichment, responses: {'200': {description: '{"event"}'}, '404': {$ref: '#/components/responses/Error'}}}
   /api/v3/events/unread-count:
-    get: {summary: 'Unread unarchived events', responses: {'200': {description: '{"unread": n}'}}}
+    get: {summary: 'Unread unarchived events, fire drills excluded', responses: {'200': {description: '{"unread": n}'}}}
   /api/v3/events/{seq}/read:
     parameters: [{name: seq, in: path, required: true, schema: {type: integer}}]
     post: {summary: Mark one read, responses: {'200': {description: '{"updated": n}'}}}
@@ -697,18 +701,18 @@ paths:
       summary: 'Factory reset {"password", "confirm": "FACTORY RESET", "purge_honeytokens": bool}. The audit record is delivered to the SIEM first; if that fails the reset is refused (502).'
       responses: {'200': {description: '{"reset": true, "setup_required": true}'}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '502': {$ref: '#/components/responses/Error'}}
   /api/v3/analytics/summary:
-    get: {summary: 'Counters: events_total/unread/24h, critical_24h, nodes/sensors total and online', responses: {'200': {description: '{"summary"}'}}}
+    get: {summary: 'Counters: events_total/unread/24h, critical_24h, nodes/sensors total and online. Fire drills are excluded unless include_drills=true (analyst/admin; viewers get 403).', responses: {'200': {description: '{"summary"}'}, '403': {$ref: '#/components/responses/Error'}}}
   /api/v3/analytics/severity:
-    get: {summary: 'Unarchived events by severity over ?days=1..365 (default 7)', responses: {'200': {description: '{"days","severity"}'}}}
+    get: {summary: 'Unarchived events by severity over ?days=1..365 (default 7). Fire drills are excluded unless include_drills=true (analyst/admin; viewers get 403).', responses: {'200': {description: '{"days","severity"}'}, '403': {$ref: '#/components/responses/Error'}}}
   /api/v3/analytics/velocity:
-    get: {summary: 'Events per bucket: ?hours=1..2160 (24), ?bucket=60..86400 s (3600), ≤ 1000 buckets, gaps filled', responses: {'200': {description: '{"bucket_seconds","series":[{t,count}]}'}}}
+    get: {summary: 'Events per bucket: ?hours=1..2160 (24), ?bucket=60..86400 s (3600), ≤ 1000 buckets, gaps filled. Fire drills are excluded unless include_drills=true (analyst/admin; viewers get 403).', responses: {'200': {description: '{"bucket_seconds","series":[{t,count}]}'}, '403': {$ref: '#/components/responses/Error'}}}
   /api/v3/analytics/uptime:
     get: {summary: 'Per sensor, per UTC day % online over ?days=1..90 (14); -1 = not yet created', responses: {'200': {description: '{"days","sensors":[{node_id,sensor_id,days,percent}]}'}}}
   /api/v3/analytics/attack/navigator:
-    get: {summary: 'ATT&CK Navigator layer for ?days', responses: {'200': {description: attachment}}}
+    get: {summary: 'ATT&CK Navigator layer for ?days. Fire drills are excluded unless include_drills=true (analyst/admin; viewers get 403).', responses: {'200': {description: attachment}, '403': {$ref: '#/components/responses/Error'}}}
   /api/v3/analytics/projections/{name}:
     parameters: [{name: name, in: path, required: true, schema: {type: string}}]
-    get: {summary: 'Analytics projections (insights, sources, attack_matrix, attack_path, geo_map, report) over ?days; keyed on source_ip when set (else source), excluding drills; supports optional group_by=ip|subnet24|subnet64|asn and other projection parameters', responses: {'200': {description: '{"projection","days","data"}'}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}}
+    get: {summary: 'Analytics projections (insights, sources, attack_matrix, attack_path, geo_map, report) over ?days; keyed on source_ip when set (else source), excluding fire drills (is_drill) unless include_drills=true (analyst/admin; viewers get 403); supports optional group_by=ip|subnet24|subnet64|asn and other projection parameters', responses: {'200': {description: '{"projection","days","data"}'}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}}
   /api/v3/system/status:
     get: {summary: 'Version, schema, uptime, armed, SIEM queue, update state, hub_update_available, cli_release_notice, modules (attack is always true; retained for compatibility), live clients', responses: {'200': {description: '{"status"}'}}}
   /api/v3/system/update-check:

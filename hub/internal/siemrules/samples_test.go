@@ -112,6 +112,17 @@ func login(sensor, proto string, port int, source, user string) *domain.Event {
 		map[string]any{"protocol": proto, "dst_port": port, "username": user, "auth": "password", "password_hmac": "0f1e2d3c"})
 }
 
+// drill turns e into a fire drill as ingest stores it (F-001): drill flag,
+// SDK drill source, severity info, original severity in details.
+func drill(e *domain.Event) *domain.Event {
+	var d map[string]any
+	_ = json.Unmarshal(e.Details, &d)
+	d["original_severity"] = string(e.Severity)
+	e.Details, _ = json.Marshal(d)
+	e.Drill, e.Source, e.Severity = true, domain.DrillSource, domain.SeverityInfo
+	return e
+}
+
 func audit(action, method, path string, status int, ip string) *domain.AuditRecord {
 	outcome := "success"
 	if status >= 400 {
@@ -201,6 +212,14 @@ func sampleCases() []sampleCase {
 		map[string]any{"protocol": "snmp", "dst_port": 161, "community_hmac": "hmac-sha256:22bb", "pdu": "get"})})
 	add(sampleCase{Name: "file_tampered", OffsetSec: 60, Node: nodeA, Event: ev("ts-sensor-file-canary", "decoy_file_tampered", "critical", "local", "/srv/backup/db.env",
 		map[string]any{"path": "/srv/backup/db.env", "action": "modify", "category": "credentials"})})
+
+	// Fire drills (F-001): one per decoy family. Labelled pipeline_test, so no
+	// alerting rule fires; truesignal-drill-received records each.
+	add(sampleCase{Name: "drill_ssh_login", OffsetSec: 46, Node: nodeA, Event: drill(login("ts-sensor-remote-access-decoy", "ssh", 22, "", "drill"))})
+	add(sampleCase{Name: "drill_beacon_firedrill", OffsetSec: 45, Node: nodeDMZ, Event: drill(ev("ts-sensor-token-receiver", "beacon_triggered", "critical", "",
+		"DNS ("+beaconDomain+")", dnsBeacon("firedrill", "", "")))})
+	add(sampleCase{Name: "drill_tcp_connection", OffsetSec: 44, Node: nodeB, Event: drill(ev("ts-sensor-tcp-tarpit", "tcp_connection", "high", "", "TCP (port 445)",
+		map[string]any{"dst_port": 445, "phase": "connect", "action_taken": "hold"}))})
 
 	// Liveness (Hub-raised).
 	add(sampleCase{Name: "hb_lost_dark", OffsetSec: 3 * 3600, Node: nodeA, System: &systemEvent{"ts-sensor-tcp-tarpit", "sensor_heartbeat_lost", "high",
@@ -483,7 +502,7 @@ func TestSIEMDetectionSamples(t *testing.T) {
 
 // ecsFieldRef matches field references in rule queries: ECS and truesignal
 // namespaces only, so query keywords and values are not picked up.
-var ecsFieldRef = regexp.MustCompile(`\b(?:event|source|destination|truesignal|threat|host|user|url|observer|http|file|user_agent|log)\.[A-Za-z_][\w.]*(?:\[\])?`)
+var ecsFieldRef = regexp.MustCompile(`\b(?:event|source|destination|truesignal|threat|host|user|url|observer|http|file|user_agent|log|labels)\.[A-Za-z_][\w.]*(?:\[\])?`)
 
 // quotedFieldArg matches string literals LogScale uses as field names
 // (in(field="…"), array:contains("…")); other literals are values.

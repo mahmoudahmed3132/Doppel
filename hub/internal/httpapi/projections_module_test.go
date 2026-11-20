@@ -179,7 +179,7 @@ func TestSourcesProjectionCorrelatesTwoDecoysAndGroupBy(t *testing.T) {
 		{
 			EventID: "drill-1", NodeID: "node-0000000a", SensorID: "ts-sensor-tarpit", Trigger: "tcp_connection",
 			Severity: domain.SeverityInfo, OccurredAt: now, ReceivedAt: now, Source: "Fire drill",
-			SourceKind: domain.SourceKindDrill, Target: "2222", Details: []byte(`{}`),
+			SourceKind: domain.SourceKindDrill, Target: "2222", Details: []byte(`{}`), Drill: true,
 		},
 	} {
 		if _, err := db.InsertEvent(ctx, ev); err != nil {

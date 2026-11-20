@@ -2,6 +2,7 @@
 // Elastic twin: Docs/siem/elastic/truesignal-beacon-triggered.json. Docs: Docs/siem/detection-rules.md
 // Schedule: every 5m over the last 6m. Known beacons are never whitelisted by the Hub.
 event.module="truesignal" event.dataset="truesignal.alert"
+| event.kind!="pipeline_test"
 | event.action="beacon_triggered" truesignal.details.beacon.id=*
 | truesignal.whitelisted!="true" truesignal.known_scanner!="true"
 | case {
