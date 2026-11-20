@@ -302,7 +302,11 @@ func (in *Insights) projection(w http.ResponseWriter, r *http.Request) {
 		in.fail(w, err)
 		return
 	}
-	dto, err := p.Build(ported.WithWindowDays(r.Context(), days), evs, params)
+	ctx := ported.WithWindowDays(r.Context(), days)
+	if drills {
+		ctx = ported.WithIncludeDrills(ctx)
+	}
+	dto, err := p.Build(ctx, evs, params)
 	if err != nil {
 		Fail(w, http.StatusBadRequest, CodeInvalid, err.Error())
 		return

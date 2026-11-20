@@ -22,7 +22,9 @@ func attackerEvent(e domain.Event) bool {
 	if e.Source == domain.HubSource {
 		return false
 	}
-	if _, _, kind := e.EffectiveSource(); kind == domain.SourceKindDrill {
+	if e.Drill {
+		// The stored flag (F-001), not the source text. Drills carry no
+		// ATT&CK mapping (enrich), so include_drills never adds techniques.
 		return false
 	}
 	switch e.Trigger {

@@ -150,9 +150,9 @@ secrets; the KEK is not in it (see THREATMODEL.md R1).
   their `Fire drill` source. The Hub logs `deprecated: fire drill without the
   drill flag` with a running count (`legacy_drills_total`); rebuild those
   sensors on the current SDK.
-- Schema v6 adds `events.is_drill`, flags every stored event whose source is
+- Schema v7 adds `events.is_drill`, flags every stored event whose source is
   `Fire drill` and creates the `events_nondrill` index on first start (one
-  table scan; the `.pre-v6-…bak` snapshot is written first, §3).
+  table scan; the `.pre-v7-…bak` snapshot is written first, §3).
 
 ## 3. Upgrade the Hub
 
