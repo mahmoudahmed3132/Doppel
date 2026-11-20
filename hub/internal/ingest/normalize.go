@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -41,6 +42,9 @@ type RawEvent struct {
 	Source     string          `json:"source"`
 	Target     string          `json:"target"`
 	Details    json.RawMessage `json:"details"`
+	// Drill is the fire-drill flag (contract capability event.drill). nil
+	// means the SDK predates the flag; see Normalize for the legacy shim.
+	Drill *bool `json:"drill"`
 }
 
 // DecodeRawEvent strictly decodes one event object (unknown fields refused).
@@ -61,12 +65,33 @@ const (
 	WarnUnknownSeverity Warning = "unknown_severity"
 	WarnTimeReplaced    Warning = "occurred_at_replaced"
 	WarnDetailsDropped  Warning = "details_dropped"
+	// WarnLegacyDrill: an event without the drill flag whose source is the
+	// SDK drill source was treated as a drill (deprecated SDK behaviour).
+	WarnLegacyDrill Warning = "legacy_drill_source"
 )
+
+// legacyDrills counts events treated as drills by the compatibility shim.
+var legacyDrills atomic.Uint64
+
+// LegacyDrills returns how many events the legacy drill shim has flagged
+// since the Hub started (deprecation counter, F-001).
+func LegacyDrills() uint64 { return legacyDrills.Load() }
+
+// OriginalSeverityKey is the details key holding a drill's sensor-reported
+// severity; the stored severity of a drill is always info (F-001).
+const OriginalSeverityKey = "original_severity"
 
 // Normalize converts a raw sensor event into a domain event. It never
 // trusts sensor input: strings are made valid UTF-8, trimmed and clamped;
 // details are re-serialised and size-limited; severities and timestamps are
 // sanitised. code is non-empty when the event must be rejected.
+//
+// Fire drills (F-001): an event is a drill when it carries "drill": true, or
+// when it has no drill key at all (an SDK older than capability event.drill)
+// and its source is domain.DrillSource. An SDK that knows the flag always
+// sends the key, so an attacker-chosen source cannot turn its events into
+// drills. A drill is stored with severity info; the sensor's severity is
+// kept in details.original_severity.
 func Normalize(r *RawEvent, nodeID string, now time.Time) (ev *domain.Event, warns []Warning, code string) {
 	eventID, ok := ids.NormalizeUUIDv7(r.EventID)
 	if !ok {
@@ -107,6 +132,16 @@ func Normalize(r *RawEvent, nodeID string, now time.Time) (ev *domain.Event, war
 		source = "Unknown"
 	}
 	sourceIP, sourcePort, sourceKind := domain.ParseSource(source)
+	drill := r.Drill != nil && *r.Drill
+	if r.Drill == nil && source == domain.DrillSource {
+		drill = true
+		legacyDrills.Add(1)
+		warns = append(warns, WarnLegacyDrill)
+	}
+	if drill {
+		details[OriginalSeverityKey] = string(sev)
+		sev = domain.SeverityInfo
+	}
 	target := Clamp(r.Target)
 	if target == "" {
 		target = "Unknown"
@@ -115,8 +150,10 @@ func Normalize(r *RawEvent, nodeID string, now time.Time) (ev *domain.Event, war
 	if err != nil || len(raw) > MaxDetailsBytes {
 		// Only reachable when sensor_time pushed details over the limit.
 		fallback := map[string]any{"details_dropped": true}
-		if st, ok := details["sensor_time"]; ok {
-			fallback["sensor_time"] = st
+		for _, k := range []string{"sensor_time", OriginalSeverityKey} {
+			if v, ok := details[k]; ok {
+				fallback[k] = v
+			}
 		}
 		raw, _ = marshalDetails(fallback)
 		if !dropped {
@@ -138,6 +175,7 @@ func Normalize(r *RawEvent, nodeID string, now time.Time) (ev *domain.Event, war
 		Labels:     domain.SourceLabels(sourceIP),
 		Target:     target,
 		Details:    raw,
+		Drill:      drill,
 	}, warns, ""
 }
 

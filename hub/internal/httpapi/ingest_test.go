@@ -60,7 +60,7 @@ func newHub(t *testing.T, rate float64, burst int) *hubFixture {
 	auth := nodekey.NewAuthenticator(db)
 	lim := ratelimit.NewKeyed(rate, burst)
 	h := &Ingest{Auth: auth, Limiter: lim, Store: db, Pipeline: pipe, Liveness: live,
-		Version: Version{"truesignal-hub", "3.0.0", 3}, Log: log, Now: time.Now}
+		Version: Version{"truesignal-hub", "3.0.0", 3, Capabilities()}, Log: log, Now: time.Now}
 	mux := http.NewServeMux()
 	h.Register(mux)
 	srv := httptest.NewServer(mux)
@@ -96,7 +96,7 @@ func TestVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := io.ReadAll(resp.Body)
-	if strings.TrimSpace(string(b)) != `{"product":"truesignal-hub","version":"3.0.0","contract":3}` {
+	if strings.TrimSpace(string(b)) != `{"product":"truesignal-hub","version":"3.0.0","contract":3,"capabilities":["event.drill"]}` {
 		t.Fatalf("%s", b)
 	}
 }

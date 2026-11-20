@@ -195,6 +195,16 @@ ALTER TABLE events ADD COLUMN source_port INTEGER;
 ALTER TABLE events ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'other';
 CREATE INDEX events_source_ip ON events(source_ip, received_at);
 `, Hook: backfillEventSourcesTx},
+	// v7: fire drill as a first-class flag (F-001). Drill events stay stored
+	// (they prove the pipeline) but are excluded from analytics, so the
+	// partial index covers the default, non-drill queries. Backfill: events
+	// stored before the flag existed are drills when their source is the SDK's
+	// drill source (sensor.DrillSource).
+	{Version: 7, SQL: `
+ALTER TABLE events ADD COLUMN is_drill INTEGER NOT NULL DEFAULT 0;
+UPDATE events SET is_drill = 1 WHERE source = 'Fire drill';
+CREATE INDEX events_nondrill ON events (received_at) WHERE is_drill = 0;
+`},
 }
 
 // SchemaVersion is the schema version this build migrates to.

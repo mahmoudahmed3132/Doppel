@@ -40,7 +40,20 @@ type Version struct {
 	Product  string `json:"product"`
 	Version  string `json:"version"`
 	Contract int    `json:"contract"`
+	// Capabilities lists the contract additions this Hub accepts, so a newer
+	// SDK can feature-detect them (ENTERPRISE-SPEC §0.3). Additive.
+	Capabilities []string `json:"capabilities"`
 }
+
+// Contract capability strings advertised in /v3/version.
+const (
+	// CapEventDrill: the event object accepts the optional boolean "drill"
+	// (F-001). Hubs without it refuse the unknown field.
+	CapEventDrill = "event.drill"
+)
+
+// Capabilities returns the capabilities this Hub build advertises.
+func Capabilities() []string { return []string{CapEventDrill} }
 
 // IngestStore is the persistence the ingest handlers need directly.
 type IngestStore interface {
@@ -204,6 +217,11 @@ func (h *Ingest) events(w http.ResponseWriter, r *http.Request, nodeID string) {
 			continue
 		}
 		for _, wn := range warns {
+			if wn == ingest.WarnLegacyDrill {
+				h.Log.Warn("deprecated: fire drill without the drill flag, treated as a drill by its source",
+					"node_id", nodeID, "sensor_id", ev.SensorID, "trigger", ev.Trigger, "legacy_drills_total", ingest.LegacyDrills())
+				continue
+			}
 			h.Log.Warn("event normalised", "node_id", nodeID, "sensor_id", ev.SensorID, "trigger", ev.Trigger, "warning", string(wn))
 		}
 		res, err := h.Pipeline.Process(ctx, ev)
