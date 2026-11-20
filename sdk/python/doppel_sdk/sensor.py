@@ -21,7 +21,18 @@ from typing import Any, Callable, Mapping, Optional, Protocol
 
 from .client import PATH_EVENTS, PATH_HEARTBEATS, PATH_STOPPING, REQUEST_TIMEOUT, HubClient, HubError, ingest_response, retryable
 from .config import Config, ConfigError
-from .events import DRILL_SOURCE, MAX_DETAILS_BYTES, Details, Severity, bound_details, clamp_field, encode_details, now_rfc3339
+from .events import (
+    DRILL_SOURCE,
+    MAX_BATCH_BYTES,
+    MAX_DETAILS_BYTES,
+    Details,
+    Severity,
+    bound_details_sized,
+    clamp_field,
+    encode_details,
+    now_rfc3339,
+    wire_size,
+)
 from .eventqueue import EventQueue
 from .uuid7 import UUID7
 
@@ -118,11 +129,15 @@ class Sensor:
         self.report_severity(self.config.default_severity, trigger, source, target, details)
 
     def report_severity(self, severity: Severity, trigger: str, source: str, target: str, details: Details = None) -> None:
-        self._q.push(self._build(severity, trigger, source, target, details))
+        self._q.push(*self._build_sized(severity, trigger, source, target, details))
 
     # ---- internals --------------------------------------------------------
 
     def _build(self, severity: Any, trigger: str, source: str, target: str, details: Details) -> dict:
+        return self._build_sized(severity, trigger, source, target, details)[0]
+
+    def _build_sized(self, severity: Any, trigger: str, source: str, target: str, details: Details) -> "tuple[dict, int]":
+        """Builds an event and returns it with its wire_size bound."""
         try:
             sev = Severity(severity)
         except ValueError:
@@ -134,14 +149,14 @@ class Sensor:
             self.log(logging.WARNING, "event details not encodable, sending marker", trigger=trigger, error=str(e))
             det = {"details_encode_error": True}
         try:
-            bounded = bound_details(det)
+            bounded, dsize = bound_details_sized(det)
         except (TypeError, ValueError) as e:
             self.log(logging.WARNING, "event details not encodable, sending marker", trigger=trigger, error=str(e))
-            bounded = {"details_encode_error": True}
+            bounded, dsize = {"details_encode_error": True}, len('{"details_encode_error":true}')
         if bounded is not det and "details_encode_error" not in bounded:
             self.log(logging.WARNING, "event details too large, sending marker", trigger=trigger, limit=MAX_DETAILS_BYTES)
         det = bounded
-        return {
+        ev = {
             "event_id": self._ids.next(),
             "sensor_id": self.config.sensor_id,
             "trigger": trigger,
@@ -151,9 +166,13 @@ class Sensor:
             "target": clamp_field(target),
             "details": det,
         }
+        return ev, wire_size(ev, dsize)
 
     def _drill_event(self, d: Drill) -> dict:
-        return self._build(d.severity or self.config.default_severity, d.trigger, DRILL_SOURCE, d.target, d.details)
+        return self._drill_sized(d)[0]
+
+    def _drill_sized(self, d: Drill) -> "tuple[dict, int]":
+        return self._build_sized(d.severity or self.config.default_severity, d.trigger, DRILL_SOURCE, d.target, d.details)
 
     def _backoff(self, attempt: int) -> float:
         d = min(self._opts.backoff_base * (2 ** (attempt - 1)), self._opts.backoff_cap)
@@ -166,6 +185,16 @@ class Sensor:
             try:
                 out = self._client.post(PATH_EVENTS, {"events": batch})
             except Exception as err:  # HubError or network/TLS error
+                if isinstance(err, HubError) and err.status == 413 and len(batch) > 1:
+                    # The batch byte budget keeps bodies under the Hub's limit,
+                    # but a proxy in front of the Hub may enforce a lower one.
+                    # Halve rather than drop; only a single event that is still
+                    # too large is lost.
+                    mid = len(batch) // 2
+                    self.log(logging.WARNING, "event batch too large, splitting", events=len(batch))
+                    self._deliver(batch[:mid], abort)
+                    self._deliver(batch[mid:], abort)
+                    return
                 if not retryable(err):
                     self.log(logging.ERROR, "event batch refused, dropping", events=len(batch), error=str(err))
                     self._q.add_dropped(len(batch))
@@ -198,9 +227,14 @@ class Sensor:
                 deadline = time.monotonic() + o.batch_delay
                 while not flushing.is_set() and not abort.is_set():
                     left = deadline - time.monotonic()
-                    if left <= 0 or self._q.wait(left, o.batch_size) >= o.batch_size:
+                    if left <= 0:
                         break
-            batch = self._q.pop(o.batch_size)
+                    self._q.wait(left, o.batch_size, MAX_BATCH_BYTES)
+                    if self._q.full(o.batch_size, MAX_BATCH_BYTES):
+                        break
+            # A batch holds at most batch_size events and MAX_BATCH_BYTES of
+            # encoded events, so it stays under the Hub's body limit.
+            batch = self._q.pop(o.batch_size, MAX_BATCH_BYTES)
             if not batch:
                 if flushing.is_set():
                     return
@@ -287,7 +321,7 @@ class Sensor:
                 while pending and not reason:
                     sig = pending.pop(0)
                     if sig == "USR1":
-                        self._q.push(self._drill_event(spec.drill))
+                        self._q.push(*self._drill_sized(spec.drill))
                         self.log(logging.INFO, "fire drill triggered", trigger=spec.drill.trigger)
                     else:
                         reason = f"received SIG{sig}"

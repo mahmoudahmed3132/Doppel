@@ -34,13 +34,26 @@ class MockHub:
     def __init__(self):
         self.requests: list = []
         self.scripts: dict = {}
+        self.max_body = 0  # events bodies larger than this get 413; 0 = no limit
+        self.too_large = 0  # events requests answered 413 because of max_body
         self.lock = threading.Lock()
         hub = self
 
         class H(BaseHTTPRequestHandler):
             def do_POST(self):
                 n = int(self.headers.get("Content-Length", "0"))
-                body = json.loads(self.rfile.read(n) or b"{}")
+                raw = self.rfile.read(n)
+                if hub.max_body and self.path == "/v3/ingest/events" and len(raw) > hub.max_body:
+                    with hub.lock:
+                        hub.too_large += 1
+                    data = b'{"ok":false,"error":"body_too_large","message":"request body too large"}'
+                    self.send_response(413)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                body = json.loads(raw or b"{}")
                 with hub.lock:
                     hub.requests.append((self.path, dict(self.headers), body))
                     script = hub.scripts.get(self.path) or []
@@ -171,6 +184,37 @@ class UnitTests(unittest.TestCase):
         held = s._q.pop(10)
         self.assertTrue(all(len(dumps(e["details"])) <= MAX_DETAILS_BYTES and len(e["source"].encode()) <= MAX_FIELD_BYTES for e in held))
 
+    def test_queue_byte_budget(self):
+        q = EventQueue(10)
+        for i in range(5):
+            q.push(i, 100 << 10)
+        self.assertTrue(q.full(100, 240 << 10))
+        self.assertEqual([len(q.pop(100, 240 << 10)) for _ in range(3)], [2, 2, 1])
+        q.push("huge", (240 << 10) + 1)  # an item over the budget still goes alone
+        q.push("next", 10)
+        self.assertEqual(q.pop(100, 240 << 10), ["huge"])
+        self.assertEqual(q.pop(100, 240 << 10), ["next"])
+        self.assertFalse(q.full(1, 1))
+        q2 = EventQueue(2)
+        for i in range(5):
+            q2.push(i, 7)
+        self.assertEqual(q2._bytes, 14)  # eviction keeps the byte count right
+
+    def test_wire_size_is_upper_bound(self):
+        import logging
+        from doppel_sdk.events import MAX_DETAILS_BYTES, dumps
+        from doppel_sdk.sensor import Options as Opts, Sensor
+        cfg = Config.load({"TS_HUB_ENDPOINT": "https://hub", "TS_NODE_KEY": "k", "TS_SENSOR_ID": "ts-sensor-demo"})
+        quiet = logging.getLogger("test-quiet")
+        quiet.addHandler(logging.NullHandler())
+        quiet.propagate = False
+        s = Sensor(cfg, None, Opts(), quiet)
+        for txt in ("", "plain", "\x01" * 400, '"\\' * 200, "\u00e9" * 300, "\U0001f600" * 100, "\u2028" * 100):
+            for det in (None, {"v": txt}, [("k" + txt, txt)], {"v": "\x00" * (MAX_DETAILS_BYTES // 6 - 10)}):
+                ev, size = s._build_sized(Severity.CRITICAL, "t_" + txt[:32], txt, txt, det)
+                enc = len(dumps({"events": [ev, ev]})) - len('{"events":[]}')
+                self.assertLessEqual(enc, 2 * size, repr(txt[:16]))
+
     def test_limiter(self):
         t = [0.0]
         lim = SourceLimiter(10, max_sources=2, clock=lambda: t[0])
@@ -248,6 +292,69 @@ class SensorTests(unittest.TestCase):
         hb = self.hub.bodies("/v3/ingest/heartbeats")[0]
         self.assertEqual(hb, {"sensor_id": "ts-sensor-x", "config_revision": "rev_12345678", "sdk_version": "3.0.0"})
         self.assertEqual(self.hub.bodies("/v3/ingest/stopping"), [{"sensor_id": "ts-sensor-x", "reason": "received SIGTERM"}])
+
+    def _deliver_all(self, n, report, max_body=256 << 10):
+        """Runs a sensor that calls report(s) once against a Hub refusing
+        bodies over max_body; returns (events delivered, dropped_events)."""
+        self.hub.max_body = max_body
+        o = fast(self.hub)
+
+        def body(s, stop):
+            report(s)
+            stop.wait()
+
+        t = threading.Thread(target=lambda: setattr(self, "rc", run(Spec(DRILL, body), o)), daemon=True)
+        t.start()
+        try:
+            self.assertTrue(self.hub.wait(lambda: len(self.hub.events()) >= n, timeout=15))
+            time.sleep(0.5)  # at least one heartbeat after the last delivery
+        finally:
+            o.signal_queue.put("TERM")
+            t.join(10)
+        self.assertEqual(self.rc, 0)
+        dropped = sum(b.get("dropped_events", 0) for b in self.hub.bodies("/v3/ingest/heartbeats"))
+        return self.hub.events(), dropped
+
+    def test_large_events_split_across_batches(self):
+        # 100 events of ~60 KiB fit the 100-event batch size but not the Hub's
+        # 256 KiB body limit; the byte budget keeps every batch under it.
+        blob = "A" * (60 << 10)
+
+        def report(s):
+            for i in range(100):
+                s.report("file_read", "10.0.0.5", "/srv/share/payroll.xlsx", [("i", i), ("blob", blob)])
+
+        events, dropped = self._deliver_all(100, report)
+        self.assertEqual(self.hub.too_large, 0)
+        self.assertEqual(dropped, 0)
+        self.assertEqual(sorted(e["details"]["i"] for e in events), list(range(100)))
+        self.assertGreaterEqual(len(self.hub.bodies("/v3/ingest/events")), 25)
+
+    def test_escaping_cannot_overflow_batch(self):
+        # Source and target are attacker-influenced; control characters are
+        # written as 6-byte escapes and must not push a batch over the limit.
+        nasty = "\x01" * 256
+
+        def report(s):
+            for i in range(100):
+                s.report("http_request", nasty, nasty, {"i": i, "ua": "\x02" * 1024})
+
+        events, dropped = self._deliver_all(100, report)
+        self.assertEqual((self.hub.too_large, dropped), (0, 0))
+        self.assertEqual(sorted(e["details"]["i"] for e in events), list(range(100)))
+
+    def test_413_batch_is_split(self):
+        # A proxy with a lower body limit answers 413: halve, don't drop.
+        blob = "B" * (30 << 10)
+
+        def report(s):
+            for i in range(40):
+                s.report("file_read", "10.0.0.5", "/srv/share/x", {"i": i, "blob": blob})
+
+        events, dropped = self._deliver_all(40, report, max_body=100 << 10)
+        self.assertGreater(self.hub.too_large, 0)
+        self.assertEqual(dropped, 0)
+        self.assertEqual(sorted(e["details"]["i"] for e in events), list(range(40)))
 
     def test_retry_then_success_and_retry_after(self):
         self.hub.scripts["/v3/ingest/events"] = [(503, None, {}), (429, {"ok": False, "error": "rate_limited"}, {"Retry-After": "0"}), (500, None, {})]

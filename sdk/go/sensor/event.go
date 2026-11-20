@@ -135,6 +135,29 @@ func clampField(s string) string {
 	return s[:cut]
 }
 
+// maxBatchBytes is the encoded-size budget of one event batch. The Hub
+// refuses request bodies over 256 KiB with 413 body_too_large, which is not
+// retryable; the 16 KiB margin covers the {"events":[...]} envelope.
+const maxBatchBytes = 240 << 10
+
+// eventOverhead bounds the encoded size of an event's fixed parts: key names
+// and punctuation (about 110 bytes), event_id (36), severity (at most 8),
+// occurred_at (at most 35) and the comma separating it from the next event.
+const eventOverhead = 256
+
+// wireSize is an upper bound on the encoded size of e inside a batch.
+//
+// Details is already encoded JSON (compact and HTML-escaped by encoding/json
+// in build), so the client re-emits it byte for byte and it counts at its
+// length. The string fields are counted at six times their length because
+// json.Marshal can expand a single byte to six (\u003c for <, > and &, control
+// bytes, invalid UTF-8; U+2028/U+2029 go from 3 bytes to 6). Source and target
+// often carry attacker-supplied text, so a len()-only estimate could be pushed
+// past the Hub limit on purpose, getting a whole batch refused and dropped.
+func (e *wireEvent) wireSize() int {
+	return eventOverhead + len(e.Details) + 6*(len(e.SensorID)+len(e.Trigger)+len(e.Source)+len(e.Target))
+}
+
 // wireEvent is the contract v3 event object (§4.2).
 type wireEvent struct {
 	EventID    string          `json:"event_id"`
