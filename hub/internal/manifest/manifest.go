@@ -178,13 +178,14 @@ const (
 	EnvSensorID       = "TS_SENSOR_ID"
 	EnvConfigRevision = "TS_CONFIG_REVISION"
 	EnvTestMode       = "TS_TEST_MODE"
+	EnvDevAllowHTTP   = "TS_DEV_ALLOW_HTTP"
 	EnvCaptureKey     = "TS_CAPTURE_KEY"
 	EnvHoneytoken     = "TS_HONEYTOKEN"
 	EnvBeaconKey      = "TS_BEACON_KEY"
 )
 
 // AlwaysReserved are set by the Hub for every sensor.
-var AlwaysReserved = []string{EnvHubEndpoint, EnvNodeKey, EnvSensorID, EnvConfigRevision, EnvTestMode}
+var AlwaysReserved = []string{EnvHubEndpoint, EnvNodeKey, EnvSensorID, EnvConfigRevision, EnvTestMode, EnvDevAllowHTTP}
 
 // OptionalSecrets are set only when a manifest declares them hub_reserved.
 var OptionalSecrets = []string{EnvCaptureKey, EnvHoneytoken, EnvBeaconKey}

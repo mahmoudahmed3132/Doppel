@@ -71,6 +71,7 @@ type Compiler struct {
 	Keys        MasterKeys
 	Honeytokens ported.HoneytokenService // nil: File Canary renders fail unless redacted
 	Options     manifest.Options
+	AllowHTTP   bool // development only: inject TS_DEV_ALLOW_HTTP=true for http:// public_endpoint
 	Log         *slog.Logger
 }
 
@@ -362,6 +363,9 @@ func (c *Compiler) renderSensor(ctx context.Context, node domain.Node, sn domain
 	env[manifest.EnvSensorID] = sn.ID
 	env[manifest.EnvConfigRevision] = rev
 	env[manifest.EnvTestMode] = "false"
+	if c.AllowHTTP && strings.HasPrefix(strings.ToLower(endpoint), "http://") {
+		env[manifest.EnvDevAllowHTTP] = "true"
+	}
 	for i := range m.Config {
 		k := &m.Config[i]
 		if !k.HubReserved {

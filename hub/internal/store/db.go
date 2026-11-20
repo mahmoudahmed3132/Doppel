@@ -39,6 +39,9 @@ type Options struct {
 	Now    func() time.Time
 	// Migrations overrides the built-in schema (tests only).
 	Migrations []Migration
+	// ObserveQuery receives the execution duration of each SQLite query
+	// when set (used by /metrics doppel_db_query_seconds).
+	ObserveQuery func(time.Duration)
 }
 
 // ErrSchemaTooNew is returned when the database was written by a newer Hub.
@@ -67,7 +70,7 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 	}
 	q.Set("_txlock", "immediate")
 	dsn := "file:" + (&url.URL{Path: path}).EscapedPath() + "?" + q.Encode()
-	sqldb, err := sql.Open("sqlite", dsn)
+	sqldb, err := openTimedSQLite(dsn, opts.ObserveQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +92,22 @@ func Open(ctx context.Context, path string, opts Options) (*DB, error) {
 
 // Close closes the database.
 func (db *DB) Close() error { return db.sql.Close() }
+
+// Ready checks that SQLite is reachable and the schema matches the Hub's
+// current migration version (used by GET /readyz).
+func (db *DB) Ready(ctx context.Context) error {
+	if err := db.sql.PingContext(ctx); err != nil {
+		return err
+	}
+	v, err := db.schemaVersion(ctx)
+	if err != nil {
+		return err
+	}
+	if v != SchemaVersion() {
+		return fmt.Errorf("schema version %d, expected %d", v, SchemaVersion())
+	}
+	return nil
+}
 
 // Migration is one schema step. Version numbers start at 1 and are dense.
 type Migration struct {

@@ -81,16 +81,17 @@ type Store interface {
 
 // Service is the admin authentication service.
 type Service struct {
-	store      Store
-	hasher     *Hasher
-	totp       ported.TOTP
-	lockout    *Lockout
-	log        *slog.Logger
-	now        func() time.Time
-	ttl        time.Duration
-	idle       time.Duration
-	requireMFA bool
-	override   string // TS_DASHBOARD_PASSWORD
+	store        Store
+	hasher       *Hasher
+	totp         ported.TOTP
+	lockout      *Lockout
+	log          *slog.Logger
+	now          func() time.Time
+	ttl          time.Duration
+	idle         time.Duration
+	requireMFA   bool
+	requireHTTPS bool
+	override     string // TS_DASHBOARD_PASSWORD
 
 	mu         sync.Mutex
 	setupToken string
@@ -106,6 +107,7 @@ type Options struct {
 	SessionTTL         time.Duration
 	SessionIdle        time.Duration
 	RequireMFA         bool
+	RequireHTTPS       bool
 	PasswordOverride   string
 	SetupTokenOverride string
 }
@@ -120,8 +122,8 @@ func New(o Options) (*Service, error) {
 	}
 	return &Service{
 		store: o.Store, hasher: o.Hasher, totp: o.TOTP, lockout: NewLockout(o.Now), log: o.Log, now: o.Now,
-		ttl: o.SessionTTL, idle: o.SessionIdle, requireMFA: o.RequireMFA, override: o.PasswordOverride,
-		setupToken: o.SetupTokenOverride,
+		ttl: o.SessionTTL, idle: o.SessionIdle, requireMFA: o.RequireMFA, requireHTTPS: o.RequireHTTPS,
+		override: o.PasswordOverride, setupToken: o.SetupTokenOverride,
 	}, nil
 }
 
@@ -203,10 +205,19 @@ func validatePassword(p string) error {
 // NormalizeEndpoint validates a Hub public endpoint URL and returns its
 // canonical form (scheme://host[:port][/path], no trailing slash).
 func NormalizeEndpoint(raw string) (string, error) {
+	return NormalizeEndpointWithPolicy(raw, true)
+}
+
+// NormalizeEndpointWithPolicy validates a Hub public endpoint URL and refuses
+// plain http:// unless allowHTTP is true (development mode only, H1/WP-4A).
+func NormalizeEndpointWithPolicy(raw string, allowHTTP bool) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil ||
 		u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || len(raw) > 512 {
 		return "", ErrInvalidEndpoint
+	}
+	if u.Scheme == "http" && !allowHTTP {
+		return "", fmt.Errorf("%w: https:// is required in production", ErrInvalidEndpoint)
 	}
 	u.Scheme, u.Host = strings.ToLower(u.Scheme), strings.ToLower(u.Host)
 	u.Path = strings.TrimRight(u.Path, "/")
@@ -235,7 +246,7 @@ func (s *Service) Setup(ctx context.Context, ip, token, password, endpoint strin
 	if err := validatePassword(password); err != nil {
 		return err
 	}
-	ep, err := NormalizeEndpoint(endpoint)
+	ep, err := NormalizeEndpointWithPolicy(endpoint, !s.requireHTTPS)
 	if err != nil {
 		return err
 	}

@@ -267,7 +267,7 @@ func setInt(kv map[string]*string, key string, v *int, min, max int, what string
 func (s *Service) Update(ctx context.Context, p Patch) (View, error) {
 	kv := map[string]*string{}
 	if p.PublicEndpoint != nil {
-		ep, err := auth.NormalizeEndpoint(*p.PublicEndpoint)
+		ep, err := auth.NormalizeEndpointWithPolicy(*p.PublicEndpoint, s.AllowHTTP)
 		if err != nil {
 			return View{}, invalid("public_endpoint: %v", err)
 		}
