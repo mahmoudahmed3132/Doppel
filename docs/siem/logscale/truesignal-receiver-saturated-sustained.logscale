@@ -3,6 +3,7 @@
 // Elastic twin: Docs/siem/elastic/truesignal-receiver-saturated-sustained.json
 // Schedule: every 5m over the last 16m.
 event.module="truesignal" event.dataset="truesignal.alert"
+| event.kind!="pipeline_test"
 | event.action="receiver_saturated"
 | truesignal.whitelisted!="true" truesignal.known_scanner!="true"
 | groupBy([host.id, host.name, truesignal.details.listener], function=[count(as=reports), max(truesignal.details.distinct_sources, as=max_distinct_sources)])

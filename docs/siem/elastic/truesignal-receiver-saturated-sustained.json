@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "index": [
     "logs-truesignal-*"
@@ -47,7 +47,7 @@
       ]
     }
   ],
-  "query": "event.dataset:\"truesignal.alert\" and event.action:\"receiver_saturated\" and not truesignal.whitelisted:true and not truesignal.known_scanner:true",
+  "query": "event.dataset:\"truesignal.alert\" and event.action:\"receiver_saturated\" and not truesignal.whitelisted:true and not truesignal.known_scanner:true and not event.kind:\"pipeline_test\"",
   "type": "threshold",
   "language": "kuery",
   "threshold": {

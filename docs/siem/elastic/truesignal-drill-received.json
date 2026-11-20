@@ -1,0 +1,35 @@
+{
+  "rule_id": "truesignal-drill-received",
+  "name": "TrueSignal fire drill received",
+  "description": "A Doppel fire drill reached the SIEM (event.kind: pipeline_test, labels.drill: true). Drills are sent by `doppel firedrill` (SIGUSR1) or a sensor in test mode to prove the sensor → Hub → SIEM path. Every alerting rule excludes them; this rule records that each drill arrived, for drill-success tracking (F-802). Informational, not an incident.",
+  "author": [
+    "TrueSignal"
+  ],
+  "license": "AGPL-3.0",
+  "version": 1,
+  "enabled": true,
+  "index": [
+    "logs-truesignal-*"
+  ],
+  "severity": "low",
+  "risk_score": 21,
+  "interval": "5m",
+  "from": "now-6m",
+  "max_signals": 100,
+  "tags": [
+    "TrueSignal",
+    "Deception",
+    "Pipeline test"
+  ],
+  "references": [
+    "https://github.com/mahmoudahmed3132/TrueSignal/blob/main/Docs/siem/detection-rules.md#truesignal-drill-received"
+  ],
+  "false_positives": [
+    "None: every match is a drill. A drill outside a planned test window means someone with Docker access on the node (or the node key) sent it; check the Hub audit and the node."
+  ],
+  "note": "## Triage\n1. Expected after `doppel firedrill` on `host.name`: one alert per running sensor (`truesignal.sensor_id`). Fewer alerts than sensors means a broken path for the missing ones (sensor, node, Hub or SIEM output).\n2. `truesignal.details.original_severity` is the severity the sensor would have reported; the Hub stores drills as `info`.\n3. No drill was planned: someone ran `doppel firedrill` or sent SIGUSR1 on the node. Check who has Docker or root access there.",
+  "threat": [],
+  "query": "event.dataset:\"truesignal.alert\" and event.kind:\"pipeline_test\" and labels.drill:true",
+  "type": "query",
+  "language": "kuery"
+}

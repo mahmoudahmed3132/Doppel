@@ -2,6 +2,7 @@
 // Severity follows truesignal.severity (default critical). Elastic twin: Docs/siem/elastic/truesignal-decoy-login.json
 // Schedule: every 5m over the last 6m.
 event.module="truesignal" event.dataset="truesignal.alert"
+| event.kind!="pipeline_test"
 | event.action=/_login$|^web_login/ event.action!="honeytoken_used"
 | !array:contains("threat.tactic.id[]", value="TA0008")
 | truesignal.whitelisted!="true" truesignal.known_scanner!="true"

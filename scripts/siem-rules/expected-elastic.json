@@ -119,5 +119,12 @@
         "count": 6
       }
     ]
+  },
+  "truesignal-drill-received": {
+    "cases": [
+      "drill_ssh_login",
+      "drill_beacon_firedrill",
+      "drill_tcp_connection"
+    ]
   }
 }

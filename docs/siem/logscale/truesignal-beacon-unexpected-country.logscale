@@ -5,6 +5,7 @@
 // [NOT IN PROJECT] Replace "EG" with every country your staff, VPN egress and cloud regions use.
 // Schedule: every 5m over the last 6m.
 event.module="truesignal" event.dataset="truesignal.alert"
+| event.kind!="pipeline_test"
 | event.action="beacon_triggered" truesignal.details.beacon.id=*
 | case {
     truesignal.source_geo.basis="client_subnet";

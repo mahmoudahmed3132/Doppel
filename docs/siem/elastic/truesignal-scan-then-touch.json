@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "index": [
     "logs-truesignal-*"
@@ -46,7 +46,7 @@
       ]
     }
   ],
-  "query": "sequence by source.ip with maxspan=1h\n  [any where event.dataset == \"truesignal.alert\" and event.action in (\"network_scan_detected\", \"icmp_scan_received\") and truesignal.whitelisted == false and truesignal.known_scanner == false]\n  [any where event.dataset == \"truesignal.alert\" and event.kind == \"alert\" and event.severity >= 47 and not event.action in (\"network_scan_detected\", \"icmp_scan_received\") and not event.action like \"*_connection\" and truesignal.whitelisted == false and truesignal.known_scanner == false]",
+  "query": "sequence by source.ip with maxspan=1h\n  [any where event.dataset == \"truesignal.alert\" and event.kind != \"pipeline_test\" and event.action in (\"network_scan_detected\", \"icmp_scan_received\") and truesignal.whitelisted == false and truesignal.known_scanner == false]\n  [any where event.dataset == \"truesignal.alert\" and event.kind == \"alert\" and event.severity >= 47 and not event.action in (\"network_scan_detected\", \"icmp_scan_received\") and not event.action like \"*_connection\" and truesignal.whitelisted == false and truesignal.known_scanner == false]",
   "type": "eql",
   "language": "eql"
 }

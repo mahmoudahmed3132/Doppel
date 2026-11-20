@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "severity": "high",
   "risk_score": 73,
@@ -50,7 +50,7 @@
       ]
     }
   ],
-  "query": "FROM logs-truesignal-*\n| WHERE event.dataset == \"truesignal.alert\" AND event.action IN (\"sensor_heartbeat_lost\", \"sensor_recovered\") AND truesignal.whitelisted == false AND truesignal.known_scanner == false\n| EVAL lost = CASE(event.action == \"sensor_heartbeat_lost\", @timestamp, null), recovered = CASE(event.action == \"sensor_recovered\", @timestamp, null)\n| STATS last_lost = MAX(lost), last_recovered = MAX(recovered) BY host.id, host.name, truesignal.sensor_id\n| WHERE last_lost IS NOT NULL AND (last_recovered IS NULL OR last_recovered < last_lost) AND last_lost <= NOW() - 30 minutes\n| KEEP host.id, host.name, truesignal.sensor_id, last_lost, last_recovered",
+  "query": "FROM logs-truesignal-*\n| WHERE event.dataset == \"truesignal.alert\" AND event.kind != \"pipeline_test\" AND event.action IN (\"sensor_heartbeat_lost\", \"sensor_recovered\") AND truesignal.whitelisted == false AND truesignal.known_scanner == false\n| EVAL lost = CASE(event.action == \"sensor_heartbeat_lost\", @timestamp, null), recovered = CASE(event.action == \"sensor_recovered\", @timestamp, null)\n| STATS last_lost = MAX(lost), last_recovered = MAX(recovered) BY host.id, host.name, truesignal.sensor_id\n| WHERE last_lost IS NOT NULL AND (last_recovered IS NULL OR last_recovered < last_lost) AND last_lost <= NOW() - 30 minutes\n| KEEP host.id, host.name, truesignal.sensor_id, last_lost, last_recovered",
   "type": "esql",
   "language": "esql"
 }

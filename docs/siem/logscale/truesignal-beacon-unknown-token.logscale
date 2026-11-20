@@ -2,6 +2,7 @@
 // Elastic twin: Docs/siem/elastic/truesignal-beacon-unknown-token.json
 // Schedule: every 5m over the last 6m.
 event.module="truesignal" event.dataset="truesignal.alert"
+| event.kind!="pipeline_test"
 | event.action="beacon_triggered" truesignal.details.beacon_known="false"
 | truesignal.whitelisted!="true" truesignal.known_scanner!="true"
 | table([@timestamp, host.name, source.ip, truesignal.details.token, truesignal.details.channel])

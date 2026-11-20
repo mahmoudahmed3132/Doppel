@@ -6,7 +6,7 @@
     "TrueSignal"
   ],
   "license": "AGPL-3.0",
-  "version": 1,
+  "version": 2,
   "enabled": true,
   "index": [
     "logs-truesignal-*"
@@ -30,7 +30,7 @@
   ],
   "note": "## Triage\n1. DNS channel with an internal `source.ip`: it is one of your resolvers. Pull its query log for `truesignal.details.query_name` at `@timestamp` to get the real client.\n2. `truesignal.source_asset.name` names the inventoried host or egress range; for an egress range, map it back through firewall/NAT logs (Palo Alto, FortiGate).\n3. HTTP channel: `source.ip` (or `truesignal.details.proxy`) is the client or your proxy; use proxy logs for the user.\n4. Contain the client host, then review what else it touched (other TrueSignal alerts from the same `source.ip`, EDR timeline).",
   "threat": [],
-  "query": "event.dataset:\"truesignal.alert\" and event.action:\"beacon_triggered\" and truesignal.details.beacon.id:* and (source.ip:(\"10.0.0.0/8\" or \"172.16.0.0/12\" or \"192.168.0.0/16\" or \"100.64.0.0/10\" or \"fc00::/7\") or truesignal.source_asset.name:*)",
+  "query": "event.dataset:\"truesignal.alert\" and event.action:\"beacon_triggered\" and truesignal.details.beacon.id:* and (source.ip:(\"10.0.0.0/8\" or \"172.16.0.0/12\" or \"192.168.0.0/16\" or \"100.64.0.0/10\" or \"fc00::/7\") or truesignal.source_asset.name:*) and not event.kind:\"pipeline_test\"",
   "type": "query",
   "language": "kuery"
 }

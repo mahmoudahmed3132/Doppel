@@ -53,6 +53,12 @@ func TestEnrichWithAllModules(t *testing.T) {
 	if out.Event.Source != ev.Source || string(out.Event.Details) != `{"k":1}` {
 		t.Fatal("enrichment must not modify the event")
 	}
+
+	// A fire drill is not an attacker technique: no ATT&CK mapping (F-001).
+	ev.Drill = true
+	if out := e.Enrich(context.Background(), ev); out.Enrichment.Attack != nil || out.NodeAlias != "dmz-1" {
+		t.Fatalf("drill enrichment %+v", out)
+	}
 }
 
 func TestEnrichAbsentOrUnmatched(t *testing.T) {
