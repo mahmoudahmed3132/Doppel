@@ -195,6 +195,20 @@ ALTER TABLE events ADD COLUMN source_port INTEGER;
 ALTER TABLE events ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'other';
 CREATE INDEX events_source_ip ON events(source_ip, received_at);
 `, Hook: backfillEventSourcesTx},
+	// v7: PCI 10.7.2 liveness alerting, config drift and silence windows (F-005).
+	{Version: 7, SQL: `
+ALTER TABLE nodes ADD COLUMN ever_online INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE nodes ADD COLUMN offline_alerted_at INTEGER;
+ALTER TABLE nodes ADD COLUMN drift_since INTEGER;
+ALTER TABLE nodes ADD COLUMN drift_alerted_at INTEGER;
+UPDATE nodes SET ever_online = 1
+	WHERE last_seen_at IS NOT NULL
+	   OR id IN (SELECT DISTINCT node_id FROM sensors WHERE ever_online = 1 OR last_heartbeat_at IS NOT NULL);
+UPDATE nodes SET drift_since = COALESCE(last_seen_at, created_at)
+	WHERE desired_revision != '' AND desired_revision != applied_revision;
+ALTER TABLE sensors ADD COLUMN silenced_reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE sensors ADD COLUMN silenced_until INTEGER;
+`},
 }
 
 // SchemaVersion is the schema version this build migrates to.

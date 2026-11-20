@@ -35,15 +35,19 @@ func TestDefaultsAndUpdate(t *testing.T) {
 	s, _ := newSvc(t)
 	ctx := context.Background()
 	v := s.Get(ctx)
-	if v.RegistryURL != "https://registry.example/" || v.UpdateCheckHours != 24 || v.Retention.HistoryDays != 30 ||
-		v.Retention.ArchiveAfterDays != 0 || !v.SourceListsActive || len(v.Whitelist) != 0 {
+	if v.RegistryURL != "https://registry.example/" || v.UpdateCheckHours != 24 || v.ConfigDriftMinutes != 15 ||
+		v.Retention.HistoryDays != 30 || v.Retention.ArchiveAfterDays != 0 || !v.SourceListsActive || len(v.Whitelist) != 0 {
 		t.Fatalf("%+v", v)
+	}
+	if s.ConfigDriftTimeout(ctx) != 15*time.Minute {
+		t.Fatalf("drift timeout = %v", s.ConfigDriftTimeout(ctx))
 	}
 	if s.Whitelist() != nil {
 		t.Fatal("empty list must not match")
 	}
 	p := Patch{PublicEndpoint: ptr("https://Hub.Example.com/"), UpdateCheckHours: ptr(0),
-		Whitelist: &[]string{"10.0.0.7", " 10.0.0.7 ", "", "scanner.corp"}}
+		ConfigDriftMinutes: ptr(20),
+		Whitelist:          &[]string{"10.0.0.7", " 10.0.0.7 ", "", "scanner.corp"}}
 	p.Retention = &struct {
 		ArchiveAfterDays       *int `json:"archive_after_days"`
 		PurgeArchivedAfterDays *int `json:"purge_archived_after_days"`
@@ -53,9 +57,12 @@ func TestDefaultsAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.PublicEndpoint != "https://hub.example.com" || v.UpdateCheckHours != 0 || v.Retention.ArchiveAfterDays != 30 ||
-		strings.Join(v.Whitelist, ",") != "10.0.0.7,scanner.corp" {
+	if v.PublicEndpoint != "https://hub.example.com" || v.UpdateCheckHours != 0 || v.ConfigDriftMinutes != 20 ||
+		v.Retention.ArchiveAfterDays != 30 || strings.Join(v.Whitelist, ",") != "10.0.0.7,scanner.corp" {
 		t.Fatalf("%+v", v)
+	}
+	if s.ConfigDriftTimeout(ctx) != 20*time.Minute {
+		t.Fatalf("drift timeout = %v", s.ConfigDriftTimeout(ctx))
 	}
 	if !s.Whitelist().Match("10.0.0.7:4444") || s.Whitelist().Match("10.0.0.8") {
 		t.Fatal("whitelist not applied immediately")
@@ -76,6 +83,8 @@ func TestValidation(t *testing.T) {
 		{RegistryURL: ptr("http://registry.example/")}, // http outside development
 		{CatalogueRefreshHours: ptr(0)},
 		{UpdateCheckHours: ptr(-1)},
+		{ConfigDriftMinutes: ptr(0)},
+		{ConfigDriftMinutes: ptr(1441)},
 		{Whitelist: &[]string{"ok", "bad\nentry"}},
 		{KnownScanners: &[]string{strings.Repeat("a", 300)}},
 	}

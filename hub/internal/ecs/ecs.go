@@ -63,8 +63,8 @@ func ecsClassify(trigger string, allowed bool) (string, []string) {
 		kind = "event"
 	}
 	switch {
-	case strings.HasPrefix(trigger, "sensor_"):
-		// Hub-generated liveness (sensor_stopped, sensor_heartbeat_lost, ...).
+	case strings.HasPrefix(trigger, "sensor_") || strings.HasPrefix(trigger, "node_") || trigger == domain.TriggerConfigDrift:
+		// Hub-generated liveness and fleet health (sensor_*, node_*, config_drift).
 		return "event", []string{"host"}
 	case strings.HasSuffix(trigger, "_login") || strings.HasPrefix(trigger, "web_login") || trigger == "honeytoken_used":
 		return kind, []string{"intrusion_detection", "authentication"}

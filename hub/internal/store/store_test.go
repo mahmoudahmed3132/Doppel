@@ -427,3 +427,47 @@ func TestBeaconHoneytokenStoresAndFactoryReset(t *testing.T) {
 		t.Fatal("honeytokens not purged")
 	}
 }
+
+func TestSensorSilenceAndNodeLiveness(t *testing.T) {
+	db, _ := openTest(t)
+	ctx := context.Background()
+	seedNode(t, db, "node-00000001")
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	until := now.Add(2 * time.Hour)
+
+	if err := db.SetSensorSilence(ctx, "node-00000001", "ts-sensor-a", true, "Planned maintenance", &until); err != nil {
+		t.Fatal(err)
+	}
+	s, err := db.Sensor(ctx, "node-00000001", "ts-sensor-a")
+	if err != nil || !s.Silenced || s.SilencedReason != "Planned maintenance" || s.SilencedUntil == nil || !s.SilencedUntil.Equal(until) {
+		t.Fatalf("silenced sensor: %+v err=%v", s, err)
+	}
+	if err := db.SetSensorSilence(ctx, "node-00000001", "ts-sensor-a", false, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = db.Sensor(ctx, "node-00000001", "ts-sensor-a")
+	if s.Silenced || s.SilencedReason != "" || s.SilencedUntil != nil {
+		t.Fatalf("unsilenced sensor: %+v", s)
+	}
+
+	if err := db.SaveNodeLiveness(ctx, "node-00000001", NodeLiveness{
+		EverOnline:       true,
+		OfflineAlertedAt: &now,
+		DriftSince:       &now,
+		DriftAlertedAt:   &now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	n2, err := db.Node(ctx, "node-00000001")
+	if err != nil || !n2.EverOnline || n2.OfflineAlertedAt == nil || n2.DriftSince == nil || n2.DriftAlertedAt == nil {
+		t.Fatalf("node liveness: %+v err=%v", n2, err)
+	}
+	// SetNodeRevisions clears drift state when desired and applied match.
+	if err := db.SetNodeRevisions(ctx, "node-00000001", "rev_11112222", "rev_11112222"); err != nil {
+		t.Fatal(err)
+	}
+	n3, _ := db.Node(ctx, "node-00000001")
+	if n3.DriftSince != nil || n3.DriftAlertedAt != nil {
+		t.Fatalf("drift state not cleared on revision sync: %+v", n3)
+	}
+}

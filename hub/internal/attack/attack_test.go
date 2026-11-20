@@ -29,7 +29,7 @@ func TestFor(t *testing.T) {
 			t.Errorf("For(%q) = %v %v, want %s", trigger, m.Primary.ID, ok, want)
 		}
 	}
-	for _, unmapped := range []string{"web_page_view", "sensor_heartbeat_lost", "sensor_stopped", "sensor_recovered", "custom_anomaly_detected", ""} {
+	for _, unmapped := range []string{"web_page_view", "sensor_heartbeat_lost", "sensor_stopped", "sensor_recovered", "sensor_tamper_suspected", "node_offline", "node_online", "config_drift", "custom_anomaly_detected", ""} {
 		if _, ok := For(unmapped); ok {
 			t.Errorf("For(%q) is mapped; it must not be", unmapped)
 		}

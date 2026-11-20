@@ -40,20 +40,25 @@ func (s Severity) Rank() int {
 
 // Triggers that only the Hub may raise.
 const (
-	TriggerHoneytokenUsed      = "honeytoken_used"
-	TriggerSensorStopped       = "sensor_stopped"
-	TriggerSensorHeartbeatLost = "sensor_heartbeat_lost"
-	TriggerSensorRecovered     = "sensor_recovered"
-	TriggerBeaconTriggered     = "beacon_triggered"
+	TriggerHoneytokenUsed        = "honeytoken_used"
+	TriggerSensorStopped         = "sensor_stopped"
+	TriggerSensorHeartbeatLost   = "sensor_heartbeat_lost"
+	TriggerSensorRecovered       = "sensor_recovered"
+	TriggerSensorTamperSuspected = "sensor_tamper_suspected"
+	TriggerBeaconTriggered       = "beacon_triggered"
 	// TriggerNodeApplyFailed: a node could not apply its desired revision
 	// (rolled back or failed), so its decoys may not run as configured.
 	TriggerNodeApplyFailed = "node_apply_failed"
+	TriggerNodeOffline     = "node_offline"
+	TriggerNodeOnline      = "node_online"
+	TriggerConfigDrift     = "config_drift"
 )
 
 // IsReservedTrigger reports whether a sensor is forbidden to emit t.
 func IsReservedTrigger(t string) bool {
 	switch t {
-	case TriggerHoneytokenUsed, TriggerSensorStopped, TriggerSensorHeartbeatLost, TriggerSensorRecovered, TriggerNodeApplyFailed:
+	case TriggerHoneytokenUsed, TriggerSensorStopped, TriggerSensorHeartbeatLost, TriggerSensorRecovered,
+		TriggerSensorTamperSuspected, TriggerNodeApplyFailed, TriggerNodeOffline, TriggerNodeOnline, TriggerConfigDrift:
 		return true
 	}
 	return false
@@ -103,14 +108,18 @@ type Event struct {
 
 // Node is a managed host.
 type Node struct {
-	ID              string     `json:"id"`
-	Alias           string     `json:"alias"`
-	Tags            []string   `json:"tags"`
-	KeyHash         []byte     `json:"-"`
-	CreatedAt       time.Time  `json:"created_at"`
-	LastSeenAt      *time.Time `json:"last_seen_at"`
-	DesiredRevision string     `json:"desired_revision"`
-	AppliedRevision string     `json:"applied_revision"`
+	ID               string     `json:"id"`
+	Alias            string     `json:"alias"`
+	Tags             []string   `json:"tags"`
+	KeyHash          []byte     `json:"-"`
+	CreatedAt        time.Time  `json:"created_at"`
+	LastSeenAt       *time.Time `json:"last_seen_at"`
+	DesiredRevision  string     `json:"desired_revision"`
+	AppliedRevision  string     `json:"applied_revision"`
+	EverOnline       bool       `json:"-"`
+	OfflineAlertedAt *time.Time `json:"-"`
+	DriftSince       *time.Time `json:"drift_since,omitempty"`
+	DriftAlertedAt   *time.Time `json:"-"`
 }
 
 // NodeOnlineWindow is three SDK heartbeat intervals.
@@ -138,6 +147,8 @@ type Sensor struct {
 	Version         string            `json:"version"`
 	Config          map[string]string `json:"config"`
 	Silenced        bool              `json:"silenced"`
+	SilencedReason  string            `json:"silenced_reason,omitempty"`
+	SilencedUntil   *time.Time        `json:"silenced_until,omitempty"`
 	Status          SensorStatus      `json:"status"`
 	StatusChangedAt *time.Time        `json:"status_changed_at"`
 	LastHeartbeatAt *time.Time        `json:"last_heartbeat_at"`

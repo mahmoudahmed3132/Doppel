@@ -25,21 +25,23 @@ import (
 
 // Settings keys.
 const (
-	KeyUpdateHours  = "update_check_hours"
-	KeyArchiveDays  = "retention_archive_days"
-	KeyPurgeDays    = "retention_purge_days"
-	KeyHistoryDays  = "retention_history_days"
-	KeyWhitelist    = "whitelist"
-	KeyScanners     = "known_scanners"
-	KeyAssets       = "assets"
-	KeyCLINoticeAck = "cli_notice_ack"
+	KeyUpdateHours        = "update_check_hours"
+	KeyConfigDriftMinutes = "config_drift_minutes"
+	KeyArchiveDays        = "retention_archive_days"
+	KeyPurgeDays          = "retention_purge_days"
+	KeyHistoryDays        = "retention_history_days"
+	KeyWhitelist          = "whitelist"
+	KeyScanners           = "known_scanners"
+	KeyAssets             = "assets"
+	KeyCLINoticeAck       = "cli_notice_ack"
 )
 
-// Limits.
+// Limits and defaults.
 const (
-	MaxListEntries = 1000
-	MaxEntryBytes  = 256
-	MaxAssetsBytes = 512 << 10
+	MaxListEntries            = 1000
+	MaxEntryBytes             = 256
+	MaxAssetsBytes            = 512 << 10
+	DefaultConfigDriftMinutes = 15
 )
 
 // Errors.
@@ -63,6 +65,7 @@ type View struct {
 	RegistryURL           string    `json:"registry_url"`
 	CatalogueRefreshHours int       `json:"catalogue_refresh_hours"`
 	UpdateCheckHours      int       `json:"update_check_hours"`
+	ConfigDriftMinutes    int       `json:"config_drift_minutes"`
 	Retention             Retention `json:"retention"`
 	Whitelist             []string  `json:"whitelist"`
 	KnownScanners         []string  `json:"known_scanners"`
@@ -82,6 +85,7 @@ type Patch struct {
 	RegistryURL           *string `json:"registry_url"`
 	CatalogueRefreshHours *int    `json:"catalogue_refresh_hours"`
 	UpdateCheckHours      *int    `json:"update_check_hours"`
+	ConfigDriftMinutes    *int    `json:"config_drift_minutes"`
 	Retention             *struct {
 		ArchiveAfterDays       *int `json:"archive_after_days"`
 		PurgeArchivedAfterDays *int `json:"purge_archived_after_days"`
@@ -205,6 +209,7 @@ func (s *Service) Get(ctx context.Context) View {
 		PublicEndpoint: ep, RegistryURL: reg,
 		CatalogueRefreshHours: s.intSetting(ctx, catalogue.SettingRefreshHours, 24),
 		UpdateCheckHours:      s.intSetting(ctx, KeyUpdateHours, 24),
+		ConfigDriftMinutes:    s.intSetting(ctx, KeyConfigDriftMinutes, DefaultConfigDriftMinutes),
 		Retention: Retention{
 			ArchiveAfterDays:       s.intSetting(ctx, KeyArchiveDays, 0),
 			PurgeArchivedAfterDays: s.intSetting(ctx, KeyPurgeDays, 0),
@@ -213,6 +218,15 @@ func (s *Service) Get(ctx context.Context) View {
 		Whitelist: s.listSetting(ctx, KeyWhitelist), KnownScanners: s.listSetting(ctx, KeyScanners),
 		SourceListsActive: true,
 	}
+}
+
+// ConfigDriftTimeout returns the configured config_drift period (default 15 min).
+func (s *Service) ConfigDriftTimeout(ctx context.Context) time.Duration {
+	m := s.intSetting(ctx, KeyConfigDriftMinutes, DefaultConfigDriftMinutes)
+	if m <= 0 {
+		m = DefaultConfigDriftMinutes
+	}
+	return time.Duration(m) * time.Minute
 }
 
 func cleanEntries(name string, in []string) ([]string, error) {
@@ -275,6 +289,9 @@ func (s *Service) Update(ctx context.Context, p Patch) (View, error) {
 		return View{}, err
 	}
 	if err := setInt(kv, KeyUpdateHours, p.UpdateCheckHours, 0, 720, "update_check_hours"); err != nil {
+		return View{}, err
+	}
+	if err := setInt(kv, KeyConfigDriftMinutes, p.ConfigDriftMinutes, 1, 1440, "config_drift_minutes"); err != nil {
 		return View{}, err
 	}
 	if r := p.Retention; r != nil {

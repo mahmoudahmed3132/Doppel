@@ -12,16 +12,18 @@ import (
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
 )
 
-const nodeCols = `id, alias, tags, key_hash, created_at, last_seen_at, desired_revision, applied_revision`
+const nodeCols = `id, alias, tags, key_hash, created_at, last_seen_at, desired_revision, applied_revision, ever_online, offline_alerted_at, drift_since, drift_alerted_at`
 
 func scanNode(row interface{ Scan(...any) error }) (*domain.Node, error) {
 	var (
-		n        domain.Node
-		tags     string
-		created  int64
-		lastSeen sql.NullInt64
+		n                                             domain.Node
+		tags                                          string
+		created                                       int64
+		everOnline                                    int
+		lastSeen, offlineAlerted, driftSince, alerted sql.NullInt64
 	)
-	if err := row.Scan(&n.ID, &n.Alias, &tags, &n.KeyHash, &created, &lastSeen, &n.DesiredRevision, &n.AppliedRevision); err != nil {
+	if err := row.Scan(&n.ID, &n.Alias, &tags, &n.KeyHash, &created, &lastSeen, &n.DesiredRevision, &n.AppliedRevision,
+		&everOnline, &offlineAlerted, &driftSince, &alerted); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
@@ -32,6 +34,10 @@ func scanNode(row interface{ Scan(...any) error }) (*domain.Node, error) {
 	}
 	n.CreatedAt = fromMS(created)
 	n.LastSeenAt = fromNullMS(lastSeen)
+	n.EverOnline = everOnline != 0
+	n.OfflineAlertedAt = fromNullMS(offlineAlerted)
+	n.DriftSince = fromNullMS(driftSince)
+	n.DriftAlertedAt = fromNullMS(alerted)
 	return &n, nil
 }
 
@@ -110,12 +116,52 @@ func (db *DB) TouchNode(ctx context.Context, id string, at time.Time) error {
 }
 
 // SetNodeRevisions stores the desired and/or applied revision; empty
-// arguments leave the column unchanged.
+// arguments leave the column unchanged. When desired and applied match,
+// config-drift tracking is cleared.
 func (db *DB) SetNodeRevisions(ctx context.Context, id, desired, applied string) error {
 	return affectedOne(db.sql.ExecContext(ctx, `UPDATE nodes SET
 		desired_revision = CASE WHEN ? = '' THEN desired_revision ELSE ? END,
-		applied_revision = CASE WHEN ? = '' THEN applied_revision ELSE ? END
-		WHERE id = ?`, desired, desired, applied, applied, id))
+		applied_revision = CASE WHEN ? = '' THEN applied_revision ELSE ? END,
+		drift_since = CASE
+			WHEN (CASE WHEN ? = '' THEN desired_revision ELSE ? END) = ''
+			  OR (CASE WHEN ? = '' THEN desired_revision ELSE ? END) = (CASE WHEN ? = '' THEN applied_revision ELSE ? END)
+			THEN NULL
+			ELSE drift_since
+		END,
+		drift_alerted_at = CASE
+			WHEN (CASE WHEN ? = '' THEN desired_revision ELSE ? END) = ''
+			  OR (CASE WHEN ? = '' THEN desired_revision ELSE ? END) = (CASE WHEN ? = '' THEN applied_revision ELSE ? END)
+			THEN NULL
+			ELSE drift_alerted_at
+		END
+		WHERE id = ?`,
+		desired, desired,
+		applied, applied,
+		desired, desired, desired, desired, applied, applied,
+		desired, desired, desired, desired, applied, applied,
+		id))
+}
+
+// NodeLiveness is the mutable liveness and config-drift state of a node.
+type NodeLiveness struct {
+	LastSeenAt       *time.Time
+	EverOnline       bool
+	OfflineAlertedAt *time.Time
+	DriftSince       *time.Time
+	DriftAlertedAt   *time.Time
+}
+
+// SaveNodeLiveness persists the node's liveness and drift state.
+func (db *DB) SaveNodeLiveness(ctx context.Context, id string, l NodeLiveness) error {
+	return affectedOne(db.sql.ExecContext(ctx, `UPDATE nodes SET
+		last_seen_at = COALESCE(?, last_seen_at),
+		ever_online = ?,
+		offline_alerted_at = ?,
+		drift_since = ?,
+		drift_alerted_at = ?
+		WHERE id = ?`,
+		nullMS(l.LastSeenAt), boolInt(l.EverOnline), nullMS(l.OfflineAlertedAt),
+		nullMS(l.DriftSince), nullMS(l.DriftAlertedAt), id))
 }
 
 func affectedOne(res sql.Result, err error) error {

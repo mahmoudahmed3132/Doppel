@@ -151,5 +151,23 @@ func TestNodeAPI(t *testing.T) {
 	if !domain.IsReservedTrigger(domain.TriggerNodeApplyFailed) {
 		t.Fatal("node_apply_failed must be reserved")
 	}
+	if !domain.IsReservedTrigger(domain.TriggerSensorTamperSuspected) ||
+		!domain.IsReservedTrigger(domain.TriggerNodeOffline) ||
+		!domain.IsReservedTrigger(domain.TriggerNodeOnline) ||
+		!domain.IsReservedTrigger(domain.TriggerConfigDrift) {
+		t.Fatal("F-005 triggers must be reserved")
+	}
+
+	// POST /v3/node/status reports container restart counts (F-005 / F-505).
+	if code, _ := call("POST", "/v3/node/status", key1, "3.0.0", `{"containers":[{"sensor_id":"ts-sensor-tcp-tarpit","restart_count":1,"status":"restarting"}]}`); code != 200 {
+		t.Fatalf("status report refused: %d", code)
+	}
+	if code, _ := call("POST", "/v3/node/status", key1, "3.0.0", `{"containers":[{"sensor_id":"ts-sensor-tcp-tarpit","restart_count":5,"status":"restarting"}]}`); code != 200 {
+		t.Fatalf("status report refused: %d", code)
+	}
+	tamper, _ := db.Events(ctx, store.EventFilter{Trigger: domain.TriggerSensorTamperSuspected})
+	if len(tamper) != 1 || tamper[0].Severity != domain.SeverityHigh || tamper[0].SensorID != "ts-sensor-tcp-tarpit" {
+		t.Fatalf("expected sensor_tamper_suspected from /v3/node/status, got %+v", tamper)
+	}
 	_ = domain.StatusPending
 }

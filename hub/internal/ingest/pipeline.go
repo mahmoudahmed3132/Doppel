@@ -184,13 +184,13 @@ func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error
 		return res, nil
 	}
 
-	// Step 11: webhook unless the sensor is silenced.
+	// Step 11: webhook unless the sensor is silenced (and the silence window has not expired).
 	if p.Notifier != nil {
 		silenced := false
 		s, err := p.Store.Sensor(ctx, ev.NodeID, ev.SensorID)
 		switch {
 		case err == nil:
-			silenced = s.Silenced
+			silenced = s.Silenced && (s.SilencedUntil == nil || ev.ReceivedAt.Before(*s.SilencedUntil))
 		case !errors.Is(err, domain.ErrNotFound):
 			p.Log.Warn("sensor lookup failed", "error", err.Error())
 		}

@@ -26,7 +26,9 @@ func attackerEvent(e domain.Event) bool {
 		return false
 	}
 	switch e.Trigger {
-	case domain.TriggerSensorStopped, domain.TriggerSensorHeartbeatLost, domain.TriggerSensorRecovered, domain.TriggerNodeApplyFailed:
+	case domain.TriggerSensorStopped, domain.TriggerSensorHeartbeatLost, domain.TriggerSensorRecovered,
+		domain.TriggerSensorTamperSuspected, domain.TriggerNodeApplyFailed,
+		domain.TriggerNodeOffline, domain.TriggerNodeOnline, domain.TriggerConfigDrift:
 		return false
 	}
 	return true
