@@ -289,6 +289,25 @@ func TestMigrationV1ToCurrentKeepsData(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedNode(t, db, "node-00000001")
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	preRows := []struct {
+		id  string
+		src string
+	}{
+		{"e-v4", "203.0.113.9:51234"},
+		{"e-v6", "[2001:db8::1%eth0]:443"},
+		{"e-map", "[::ffff:192.168.65.1]:50000"},
+		{"e-drill", "Fire drill"},
+		{"e-local", "local"},
+		{"e-other", "scanner.example.com"},
+	}
+	for i, r := range preRows {
+		if _, err := db.sql.ExecContext(ctx, `INSERT INTO events (event_id, node_id, sensor_id, trigger, severity, occurred_at,
+			received_at, source, target, details) VALUES (?, 'node-00000001', 'ts-sensor-a', 'tcp_connection', 'high', ?, ?, ?, 'SSH', '{}')`,
+			r.id, ms(now), ms(now.Add(time.Duration(i)*time.Second)), r.src); err != nil {
+			t.Fatal(err)
+		}
+	}
 	db.Close()
 
 	db, err = Open(ctx, path, Options{})
@@ -310,6 +329,33 @@ func TestMigrationV1ToCurrentKeepsData(t *testing.T) {
 	}
 	if c, _ := db.CachedManifests(ctx); len(c) != 1 || c[0].Verified {
 		t.Fatalf("%+v", c)
+	}
+
+	evs, err := db.Events(ctx, EventFilter{Limit: 10})
+	if err != nil || len(evs) != len(preRows) {
+		t.Fatalf("backfilled events = %d, err = %v", len(evs), err)
+	}
+	byID := map[string]domain.Event{}
+	for _, e := range evs {
+		byID[e.EventID] = e
+	}
+	if e := byID["e-v4"]; e.SourceIP != "203.0.113.9" || e.SourcePort == nil || *e.SourcePort != 51234 || e.SourceKind != domain.SourceKindIP {
+		t.Fatalf("e-v4 backfill = %+v", e)
+	}
+	if e := byID["e-v6"]; e.SourceIP != "2001:db8::1" || e.SourcePort == nil || *e.SourcePort != 443 || e.SourceKind != domain.SourceKindIP {
+		t.Fatalf("e-v6 backfill = %+v", e)
+	}
+	if e := byID["e-map"]; e.SourceIP != "192.168.65.1" || e.SourcePort == nil || *e.SourcePort != 50000 || e.SourceKind != domain.SourceKindIP || len(e.Labels) != 1 || e.Labels[0] != "host_local" {
+		t.Fatalf("e-map backfill = %+v", e)
+	}
+	if e := byID["e-drill"]; e.SourceIP != "" || e.SourcePort != nil || e.SourceKind != domain.SourceKindDrill {
+		t.Fatalf("e-drill backfill = %+v", e)
+	}
+	if e := byID["e-local"]; e.SourceIP != "" || e.SourcePort != nil || e.SourceKind != domain.SourceKindLocal {
+		t.Fatalf("e-local backfill = %+v", e)
+	}
+	if e := byID["e-other"]; e.SourceIP != "" || e.SourcePort != nil || e.SourceKind != domain.SourceKindOther {
+		t.Fatalf("e-other backfill = %+v", e)
 	}
 }
 

@@ -12,16 +12,100 @@
 package projections
 
 import (
+	"errors"
+	"fmt"
+	"net/netip"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/geoip"
 )
 
+// Rollup modes for the group_by projection parameter (F-002).
+const (
+	GroupByIP       = "ip"
+	GroupBySubnet24 = "subnet24"
+	GroupBySubnet64 = "subnet64"
+	GroupByASN      = "asn"
+)
+
+func parseGroupBy(params map[string]string) (string, error) {
+	if params == nil {
+		return GroupByIP, nil
+	}
+	g := strings.ToLower(strings.TrimSpace(params["group_by"]))
+	switch g {
+	case "", GroupByIP:
+		return GroupByIP, nil
+	case GroupBySubnet24, GroupBySubnet64, GroupByASN:
+		return g, nil
+	default:
+		return "", errors.New("group_by must be ip, subnet24, subnet64 or asn")
+	}
+}
+
+// sourceKey returns the correlation key for an event: source_ip when set
+// (rolled up according to groupBy), and source otherwise (F-002).
+func sourceKey(e domain.EnrichedEvent, groupBy string, geo *geoip.Service) string {
+	ip := e.EffectiveSourceIP()
+	if ip == "" {
+		return e.Source
+	}
+	switch groupBy {
+	case GroupBySubnet24:
+		if a, err := netip.ParseAddr(ip); err == nil {
+			a = a.WithZone("").Unmap()
+			if a.Is4() {
+				return netip.PrefixFrom(a, 24).Masked().String()
+			}
+		}
+		return ip
+	case GroupBySubnet64:
+		if a, err := netip.ParseAddr(ip); err == nil {
+			a = a.WithZone("").Unmap()
+			if a.Is6() {
+				return netip.PrefixFrom(a, 64).Masked().String()
+			}
+		}
+		return ip
+	case GroupByASN:
+		asn := e.Enrichment.ASN
+		if asn == 0 && e.Enrichment.Location != nil {
+			asn = e.Enrichment.Location.ASN
+		}
+		if asn == 0 && geo != nil {
+			asn, _ = geo.LookupASN(ip)
+		}
+		if asn > 0 {
+			return fmt.Sprintf("AS%d", asn)
+		}
+		return ip
+	default:
+		return ip
+	}
+}
+
+func normalizeQuerySource(raw, groupBy string, geo *geoip.Service) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if ip, _, kind := domain.ParseSource(raw); kind == domain.SourceKindIP && ip != "" {
+		return sourceKey(domain.EnrichedEvent{Event: domain.Event{Source: raw, SourceIP: ip, SourceKind: domain.SourceKindIP}}, groupBy, geo)
+	}
+	return raw
+}
+
 // attacker excludes what the Hub raises about its own fleet (liveness and
-// apply failures); honeytoken and beacon use are attacker activity.
+// apply failures) and synthetic fire drills; honeytoken and beacon use are
+// attacker activity.
 func attacker(e domain.Event) bool {
 	if e.Source == domain.HubSource {
+		return false
+	}
+	if _, _, kind := e.EffectiveSource(); kind == domain.SourceKindDrill {
 		return false
 	}
 	switch e.Trigger {

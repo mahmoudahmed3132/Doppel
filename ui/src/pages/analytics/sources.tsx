@@ -13,6 +13,7 @@ import type { SourceProfile } from "./common";
 
 type FilterChip = "all" | "internal" | "external" | "multi-decoy" | "repeat" | "known-scanner" | "whitelisted";
 type SortKey = "source" | "events" | "decoys" | "firstSeen" | "lastSeen";
+type GroupBy = "ip" | "subnet24" | "subnet64" | "asn";
 
 const FILTERS: [FilterChip, string][] = [
   ["all", "All"],
@@ -24,13 +25,25 @@ const FILTERS: [FilterChip, string][] = [
   ["whitelisted", "Whitelisted"],
 ];
 
+function isMultiDecoy(s: SourceProfile): boolean {
+  return s.decoys > 1 || (s.labels ?? []).includes("multi-decoy");
+}
+
+function isRepeat(s: SourceProfile): boolean {
+  return s.events > 1 || (s.labels ?? []).includes("repeat");
+}
+
+function isHostLocal(s: SourceProfile): boolean {
+  return (s.labels ?? []).includes("host_local");
+}
+
 function matchesFilter(s: SourceProfile, filter: FilterChip): boolean {
   switch (filter) {
     case "all": return true;
     case "internal": return s.internal;
     case "external": return !s.internal;
-    case "multi-decoy": return s.decoys > 1;
-    case "repeat": return s.events > 1;
+    case "multi-decoy": return isMultiDecoy(s);
+    case "repeat": return isRepeat(s);
     case "known-scanner": return s.knownScanner;
     case "whitelisted": return s.whitelisted;
   }
@@ -38,12 +51,13 @@ function matchesFilter(s: SourceProfile, filter: FilterChip): boolean {
 
 export function SourcesPage() {
   const [days, setDays] = useState(30);
+  const [groupBy, setGroupBy] = useState<GroupBy>("ip");
   const [filter, setFilter] = useState<FilterChip>("all");
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("events");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const data = useProjection<{ sources: SourceProfile[] }>("sources", { days });
+  const data = useProjection<{ sources: SourceProfile[] }>("sources", { days, group_by: groupBy });
 
   const allSources = data.data?.sources ?? [];
 
@@ -60,8 +74,8 @@ export function SourcesPage() {
     for (const s of allSources) {
       if (s.internal) map.internal++;
       else map.external++;
-      if (s.decoys > 1) map["multi-decoy"]++;
-      if (s.events > 1) map.repeat++;
+      if (isMultiDecoy(s)) map["multi-decoy"]++;
+      if (isRepeat(s)) map.repeat++;
       if (s.knownScanner) map["known-scanner"]++;
       if (s.whitelisted) map.whitelisted++;
     }
@@ -104,7 +118,20 @@ export function SourcesPage() {
       <PageHead
         title="Scans"
         sub="Observed sources classified by scope, persistence, and asset inventory. Click any source to inspect its attack path."
-        actions={<DaysSelect days={days} onChange={setDays} />}
+        actions={
+          <div class="row">
+            <label class="inline-field">
+              <span>Group by</span>
+              <select class="input" value={groupBy} onChange={(e) => setGroupBy(e.currentTarget.value as GroupBy)}>
+                <option value="ip">IP</option>
+                <option value="subnet24">/24 subnet</option>
+                <option value="subnet64">/64 subnet</option>
+                <option value="asn">ASN</option>
+              </select>
+            </label>
+            <DaysSelect days={days} onChange={setDays} />
+          </div>
+        }
       />
       <ErrorBox error={data.error} retry={data.reload} />
       {data.loading && !data.data ? (
@@ -179,8 +206,9 @@ export function SourcesPage() {
                         </td>
                         <td>
                           <Pill kind={s.internal ? "warn" : "info"}>{s.internal ? "internal" : "external"}</Pill>
-                          {s.decoys > 1 ? <Pill kind="bad">multi-decoy</Pill> : null}
-                          {s.events > 1 ? <Pill kind="neutral">repeat</Pill> : null}
+                          {isHostLocal(s) ? <Pill kind="warn">host_local</Pill> : null}
+                          {isMultiDecoy(s) ? <Pill kind="bad">multi-decoy</Pill> : null}
+                          {isRepeat(s) ? <Pill kind="neutral">repeat</Pill> : null}
                           {s.knownScanner ? <Pill kind="neutral">known scanner</Pill> : null}
                           {s.whitelisted ? <Pill kind="ok">whitelisted</Pill> : null}
                         </td>

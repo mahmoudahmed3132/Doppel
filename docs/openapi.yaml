@@ -642,7 +642,7 @@ paths:
         '200': {description: '{"armed": bool}'}
   /api/v3/events:
     get:
-      summary: 'Events newest first, enriched. Query: archived (false|true|any), node, sensor, severity (comma list), trigger, from/to (RFC 3339), q (source/target substring), before (cursor), limit (1..500)'
+      summary: 'Events newest first, enriched (each event includes raw source plus parsed source_ip, source_port, source_kind in ip|local|drill|other, and optional labels such as host_local). Query: archived (false|true|any), node, sensor, severity (comma list), trigger, from/to (RFC 3339), q (source/target substring), before (cursor), limit (1..500)'
       responses:
         '200': {description: '{"events": [EnrichedEvent], "next_cursor": string|null}'}
         '400': {$ref: '#/components/responses/Error'}
@@ -708,7 +708,7 @@ paths:
     get: {summary: 'ATT&CK Navigator layer for ?days', responses: {'200': {description: attachment}}}
   /api/v3/analytics/projections/{name}:
     parameters: [{name: name, in: path, required: true, schema: {type: string}}]
-    get: {summary: 'Analytics projections (insights, sources, attack_matrix, attack_path, geo_map, report) over ?days; other query parameters passed through', responses: {'200': {description: '{"projection","days","data"}'}, '404': {$ref: '#/components/responses/Error'}}}
+    get: {summary: 'Analytics projections (insights, sources, attack_matrix, attack_path, geo_map, report) over ?days; keyed on source_ip when set (else source), excluding drills; supports optional group_by=ip|subnet24|subnet64|asn and other projection parameters', responses: {'200': {description: '{"projection","days","data"}'}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}}
   /api/v3/system/status:
     get: {summary: 'Version, schema, uptime, armed, SIEM queue, update state, hub_update_available, cli_release_notice, modules (attack is always true; retained for compatibility), live clients', responses: {'200': {description: '{"status"}'}}}
   /api/v3/system/update-check:

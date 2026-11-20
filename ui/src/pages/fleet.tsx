@@ -125,10 +125,18 @@ export function NodePage({ id }: { id: string }) {
   if (node.error) return <div class="stack-lg"><PageHead title="Node" /><ErrorBox error={node.error} retry={node.reload} /></div>;
   if (!n) return <Loading />;
   const updatable = n.sensors.filter((s) => s.update_available).length;
+  const isDockerDesktop =
+    n.docker_desktop === true ||
+    n.host_facts?.docker_desktop === true ||
+    n.facts?.docker_desktop === true ||
+    (n.tags ?? []).includes("docker_desktop=true");
 
   return (
     <div class="stack-lg">
       <div class="crumbs"><Link href="/fleet">Fleet</Link> / <span>{n.alias || n.id}</span></div>
+      {isDockerDesktop ? (
+        <Alert kind="warn">source IPs on this node are not real client addresses</Alert>
+      ) : null}
       <PageHead
         title={n.alias || n.id}
         sub={<span class="mono">{n.id}</span>}

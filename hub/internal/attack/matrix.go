@@ -16,10 +16,13 @@ import (
 )
 
 // attackerEvent excludes what the Hub raises about its own fleet
-// (liveness and apply failures); honeytoken and beacon use are attacker
-// activity and count.
+// (liveness and apply failures) and synthetic fire drills; honeytoken and
+// beacon use are attacker activity and count.
 func attackerEvent(e domain.Event) bool {
 	if e.Source == domain.HubSource {
+		return false
+	}
+	if _, _, kind := e.EffectiveSource(); kind == domain.SourceKindDrill {
 		return false
 	}
 	switch e.Trigger {
@@ -80,7 +83,9 @@ func Calculate(events []domain.EnrichedEvent, timeframe string, since time.Time)
 		} else {
 			s.SecondaryEvents++
 		}
-		sources[id][e.Source] = true
+		if src := e.CorrelationSource(); src != "" {
+			sources[id][src] = true
+		}
 		triggers[id][e.Trigger] = true
 		if e.OccurredAt.After(last[id]) {
 			last[id] = e.OccurredAt

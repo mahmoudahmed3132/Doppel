@@ -159,13 +159,37 @@ api GET "/nodes/$NODE" | jq -r '.node.sensors[] | "\(.id) \(.status) sdk=\(.sdk_
 [ -n "$ok" ] || fail "sensors did not all come online"
 
 step "real interactions with the decoys"
-python3 - <<'PY'
-import socket, urllib.request, urllib.error
+if command -v nc >/dev/null 2>&1; then
+	printf 'SSH-2.0-e2e\r\n' | nc -w 2 127.0.0.1 2222 >/dev/null 2>&1 || true
+	nc -z -w 2 127.0.0.1 9099 >/dev/null 2>&1 || true
+else
+	python3 - <<'PY'
+import socket
 for port, payload in ((2222, b"SSH-2.0-e2e\r\n"), (9099, b"")):
     s = socket.create_connection(("127.0.0.1", port), timeout=5)
     if payload:
         s.sendall(payload)
     s.close()
+PY
+fi
+want_two="tcp_connection template_connection"
+for _ in $(seq 30); do
+	got=$(api GET '/events?limit=200&archived=any' | jq -r '[.events[].trigger] | unique | join(" ")')
+	missing=""; for t in $want_two; do echo " $got " | grep -q " $t " || missing="$missing $t"; done
+	[ -z "$missing" ] && break
+	sleep 1
+done
+[ -z "$missing" ] || fail "host-network decoy events missing:$missing"
+api GET '/analytics/projections/sources' | jq -e '
+	(.data.sources | length == 1) and
+	(.data.sources[0].source == "127.0.0.1") and
+	(.data.sources[0].decoys == 2) and
+	((.data.sources[0].labels // []) | index("multi-decoy") != null) and
+	((.data.sources[0].labels // []) | index("host_local") != null)' >/dev/null ||
+	fail "expected 1 correlated multi-decoy source in /api/v3/analytics/projections/sources after hitting two decoys (F-002)"
+
+python3 - <<'PY'
+import urllib.request, urllib.error
 for path in ("/", "/does-not-exist"):
     try:
         urllib.request.urlopen("http://127.0.0.1:8081" + path, timeout=5).read()
@@ -190,6 +214,8 @@ for _ in $(seq 30); do
 	sleep 1
 done
 [ "$d" -ge 3 ] || fail "fire drill events from $d of 3 sensors"
+api GET '/analytics/projections/sources' | jq -e '[.data.sources[].source] | index("Fire drill") == null' >/dev/null ||
+	fail "fire drill events should be excluded from /api/v3/analytics/projections/sources (F-002)"
 
 step "status, idempotent re-apply, applied revision"
 $RUN "$CLI" status

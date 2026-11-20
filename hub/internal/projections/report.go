@@ -11,6 +11,7 @@ import (
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/attack"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/geoip"
 )
 
 // MaxReportRange bounds one report.
@@ -85,7 +86,8 @@ type ReportDTO struct {
 // YYYY-MM-DD, to exclusive) narrow the Hub's window; by default the report
 // covers the window from its first event to now.
 type Report struct {
-	Now func() time.Time
+	Now   func() time.Time
+	GeoIP *geoip.Service // optional; used for group_by=asn when events are not pre-enriched
 }
 
 func (Report) Name() string { return "report" }
@@ -98,6 +100,10 @@ func parseWhen(s string) (time.Time, error) {
 }
 
 func (r Report) Build(_ context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+	groupBy, err := parseGroupBy(params)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	if r.Now != nil {
 		now = r.Now().UTC()
@@ -107,7 +113,6 @@ func (r Report) Build(_ context.Context, events []domain.EnrichedEvent, params m
 	if len(sorted) > 0 {
 		from = sorted[0].OccurredAt.UTC().Truncate(24 * time.Hour)
 	}
-	var err error
 	if v := params["from"]; v != "" {
 		if from, err = parseWhen(v); err != nil {
 			return nil, errors.New("from must be RFC 3339 or YYYY-MM-DD")
@@ -124,13 +129,13 @@ func (r Report) Build(_ context.Context, events []domain.EnrichedEvent, params m
 	if to.Sub(from) > MaxReportRange {
 		return nil, errors.New("a report covers at most 366 days")
 	}
-	return buildReport(sorted, from, to, now), nil
+	return buildReport(sorted, from, to, now, groupBy, r.GeoIP), nil
 }
 
 // buildReport covers events with from <= time < to. Active events are the
 // figures; archived ones are only counted, since archiving is a triage
 // decision.
-func buildReport(sorted []domain.EnrichedEvent, from, to, now time.Time) *ReportDTO {
+func buildReport(sorted []domain.EnrichedEvent, from, to, now time.Time, groupBy string, geo *geoip.Service) *ReportDTO {
 	in := func(e domain.EnrichedEvent) bool { return !e.OccurredAt.Before(from) && e.OccurredAt.Before(to) }
 	var events []domain.EnrichedEvent
 	d := &ReportDTO{
@@ -176,25 +181,29 @@ func buildReport(sorted []domain.EnrichedEvent, from, to, now time.Time) *Report
 				day.Critical++
 			}
 		}
-		s := srcs[e.Source]
+		key := sourceKey(e, groupBy, geo)
+		s := srcs[key]
 		if s == nil {
-			s = &ReportSource{Source: e.Source, First: at, Asset: e.Enrichment.Asset}
-			srcs[e.Source] = s
-			srcDecoys[e.Source] = map[string]bool{}
+			s = &ReportSource{Source: key, First: at, Asset: e.Enrichment.Asset}
+			srcs[key] = s
+			srcDecoys[key] = map[string]bool{}
+		}
+		if s.Asset == nil && e.Enrichment.Asset != nil {
+			s.Asset = e.Enrichment.Asset
 		}
 		s.Events++
 		if e.Severity == "critical" {
 			s.Critical++
 		}
 		s.Last = at
-		srcDecoys[e.Source][e.NodeID+"/"+e.SensorID] = true
+		srcDecoys[key][e.NodeID+"/"+e.SensorID] = true
 
 		if e.Trigger == domain.TriggerHoneytokenUsed {
 			var det struct {
 				Username string `json:"honeytoken_username"`
 			}
 			_ = json.Unmarshal(e.Details, &det)
-			d.HoneytokenUses = append(d.HoneytokenUses, HoneytokenUse{Timestamp: at, Username: det.Username, Source: e.Source, NodeID: e.NodeID, SensorID: e.SensorID})
+			d.HoneytokenUses = append(d.HoneytokenUses, HoneytokenUse{Timestamp: at, Username: det.Username, Source: key, NodeID: e.NodeID, SensorID: e.SensorID})
 		}
 	}
 	for _, day := range days {

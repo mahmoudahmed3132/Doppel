@@ -88,6 +88,10 @@ type Event struct {
 	OccurredAt   time.Time       `json:"occurred_at"`
 	ReceivedAt   time.Time       `json:"received_at"`
 	Source       string          `json:"source"`
+	SourceIP     string          `json:"source_ip,omitempty"`
+	SourcePort   *int            `json:"source_port,omitempty"`
+	SourceKind   SourceKind      `json:"source_kind,omitempty"`
+	Labels       []string        `json:"labels,omitempty"`
 	Target       string          `json:"target"`
 	Details      json.RawMessage `json:"details"`
 	Read         bool            `json:"read"`

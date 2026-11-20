@@ -106,6 +106,7 @@ func Normalize(r *RawEvent, nodeID string, now time.Time) (ev *domain.Event, war
 	if source == "" {
 		source = "Unknown"
 	}
+	sourceIP, sourcePort, sourceKind := domain.ParseSource(source)
 	target := Clamp(r.Target)
 	if target == "" {
 		target = "Unknown"
@@ -131,6 +132,10 @@ func Normalize(r *RawEvent, nodeID string, now time.Time) (ev *domain.Event, war
 		OccurredAt: occurred.UTC(),
 		ReceivedAt: now.UTC(),
 		Source:     source,
+		SourceIP:   sourceIP,
+		SourcePort: sourcePort,
+		SourceKind: sourceKind,
+		Labels:     domain.SourceLabels(sourceIP),
 		Target:     target,
 		Details:    raw,
 	}, warns, ""

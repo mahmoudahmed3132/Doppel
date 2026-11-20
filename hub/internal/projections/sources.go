@@ -6,21 +6,24 @@ import (
 	"context"
 	"net/netip"
 	"sort"
+	"strings"
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/geoip"
 )
 
 // Profile is one source's activity and classification.
 type Profile struct {
-	Source       string `json:"source"`
-	Events       int    `json:"events"`
-	Decoys       int    `json:"decoys"`
-	FirstSeen    string `json:"firstSeen"`
-	LastSeen     string `json:"lastSeen"`
-	IsIP         bool   `json:"isIp"`
-	Internal     bool   `json:"internal"`
-	Whitelisted  bool   `json:"whitelisted"`
-	KnownScanner bool   `json:"knownScanner"`
+	Source       string   `json:"source"`
+	Events       int      `json:"events"`
+	Decoys       int      `json:"decoys"`
+	FirstSeen    string   `json:"firstSeen"`
+	LastSeen     string   `json:"lastSeen"`
+	IsIP         bool     `json:"isIp"`
+	Internal     bool     `json:"internal"`
+	Whitelisted  bool     `json:"whitelisted"`
+	KnownScanner bool     `json:"knownScanner"`
+	Labels       []string `json:"labels"`
 	// Asset is the inventory asset the source belongs to, if any.
 	Asset *domain.AssetMatch `json:"asset"`
 }
@@ -41,18 +44,18 @@ var internalRanges = func() []netip.Prefix {
 	return out
 }()
 
-// Classify returns whether source is an IP address and, if so, whether it
-// is in a private, loopback or link-local range.
+// Classify returns whether source is an IP address (or CIDR prefix) and, if
+// so, whether it is in a private, loopback or link-local range.
 func Classify(source string) (isIP, internal bool) {
-	a, err := netip.ParseAddr(source)
-	if err != nil {
-		if ap, err := netip.ParseAddrPort(source); err == nil {
-			a = ap.Addr()
-		} else {
-			return false, false
-		}
+	var a netip.Addr
+	if ip, _, kind := domain.ParseSource(source); kind == domain.SourceKindIP && ip != "" {
+		a, _ = netip.ParseAddr(ip)
+	} else if p, err := netip.ParsePrefix(strings.TrimSpace(source)); err == nil {
+		a = p.Masked().Addr().WithZone("").Unmap()
+	} else {
+		return false, false
 	}
-	a = a.Unmap()
+	a = a.WithZone("").Unmap()
 	for _, p := range internalRanges {
 		if p.Contains(a) {
 			return true, true
@@ -64,25 +67,43 @@ func Classify(source string) (isIP, internal bool) {
 // Sources is the sources projection: every source in the window, busiest
 // first. Whitelisted / KnownScanner are the classification of the source's
 // latest event.
-type Sources struct{}
+type Sources struct {
+	GeoIP *geoip.Service // optional; used for group_by=asn when events are not pre-enriched
+}
 
 func (Sources) Name() string { return "sources" }
 
-func (Sources) Build(_ context.Context, events []domain.EnrichedEvent, _ map[string]string) (any, error) {
+func (s Sources) Build(_ context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+	groupBy, err := parseGroupBy(params)
+	if err != nil {
+		return nil, err
+	}
 	type agg struct {
-		p      *Profile
-		decoys map[string]bool
+		p         *Profile
+		decoys    map[string]bool
+		hostLocal bool
 	}
 	by := map[string]*agg{}
 	for _, e := range oldestFirst(events) {
 		if !attacker(e.Event) || e.Source == "" {
 			continue
 		}
-		a := by[e.Source]
+		key := sourceKey(e, groupBy, s.GeoIP)
+		if key == "" {
+			continue
+		}
+		a := by[key]
 		if a == nil {
-			isIP, internal := Classify(e.Source)
-			a = &agg{p: &Profile{Source: e.Source, FirstSeen: ts(e.OccurredAt), IsIP: isIP, Internal: internal}, decoys: map[string]bool{}}
-			by[e.Source] = a
+			isIP, internal := Classify(key)
+			a = &agg{
+				p:         &Profile{Source: key, FirstSeen: ts(e.OccurredAt), IsIP: isIP, Internal: internal, Labels: []string{}},
+				decoys:    map[string]bool{},
+				hostLocal: domain.IsHostLocal(key),
+			}
+			by[key] = a
+		}
+		if domain.IsHostLocal(e.CorrelationSource()) {
+			a.hostLocal = true
 		}
 		a.p.Events++
 		a.p.LastSeen = ts(e.OccurredAt)
@@ -97,6 +118,17 @@ func (Sources) Build(_ context.Context, events []domain.EnrichedEvent, _ map[str
 	out := make([]Profile, 0, len(by))
 	for _, a := range by {
 		a.p.Decoys = len(a.decoys)
+		labels := []string{}
+		if a.hostLocal {
+			labels = append(labels, domain.HostLocalLabel)
+		}
+		if a.p.Decoys > 1 {
+			labels = append(labels, "multi-decoy")
+		}
+		if a.p.Events > 1 {
+			labels = append(labels, "repeat")
+		}
+		a.p.Labels = labels
 		out = append(out, *a.p)
 	}
 	sort.Slice(out, func(i, j int) bool {

@@ -34,6 +34,13 @@ type Enricher struct {
 // Enrich returns ev with enrichment. Failures degrade to "no enrichment".
 func (e *Enricher) Enrich(ctx context.Context, ev *domain.Event) domain.EnrichedEvent {
 	out := domain.EnrichedEvent{Event: *ev}
+	if out.SourceKind == "" {
+		out.SourceIP, out.SourcePort, out.SourceKind = domain.ParseSource(out.Source)
+	}
+	if len(out.Labels) == 0 && out.SourceIP != "" {
+		out.Labels = domain.SourceLabels(out.SourceIP)
+	}
+	src := out.CorrelationSource()
 	if e.Nodes != nil {
 		if n, err := e.Nodes.Node(ctx, ev.NodeID); err == nil {
 			out.NodeAlias = n.Alias
@@ -44,13 +51,23 @@ func (e *Enricher) Enrich(ctx context.Context, ev *domain.Event) domain.Enriched
 	}
 	if e.Assets != nil {
 		if ix := e.Assets.AssetIndex(ctx); ix != nil {
-			out.Enrichment.Asset = ix.Lookup(ev.Source)
+			out.Enrichment.Asset = ix.Lookup(src)
 		}
 	}
-	if e.Geo != nil && e.Geo.Enabled() {
-		var details map[string]any
-		_ = json.Unmarshal(ev.Details, &details)
-		out.Enrichment.Location = e.Geo.Locate(ev.Source, details)
+	if e.Geo != nil {
+		if e.Geo.Enabled() {
+			var details map[string]any
+			_ = json.Unmarshal(ev.Details, &details)
+			out.Enrichment.Location = e.Geo.Locate(src, details)
+		}
+		if out.Enrichment.Location != nil && out.Enrichment.Location.ASN > 0 {
+			out.Enrichment.ASN = out.Enrichment.Location.ASN
+			out.Enrichment.ASOrg = out.Enrichment.Location.ASOrg
+		} else if asnLoc, ok := e.Geo.(interface{ LookupASN(string) (uint, string) }); ok {
+			if asn, org := asnLoc.LookupASN(src); asn > 0 {
+				out.Enrichment.ASN, out.Enrichment.ASOrg = asn, org
+			}
+		}
 	}
 	return out
 }
