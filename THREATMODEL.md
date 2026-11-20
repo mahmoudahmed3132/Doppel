@@ -185,6 +185,19 @@ on the next start as `secrets.reset_cli`): it deletes the sealed secrets, so the
 SIEM token, webhook and MFA must be re-entered and planted honeytokens and
 beacons are orphaned. Back the KEK up separately from the database.
 
+**Backup, restore and verification (`hub/internal/backup`, F-003b / B1).**
+Backups and restores are host-only CLI commands (`doppel-hub backup`, `verify`,
+`restore`); no HTTP API route exposes the database file, preventing a
+compromised admin session from exfiltrating the full store. `backup` takes an
+online `VACUUM INTO` snapshot with a SHA-256 `manifest.json`, refuses to write
+into a directory containing `TS_KEK_FILE`, and supports at-rest encryption via
+`--encrypt-to <age-recipient>` (`filippo.io/age`). `restore` is offline-only
+(enforced by an advisory `<db>.lock` held by `serve()`), verifies manifest
+format (rejecting path traversal), checksums, SQLite integrity, schema version
+(refusing newer schemas), and DEK unwrap under the supplied KEK **before**
+swapping, preserves the previous DB as `<db>.pre-restore`, invalidates all
+sessions, and queues a `system.restore_cli` audit record emitted on next start.
+
 ## Imported modules (merge from Doppel)
 
 Modules imported through the PORTED seams are in scope from their import on.

@@ -271,6 +271,104 @@ server-side re-encryption:
    re-encryption fixture is provided in `deploy/nginx-reencrypt/` as a local
    staging/CI stand-in.
 
+### Backup, restore and verification (F-003b / B1)
+
+Backups and restores are **host-only CLI operations** (`doppel-hub backup`,
+`doppel-hub verify`, `doppel-hub restore`). There is intentionally no HTTP API
+endpoint to download the database, because that would create a full-secrets
+exfiltration path for a compromised admin session.
+
+#### Online backup
+
+`backup` takes a consistent online SQLite snapshot via `VACUUM INTO` (safe
+while the Hub is running in WAL mode) and writes `manifest.json` alongside the
+snapshot (`schema_version`, `db_sha256`, `file_sha256`, `kek_fingerprint`,
+`created_at`, `hub_version`):
+
+```sh
+# Unencrypted snapshot (store on encrypted backup storage only)
+doppel-hub backup --out /var/backups/doppel/snap-$(date -u +%Y%m%dT%H%M%SZ)
+
+# Encrypted at rest with age (recommended for off-site / object storage)
+doppel-hub backup \
+  --out /var/backups/doppel/snap-$(date -u +%Y%m%dT%H%M%SZ) \
+  --encrypt-to age1...
+```
+
+* `--encrypt-to` accepts any valid age recipient public key and may be repeated
+  for multiple recipients. When set, the plaintext temporary snapshot is
+  removed immediately after `hub.db.age` is synced to disk.
+* **KEK separation:** the key-encryption key (`DOPPEL_KEK_FILE` / `TS_KEK_FILE`)
+  is **never** included in the backup archive, and `backup` refuses to write
+  into a directory that contains the KEK file. Back up the KEK separately (e.g.
+  in a hardware vault or KMS).
+* **Retention and off-site copy:** enforcing backup retention, off-site
+  replication, and encrypting the underlying backup medium are the operator's
+  responsibility.
+
+#### Integrity verification (without restoring)
+
+`verify` checks `manifest.json`, file SHA-256, optional age decryption, SQLite
+`PRAGMA integrity_check`, schema compatibility, and (when `TS_KEK_FILE` or
+`--kek-file` is provided) verifies that the stored DEK unwraps cleanly under
+the KEK — without touching the live database:
+
+```sh
+# Verify an unencrypted backup (including SQLite integrity and KEK unwrap)
+doppel-hub verify --from /var/backups/doppel/snap-20261120T020000Z
+
+# Verify an age-encrypted backup (ciphertext checksum only without --identity)
+doppel-hub verify --from /var/backups/doppel/snap-20261120T020000Z
+
+# Full verification of an age-encrypted backup (decrypt + SQLite + KEK unwrap)
+doppel-hub verify \
+  --from /var/backups/doppel/snap-20261120T020000Z \
+  --identity /secure/backup.agekey
+```
+
+#### Offline restore
+
+`restore` is **offline only** and refuses to run while the Hub holds the
+database lock (`<db>.lock`). Before modifying the live database, it verifies
+the manifest, checksums, age decryption (if encrypted), SQLite integrity,
+schema version (refusing backups from a newer Hub schema), and DEK unwrap under
+`TS_KEK_FILE` / `--kek-file`:
+
+```sh
+# 1. Stop the Hub
+docker compose stop hub   # or: systemctl stop doppel-hub
+
+# 2. Restore from the verified backup directory
+doppel-hub restore \
+  --from /var/backups/doppel/snap-20261120T020000Z \
+  --identity /secure/backup.agekey
+
+# 3. Start the Hub
+docker compose start hub  # or: systemctl start doppel-hub
+```
+
+* The previous database (if any) is checkpointed and preserved next to the live
+  database as `<db>.pre-restore` (mode `0600`), and stale `-wal`/`-shm`
+  sidecars are removed before the atomic swap.
+* All admin sessions in the restored database are invalidated.
+* A `system.restore_cli` audit record is queued in `cli_audit` and emitted to
+  both the Hub log and the configured SIEM on the next Hub start.
+* **Orphaned nodes:** any node linked **after** the backup timestamp does not
+  exist in the restored database; its node key will be rejected and it must be
+  re-linked with `doppel link`.
+
+#### Scheduled backups (`backup --schedule`)
+
+Run `doppel-hub backup --schedule` to print scheduling examples, or deploy the
+ready-to-use templates shipped in `deploy/backup/`:
+
+* **systemd timer:** `deploy/backup/doppel-backup.service` and
+  `deploy/backup/doppel-backup.timer` run a daily online backup with
+  `--encrypt-to`, followed by `doppel-hub verify`.
+* **Kubernetes CronJob:** `deploy/backup/cronjob.yaml` runs the distroless Hub
+  image on a daily schedule using the Downward API `$(POD_NAME)` so each run
+  writes to a fresh directory under `/backups/` without requiring a shell.
+
 ## 3. Upgrade the Hub
 
 1. Read the release notes; verify the new digest (§1).
