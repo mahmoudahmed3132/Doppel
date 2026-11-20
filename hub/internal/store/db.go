@@ -94,6 +94,9 @@ func (db *DB) Close() error { return db.sql.Close() }
 type Migration struct {
 	Version int
 	SQL     string
+	// Hook is an optional Go migration step run inside the migration
+	// transaction after SQL executes (e.g. batched row backfills).
+	Hook func(ctx context.Context, tx *sql.Tx) error
 }
 
 func (db *DB) schemaVersion(ctx context.Context) (int, error) {
@@ -143,6 +146,11 @@ func (db *DB) apply(ctx context.Context, m Migration) error {
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, m.SQL); err != nil {
 		return err
+	}
+	if m.Hook != nil {
+		if err := m.Hook(ctx, tx); err != nil {
+			return err
+		}
 	}
 	// PRAGMA does not accept bound parameters; Version is an int.
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", m.Version)); err != nil {

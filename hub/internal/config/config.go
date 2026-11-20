@@ -27,6 +27,7 @@ const (
 	EnvSIEMCABundle        = "TS_SIEM_CA_BUNDLE"
 	EnvSyslogPEN           = "TS_SYSLOG_PEN"
 	EnvGeoIPDB             = "TS_GEOIP_DB"
+	EnvGeoIPASNDB          = "TS_GEOIP_ASN_DB"
 	EnvGeoIPAutoUpdate     = "TS_GEOIP_AUTO_UPDATE"
 	EnvSignerRepo          = "TS_MANIFEST_SIGNER_REPO"
 	EnvSigstoreTrustedRoot = "TS_SIGSTORE_TRUSTED_ROOT"
@@ -52,6 +53,7 @@ type Config struct {
 	SIEMCABundle      string
 	SyslogPEN         int
 	GeoIPDB           string
+	GeoIPASNDB        string
 	GeoIPAutoUpdate   bool
 	SignerRepo        string
 	SigstoreRoot      string
@@ -170,6 +172,7 @@ func Load(getenv func(string) string) (*Config, error) {
 	}
 	c.SIEMCABundle = get(EnvSIEMCABundle)
 	c.GeoIPDB = get(EnvGeoIPDB)
+	c.GeoIPASNDB = get(EnvGeoIPASNDB)
 	c.SignerRepo = get(EnvSignerRepo)
 	c.SigstoreRoot = get(EnvSigstoreTrustedRoot)
 	c.UpdateCheckURL = DefaultUpdateCheckURL

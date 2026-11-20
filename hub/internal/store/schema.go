@@ -188,6 +188,13 @@ CREATE TABLE sessions (
 	{Version: 5, SQL: `
 ALTER TABLE sensors ADD COLUMN dropped_events INTEGER NOT NULL DEFAULT 0;
 `},
+	// v6: source identity normalisation and correlation (F-002).
+	{Version: 6, SQL: `
+ALTER TABLE events ADD COLUMN source_ip TEXT;
+ALTER TABLE events ADD COLUMN source_port INTEGER;
+ALTER TABLE events ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'other';
+CREATE INDEX events_source_ip ON events(source_ip, received_at);
+`, Hook: backfillEventSourcesTx},
 }
 
 // SchemaVersion is the schema version this build migrates to.

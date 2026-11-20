@@ -53,6 +53,8 @@ type Location struct {
 	// Address is the address looked up (the subnet's network address for
 	// client_subnet).
 	Address string `json:"address"`
+	ASN     uint   `json:"asn,omitempty"`
+	ASOrg   string `json:"asOrg,omitempty"`
 }
 
 // record is the part of a City record the Hub uses.
@@ -73,6 +75,12 @@ type record struct {
 	} `maxminddb:"location"`
 }
 
+// asnRecord is the part of an ASN record the Hub uses.
+type asnRecord struct {
+	Number       uint   `maxminddb:"autonomous_system_number"`
+	Organization string `maxminddb:"autonomous_system_organization"`
+}
+
 // Status describes the loaded database for the UI and the report.
 type Status struct {
 	Enabled        bool   `json:"enabled"`
@@ -85,18 +93,23 @@ type Status struct {
 	AttributionURL string `json:"attributionUrl"`
 }
 
-// Service owns the open database. Its zero value (or nil) finds nothing.
+// Service owns the open database(s). Its zero value (or nil) finds nothing.
 type Service struct {
 	path       string
+	asnPath    string
 	autoUpdate bool
 	log        *slog.Logger
 	client     *http.Client
 
-	mu      sync.RWMutex // Close must not run concurrently with lookups
-	db      *maxminddb.Reader
-	modTime time.Time
-	size    int64
-	lastErr string
+	mu         sync.RWMutex // Close must not run concurrently with lookups
+	db         *maxminddb.Reader
+	modTime    time.Time
+	size       int64
+	lastErr    string
+	asnDB      *maxminddb.Reader
+	asnModTime time.Time
+	asnSize    int64
+	asnLastErr string
 }
 
 // New prepares a service for the database at path and loads it if present.
@@ -110,6 +123,21 @@ func New(path string, autoUpdate bool, logger *slog.Logger) *Service {
 		s.log.Error("geoip: load failed", "err", err)
 	}
 	return s
+}
+
+// SetASNPath configures the optional GeoIP ASN database path and loads it if present.
+func (s *Service) SetASNPath(path string) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	s.asnPath = path
+	s.mu.Unlock()
+	err := s.ReloadASN()
+	if err != nil && !os.IsNotExist(err) {
+		s.log.Error("geoip: ASN load failed", "err", err)
+	}
+	return err
 }
 
 // sameHostRedirect allows at most 3 redirects, each to the same host over
@@ -126,6 +154,15 @@ func validate(db *maxminddb.Reader) error {
 	t := db.Metadata.DatabaseType
 	if !strings.Contains(strings.ToLower(t), "city") {
 		return fmt.Errorf("database type %q is not a City database (want DB-IP IP to City Lite)", t)
+	}
+	return nil
+}
+
+// validateASN checks that a database is an ASN database the Hub can use.
+func validateASN(db *maxminddb.Reader) error {
+	t := strings.ToLower(db.Metadata.DatabaseType)
+	if !strings.Contains(t, "asn") && !strings.Contains(t, "isp") {
+		return fmt.Errorf("database type %q is not an ASN database (want DB-IP IP to ASN Lite or GeoLite2-ASN)", db.Metadata.DatabaseType)
 	}
 	return nil
 }
@@ -172,6 +209,58 @@ func (s *Service) Reload() error {
 	return nil
 }
 
+// ReloadASN opens the ASN database if it changed since the last load. A file
+// that fails to open or validate leaves the previous ASN database in use.
+func (s *Service) ReloadASN() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	path := s.asnPath
+	s.mu.RUnlock()
+	if path == "" {
+		return nil
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			s.mu.Lock()
+			s.asnLastErr = ""
+			s.mu.Unlock()
+		}
+		return err
+	}
+	s.mu.RLock()
+	same := s.asnDB != nil && fi.ModTime().Equal(s.asnModTime) && fi.Size() == s.asnSize
+	s.mu.RUnlock()
+	if same {
+		return nil
+	}
+	db, err := openSnapshot(path)
+	if err == nil {
+		if err = validateASN(db); err != nil {
+			db.Close()
+		}
+	}
+	if err != nil {
+		err = fmt.Errorf("%s: %w", path, err)
+		s.mu.Lock()
+		s.asnLastErr = err.Error()
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Lock()
+	old := s.asnDB
+	s.asnDB, s.asnModTime, s.asnSize, s.asnLastErr = db, fi.ModTime(), fi.Size(), ""
+	s.mu.Unlock()
+	if old != nil {
+		old.Close()
+	}
+	s.log.Info("geoip: ASN database loaded", "path", path, "type", db.Metadata.DatabaseType,
+		"built", time.Unix(int64(db.Metadata.BuildEpoch), 0).UTC().Format("2006-01-02"))
+	return nil
+}
+
 func (s *Service) setErr(msg string) {
 	s.mu.Lock()
 	s.lastErr = msg
@@ -203,7 +292,7 @@ func openSnapshot(path string) (*maxminddb.Reader, error) {
 	return maxminddb.Open(dst.Name())
 }
 
-// Close releases the database.
+// Close releases the database(s).
 func (s *Service) Close() {
 	if s == nil {
 		return
@@ -214,9 +303,13 @@ func (s *Service) Close() {
 		s.db.Close()
 		s.db = nil
 	}
+	if s.asnDB != nil {
+		s.asnDB.Close()
+		s.asnDB = nil
+	}
 }
 
-// Enabled reports whether a database is loaded.
+// Enabled reports whether a City database is loaded.
 func (s *Service) Enabled() bool {
 	if s == nil {
 		return false
@@ -224,6 +317,16 @@ func (s *Service) Enabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.db != nil
+}
+
+// ASNEnabled reports whether an ASN database is loaded.
+func (s *Service) ASNEnabled() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.asnDB != nil
 }
 
 func (s *Service) Status() Status {
@@ -247,8 +350,22 @@ var cgnat = netip.MustParsePrefix("100.64.0.0/10")
 // Public reports whether addr is worth locating: not private, CGNAT,
 // loopback, link-local, multicast or unspecified.
 func Public(addr netip.Addr) bool {
-	addr = addr.Unmap()
+	addr = addr.WithZone("").Unmap()
 	return addr.IsValid() && addr.IsGlobalUnicast() && !addr.IsPrivate() && !cgnat.Contains(addr)
+}
+
+func parseSourceAddr(source string) (netip.Addr, bool) {
+	source = strings.TrimSpace(source)
+	if host, _, err := net.SplitHostPort(source); err == nil {
+		source = host
+	} else if strings.HasPrefix(source, "[") && strings.HasSuffix(source, "]") {
+		source = source[1 : len(source)-1]
+	}
+	addr, err := netip.ParseAddr(strings.TrimSpace(source))
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return addr.WithZone("").Unmap(), true
 }
 
 // Lookup locates a source string (an IP, or an IP with a port). Names and
@@ -257,14 +374,43 @@ func (s *Service) Lookup(source string) *Location {
 	if s == nil {
 		return nil
 	}
-	if host, _, err := net.SplitHostPort(source); err == nil {
-		source = host
-	}
-	addr, err := netip.ParseAddr(strings.TrimSpace(source))
-	if err != nil {
+	addr, ok := parseSourceAddr(source)
+	if !ok {
 		return nil
 	}
 	return s.lookup(addr, "source")
+}
+
+// LookupASN resolves the Autonomous System Number and organization for a public
+// source address when an ASN database is loaded. Internal addresses, non-IP
+// sources, or unlisted addresses return (0, "").
+func (s *Service) LookupASN(source string) (uint, string) {
+	if s == nil {
+		return 0, ""
+	}
+	addr, ok := parseSourceAddr(source)
+	if !ok || !Public(addr) {
+		return 0, ""
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lookupASNLocked(addr)
+}
+
+func (s *Service) lookupASNLocked(addr netip.Addr) (uint, string) {
+	reader := s.asnDB
+	if reader == nil {
+		reader = s.db
+	}
+	if reader == nil {
+		return 0, ""
+	}
+	var ar asnRecord
+	res := reader.Lookup(addr)
+	if !res.Found() || res.Decode(&ar) != nil || ar.Number == 0 {
+		return 0, ""
+	}
+	return ar.Number, ar.Organization
 }
 
 // ForEvent locates the event's origin: a DNS beacon's EDNS Client Subnet
@@ -284,7 +430,7 @@ func (s *Service) ForEvent(source string, details map[string]any) *Location {
 }
 
 func (s *Service) lookup(addr netip.Addr, basis string) *Location {
-	addr = addr.Unmap()
+	addr = addr.WithZone("").Unmap()
 	if !Public(addr) {
 		return nil
 	}
@@ -313,6 +459,9 @@ func (s *Service) lookup(addr netip.Addr, basis string) *Location {
 	}
 	if r.Location.Latitude != nil && r.Location.Longitude != nil {
 		loc.Lat, loc.Lon = *r.Location.Latitude, *r.Location.Longitude
+	}
+	if asn, org := s.lookupASNLocked(addr); asn > 0 {
+		loc.ASN, loc.ASOrg = asn, org
 	}
 	return loc
 }

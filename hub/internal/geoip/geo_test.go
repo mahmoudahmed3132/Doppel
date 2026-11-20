@@ -157,3 +157,43 @@ func TestDownload(t *testing.T) {
 		t.Fatalf("leftover files: %v", entries)
 	}
 }
+
+func TestASNLookup(t *testing.T) {
+	s := newTestService(t)
+	asnPath := filepath.Join(t.TempDir(), "geoip", "dbip-asn-lite.mmdb")
+	copyFixture(t, "dbip-asn-test.mmdb", asnPath)
+	if err := s.SetASNPath(asnPath); err != nil {
+		t.Fatal(err)
+	}
+	if !s.ASNEnabled() {
+		t.Fatal("ASN database should be enabled")
+	}
+	if asn, org := s.LookupASN("81.2.69.160:12345"); asn != 12345 || org != "Example UK ISP" {
+		t.Fatalf("got asn=%d org=%q", asn, org)
+	}
+	if asn, org := s.LookupASN("203.0.113.9:51234"); asn != 64500 || org != "Example Ashburn Net" {
+		t.Fatalf("got asn=%d org=%q", asn, org)
+	}
+	if asn, _ := s.LookupASN("[2a02:c7f::1]:443"); asn != 12345 {
+		t.Fatalf("IPv6 asn=%d", asn)
+	}
+	if loc := s.Lookup("203.0.113.9:51234"); loc == nil || loc.ASN != 64500 || loc.ASOrg != "Example Ashburn Net" {
+		t.Fatalf("loc = %+v", loc)
+	}
+	// Internal addresses and names return 0.
+	for _, src := range []string{"10.1.2.3", "192.168.65.1", "127.0.0.1", "local", "Fire drill"} {
+		if asn, _ := s.LookupASN(src); asn != 0 {
+			t.Errorf("%q returned asn %d", src, asn)
+		}
+	}
+	// Reject non-ASN database and keep current ASN DB.
+	copyFixture(t, "dbip-country-test.mmdb", asnPath)
+	future := time.Now().Add(time.Minute)
+	os.Chtimes(asnPath, future, future)
+	if err := s.ReloadASN(); err == nil {
+		t.Fatal("Country database accepted as ASN database")
+	}
+	if asn, _ := s.LookupASN("81.2.69.160"); asn != 12345 {
+		t.Fatalf("previous ASN database lost: %d", asn)
+	}
+}

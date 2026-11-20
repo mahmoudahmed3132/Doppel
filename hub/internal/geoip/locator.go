@@ -22,6 +22,15 @@ func (l Locator) Locate(source string, details map[string]any) *domain.Location 
 	if loc == nil {
 		return nil
 	}
-	return &domain.Location{CountryCode: loc.CountryCode, Country: loc.Country, Region: loc.Region, City: loc.City,
-		Lat: loc.Lat, Lon: loc.Lon, Basis: loc.Basis, Address: loc.Address}
+	return &domain.Location{
+		CountryCode: loc.CountryCode, Country: loc.Country, Region: loc.Region, City: loc.City,
+		Lat: loc.Lat, Lon: loc.Lon, Basis: loc.Basis, Address: loc.Address,
+		ASN: loc.ASN, ASOrg: loc.ASOrg,
+	}
+}
+
+// LookupASN resolves the Autonomous System Number and organization for source
+// when an ASN database is loaded.
+func (l Locator) LookupASN(source string) (uint, string) {
+	return l.S.LookupASN(source)
 }
