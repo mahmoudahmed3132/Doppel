@@ -6,8 +6,8 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/backup"
@@ -44,7 +44,7 @@ const backupScheduleDoc = `# Doppel Hub scheduled backup examples (see docs/oper
 #
 # 2) Kubernetes CronJob (deploy/backup/cronjob.yaml):
 #    schedule: "0 2 * * *"
-#    command: ["doppel-hub", "backup", "--out", "/backups/snap-$(date -u +%Y%m%dT%H%M%SZ)", "--encrypt-to", "$(AGE_RECIPIENT)"]
+#    command: ["doppel-hub", "backup", "--out", "/backups/$(POD_NAME)", "--encrypt-to", "$(AGE_RECIPIENT)"]
 #    Mount the Hub data PVC and a separate backup PVC (never mount the KEK Secret into the backup destination).
 `
 
@@ -65,8 +65,8 @@ func backupCmd(log *slog.Logger, args []string) error {
 		return errors.New("usage: doppel-hub backup --out <dir> [--encrypt-to <age-recipient>] | --schedule")
 	}
 	if schedule {
-		fmt.Print(backupScheduleDoc)
-		return nil
+		_, err := os.Stdout.WriteString(backupScheduleDoc)
+		return err
 	}
 	if outDir == "" {
 		return errors.New("usage: doppel-hub backup --out <dir> [--encrypt-to <age-recipient>] | --schedule")
