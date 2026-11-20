@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/geoip"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ported"
 )
 
@@ -92,6 +93,7 @@ type Insights struct {
 	Fleet       FleetReader
 	Honeytokens HoneytokenLister
 	Beacons     BeaconLister
+	GeoIP       *geoip.Service // optional; used for group_by=asn when events are not pre-enriched
 }
 
 // NewInsights constructs an Insights projection with read-only access to the
@@ -137,10 +139,13 @@ func resolveWindowDays(ctx context.Context, params map[string]string) int {
 // Build computes the insights projection over the Hub's enriched event window
 // and current fleet state. Unknown query parameters are ignored.
 func (in *Insights) Build(ctx context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+	groupBy, err := parseGroupBy(params)
+	if err != nil {
+		return nil, err
+	}
 	var (
 		nodes   []domain.Node
 		sensors []domain.Sensor
-		err     error
 	)
 	if in != nil && in.Fleet != nil {
 		nodes, err = in.Fleet.Nodes(ctx)
@@ -239,10 +244,16 @@ func (in *Insights) Build(ctx context.Context, events []domain.EnrichedEvent, pa
 			sensorType = fallbackSensorType(e.SensorID)
 		}
 
+		var geo *geoip.Service
+		if in != nil {
+			geo = in.GeoIP
+		}
 		a := getType(sensorType)
 		a.row.Events++
 		if e.Source != "" {
-			a.sources[e.Source] = true
+			if key := sourceKey(e, groupBy, geo); key != "" {
+				a.sources[key] = true
+			}
 		}
 		if sev := string(e.Severity); sev != "" {
 			if a.row.HighestSeverity == "" || sevRank[sev] > sevRank[a.row.HighestSeverity] {

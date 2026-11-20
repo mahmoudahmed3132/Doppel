@@ -9,6 +9,7 @@ import (
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/attack"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/geoip"
 )
 
 // MaxPathEvents bounds one source's timeline.
@@ -51,25 +52,33 @@ type PathDTO struct {
 
 // AttackPath is the attack_path projection. Parameter `source` selects the
 // source; without it the busiest source in the window is shown.
-type AttackPath struct{}
+type AttackPath struct {
+	GeoIP *geoip.Service // optional; used for group_by=asn when events are not pre-enriched
+}
 
 func (AttackPath) Name() string { return "attack_path" }
 
-func (AttackPath) Build(ctx context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
-	source := strings.TrimSpace(params["source"])
-	if source == "" {
-		top, _ := Sources{}.Build(ctx, events, nil)
-		if l := top.(map[string]any)["sources"].([]Profile); len(l) > 0 {
-			source = l[0].Source
-		}
+func (ap AttackPath) Build(ctx context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+	groupBy, err := parseGroupBy(params)
+	if err != nil {
+		return nil, err
 	}
+	source := strings.TrimSpace(params["source"])
 	if len(source) > 256 {
 		return nil, errors.New("source is limited to 256 bytes")
 	}
-	return buildPath(source, events), nil
+	if source == "" {
+		top, _ := (Sources{GeoIP: ap.GeoIP}).Build(ctx, events, map[string]string{"group_by": groupBy})
+		if l := top.(map[string]any)["sources"].([]Profile); len(l) > 0 {
+			source = l[0].Source
+		}
+	} else {
+		source = normalizeQuerySource(source, groupBy, ap.GeoIP)
+	}
+	return buildPath(source, groupBy, ap.GeoIP, events), nil
 }
 
-func buildPath(source string, events []domain.EnrichedEvent) *PathDTO {
+func buildPath(source, groupBy string, geo *geoip.Service, events []domain.EnrichedEvent) *PathDTO {
 	d := &PathDTO{Source: source, Steps: []Step{}, Progression: []ProgressStep{}, Timeline: []domain.EnrichedEvent{}}
 	type key struct{ node, sensor string }
 	index := map[key]int{}
@@ -78,7 +87,7 @@ func buildPath(source string, events []domain.EnrichedEvent) *PathDTO {
 	seenTactic := map[string]bool{}
 
 	for _, e := range oldestFirst(events) {
-		if source == "" || e.Source != source || !attacker(e.Event) {
+		if source == "" || !attacker(e.Event) || sourceKey(e, groupBy, geo) != source {
 			continue
 		}
 		if d.Events >= MaxPathEvents {

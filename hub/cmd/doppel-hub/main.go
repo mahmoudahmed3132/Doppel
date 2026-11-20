@@ -346,7 +346,12 @@ func serve(log *slog.Logger) error {
 	if geoPath == "" {
 		geoPath = filepath.Join(filepath.Dir(cfg.DBPath), "geoip", "dbip-city-lite.mmdb")
 	}
+	asnPath := cfg.GeoIPASNDB
+	if asnPath == "" {
+		asnPath = filepath.Join(filepath.Dir(cfg.DBPath), "geoip", "dbip-asn-lite.mmdb")
+	}
 	geoSvc := geoip.New(geoPath, cfg.GeoIPAutoUpdate, log)
+	_ = geoSvc.SetASNPath(asnPath)
 	defer geoSvc.Close()
 	go geoSvc.StartUpdater(ctx)
 	enricher := &enrich.Enricher{Nodes: db, Assets: settingsSvc, Geo: geoip.Locator{S: geoSvc}, Attack: attack.Mapper{}}
@@ -544,14 +549,16 @@ func purgeSessions(ctx context.Context, a *auth.Service, log *slog.Logger) {
 
 // installedProjections lists the installed analytics projections by name (Q56).
 func installedProjections(geo *geoip.Service, fleet projections.FleetReader, honeytokens projections.HoneytokenLister, beacons projections.BeaconLister) map[string]ported.Projection {
+	ins := projections.NewInsights(fleet, honeytokens, beacons)
+	ins.GeoIP = geo
 	out := map[string]ported.Projection{}
 	for _, p := range []ported.Projection{
-		projections.NewInsights(fleet, honeytokens, beacons),
+		ins,
 		attack.MatrixProjection{},
-		projections.Sources{},
+		projections.Sources{GeoIP: geo},
 		projections.GeoMap{GeoIP: geo},
-		projections.AttackPath{},
-		projections.Report{},
+		projections.AttackPath{GeoIP: geo},
+		projections.Report{GeoIP: geo},
 	} {
 		out[p.Name()] = p
 	}

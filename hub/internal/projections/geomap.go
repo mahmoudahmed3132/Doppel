@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"net"
 	"net/netip"
 	"sort"
 
@@ -27,7 +26,7 @@ type Point struct {
 	CountryCode  string  `json:"countryCode"`
 	Events       int     `json:"events"`
 	BeaconEvents int     `json:"beaconEvents"`
-	// Sources are event sources as stored (what Attack Path matches on);
+	// Sources are correlated event sources (what Attack Path matches on);
 	// for a DNS beacon that is the resolver. ClientSubnets are the beacon
 	// client subnets (network addresses) that placed events here.
 	SourceCount   int      `json:"sourceCount"`
@@ -63,22 +62,27 @@ type GeoDTO struct {
 // GeoMap is the geo_map projection; locations come from the Hub's GeoIP
 // enrichment of each event.
 type GeoMap struct {
-	GeoIP *geoip.Service // status only; nil reports GeoIP as disabled
+	GeoIP *geoip.Service // status and optional ASN rollup; nil reports GeoIP as disabled
 }
 
 func (GeoMap) Name() string { return "geo_map" }
 
 // internalSource reports an address the map never looks up (private,
 // CGNAT, loopback, ...), as opposed to a name or an unlisted public address.
-func internalSource(source string) bool {
-	if host, _, err := net.SplitHostPort(source); err == nil {
-		source = host
+func internalSource(e domain.EnrichedEvent) bool {
+	ip := e.EffectiveSourceIP()
+	if ip == "" {
+		return false
 	}
-	a, err := netip.ParseAddr(source)
+	a, err := netip.ParseAddr(ip)
 	return err == nil && !geoip.Public(a)
 }
 
-func (g GeoMap) Build(_ context.Context, events []domain.EnrichedEvent, _ map[string]string) (any, error) {
+func (g GeoMap) Build(_ context.Context, events []domain.EnrichedEvent, params map[string]string) (any, error) {
+	groupBy, err := parseGroupBy(params)
+	if err != nil {
+		return nil, err
+	}
 	dto := &GeoDTO{GeoIP: g.GeoIP.Status(), Points: []Point{}, Countries: []Country{}}
 	type pointAgg struct {
 		p        *Point
@@ -97,7 +101,7 @@ func (g GeoMap) Build(_ context.Context, events []domain.EnrichedEvent, _ map[st
 		dto.Events++
 		l := e.Enrichment.Location
 		if l == nil {
-			if internalSource(e.Source) {
+			if internalSource(e) {
 				dto.InternalEvents++
 			} else {
 				dto.UnlocatedEvents++
@@ -106,10 +110,11 @@ func (g GeoMap) Build(_ context.Context, events []domain.EnrichedEvent, _ map[st
 		}
 		dto.LocatedEvents++
 		sev := string(e.Severity)
+		key := sourceKey(e, groupBy, g.GeoIP)
 
 		if l.Lat != 0 || l.Lon != 0 {
-			key := fmt.Sprintf("%.2f,%.2f", round2(l.Lat), round2(l.Lon))
-			a := points[key]
+			ptKey := fmt.Sprintf("%.2f,%.2f", round2(l.Lat), round2(l.Lon))
+			a := points[ptKey]
 			if a == nil {
 				a = &pointAgg{
 					p:        &Point{Lat: round2(l.Lat), Lon: round2(l.Lon), City: l.City, Region: l.Region, Country: l.Country, CountryCode: l.CountryCode, MaxSeverity: sev},
@@ -117,13 +122,15 @@ func (g GeoMap) Build(_ context.Context, events []domain.EnrichedEvent, _ map[st
 					subnets:  map[string]bool{},
 					triggers: map[string]bool{},
 				}
-				points[key] = a
+				points[ptKey] = a
 			}
 			a.p.Events++
 			if e.Trigger == domain.TriggerBeaconTriggered {
 				a.p.BeaconEvents++
 			}
-			a.sources[e.Source] = true
+			if key != "" {
+				a.sources[key] = true
+			}
 			if l.Basis == "client_subnet" {
 				a.subnets[l.Address] = true
 			}
@@ -145,7 +152,9 @@ func (g GeoMap) Build(_ context.Context, events []domain.EnrichedEvent, _ map[st
 			countrySources[cc] = map[string]bool{}
 		}
 		c.Events++
-		countrySources[cc][e.Source] = true
+		if key != "" {
+			countrySources[cc][key] = true
+		}
 	}
 
 	for _, a := range points {

@@ -149,3 +149,75 @@ func TestInsightsProjectionRoute(t *testing.T) {
 		t.Fatalf("fleet error: %d %v", code, out)
 	}
 }
+
+func TestSourcesProjectionCorrelatesTwoDecoysAndGroupBy(t *testing.T) {
+	var db *store.DB
+	h := newInsightHubWith(t, func(in *Insights) {
+		db = in.Store.(*store.DB)
+		in.Projections = map[string]ported.Projection{
+			"sources":     projections.Sources{},
+			"attack_path": projections.AttackPath{},
+		}
+	})
+
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if _, err := db.DeleteAllEvents(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range []*domain.Event{
+		{
+			EventID: "nc-1", NodeID: "node-0000000a", SensorID: "ts-sensor-tarpit", Trigger: "tcp_connection",
+			Severity: domain.SeverityLow, OccurredAt: now, ReceivedAt: now, Source: "192.168.65.1:52101",
+			SourceIP: "192.168.65.1", SourceKind: domain.SourceKindIP, Target: "2222", Details: []byte(`{}`),
+		},
+		{
+			EventID: "nc-2", NodeID: "node-0000000a", SensorID: "ts-sensor-web", Trigger: "web_login_attempt",
+			Severity: domain.SeverityHigh, OccurredAt: now, ReceivedAt: now, Source: "192.168.65.1:52102",
+			SourceIP: "192.168.65.1", SourceKind: domain.SourceKindIP, Target: "8081", Details: []byte(`{}`),
+		},
+		{
+			EventID: "drill-1", NodeID: "node-0000000a", SensorID: "ts-sensor-tarpit", Trigger: "tcp_connection",
+			Severity: domain.SeverityInfo, OccurredAt: now, ReceivedAt: now, Source: "Fire drill",
+			SourceKind: domain.SourceKindDrill, Target: "2222", Details: []byte(`{}`),
+		},
+	} {
+		if _, err := db.InsertEvent(ctx, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	code, out, _ := h.c.do("GET", "/api/v3/analytics/projections/sources", nil)
+	if code != 200 {
+		t.Fatalf("sources: %d %v", code, out)
+	}
+	raw, _ := json.Marshal(out["data"])
+	var body struct {
+		Sources []projections.Profile `json:"sources"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Sources) != 1 || body.Sources[0].Source != "192.168.65.1" || body.Sources[0].Decoys != 2 || body.Sources[0].Events != 2 {
+		t.Fatalf("expected 1 correlated multi-decoy source, got %+v", body.Sources)
+	}
+
+	// group_by=subnet24 rolls up into 192.168.65.0/24.
+	code, out, _ = h.c.do("GET", "/api/v3/analytics/projections/sources?group_by=subnet24", nil)
+	if code != 200 {
+		t.Fatalf("sources subnet24: %d %v", code, out)
+	}
+	raw, _ = json.Marshal(out["data"])
+	body.Sources = nil
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Sources) != 1 || body.Sources[0].Source != "192.168.65.0/24" {
+		t.Fatalf("expected 192.168.65.0/24 rollup, got %+v", body.Sources)
+	}
+
+	// Invalid group_by returns 400.
+	if code, _, _ := h.c.do("GET", "/api/v3/analytics/projections/sources?group_by=invalid", nil); code != 400 {
+		t.Fatalf("invalid group_by: expected 400, got %d", code)
+	}
+}
