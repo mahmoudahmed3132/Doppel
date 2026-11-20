@@ -140,8 +140,9 @@ TS_KEK_FILE="$W/kek" \
 TS_ENV="development" \
 TS_SETUP_TOKEN="$SETUP_TOKEN" \
 TS_DB_PATH="$W/demo.db" \
-TS_LISTEN_HOST="$DEMO_LISTEN_HOST" \
+TS_LISTEN_ADDR="$DEMO_LISTEN_HOST" \
 TS_LISTEN_PORT="$DEMO_HUB_PORT" \
+TS_METRICS_ADDR="off" \
 TS_REGISTRY_URL="http://127.0.0.1:${DEMO_REG_PORT}/" \
 TS_DEV_ALLOW_UNSIGNED_MANIFESTS="1" \
 TS_UPDATE_CHECK_URL="https://127.0.0.1:1/none" \
@@ -228,6 +229,7 @@ for svc_name, svc in sorted(services.items()):
     env = dict(svc.get("environment", {}))
     env["TS_NODE_KEY"] = node_key
     env["TS_HUB_ENDPOINT"] = hub_url
+    env["TS_DEV_ALLOW_HTTP"] = "true"
     img = svc.get("image", "")
     # Extract catalogue name from image "demo.local/ts-sensor-<name>:<ver>@sha256:..."
     base = img.split("@")[0].rsplit("/", 1)[-1].split(":", 1)[0]

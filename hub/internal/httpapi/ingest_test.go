@@ -290,6 +290,7 @@ func TestSDKEndToEnd(t *testing.T) {
 	env := map[string]string{
 		sensor.EnvHubEndpoint: f.srv.URL, sensor.EnvNodeKey: f.keyA,
 		sensor.EnvSensorID: "ts-sensor-demo", sensor.EnvConfigRevision: "rev_12345678",
+		sensor.EnvDevAllowHTTP: "true",
 	}
 	getenv := func(k string) string { return env[k] }
 	drill := sensor.Drill{Trigger: "demo_drill", Target: "demo"}

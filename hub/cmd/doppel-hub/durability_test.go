@@ -66,6 +66,7 @@ func startHub(t *testing.T, dir, dbPath string) *hubProc {
 		config.EnvDevAllowPlaintext+"=true",
 		config.EnvDBPath+"="+dbPath,
 		config.EnvListenPort+"="+strconv.Itoa(port),
+		config.EnvMetricsAddr+"=off",
 		config.EnvUpdateCheckURL+"=https://127.0.0.1:1/none",
 		config.EnvRegistryURL+"=http://127.0.0.1:1/",
 	)

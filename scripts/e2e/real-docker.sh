@@ -46,9 +46,9 @@ SENSORS="tcp-tarpit template web-router-decoy"
 mkdir -p "$W/bin"; CLI="$W/bin/doppel"
 # Command as printed for the user to rerun from their own shell (macOS needs the TS_* paths).
 if [ "$OS" = Darwin ]; then
-	PCLI="env TS_CONFIG_FILE=$TS_CONFIG_FILE TS_WORK_DIR=$TS_WORK_DIR TS_ALLOW_NON_AMD64=true $CLI"
+	PCLI="env TS_CONFIG_FILE=$TS_CONFIG_FILE TS_WORK_DIR=$TS_WORK_DIR TS_ALLOW_NON_AMD64=true TS_DEV_ALLOW_HTTP=true $CLI"
 else
-	PCLI="$CLI"
+	PCLI="env TS_DEV_ALLOW_HTTP=true $CLI"
 fi
 fail() { echo "E2E FAIL: $*" >&2; exit 1; }
 step() { echo; echo "=== $*"; }
@@ -61,7 +61,7 @@ cleanup() {
 		for c in $(docker ps -aq --filter label=io.truesignal.role=sensor); do echo "--- logs $c"; docker logs --tail 30 "$c" 2>&1 || true; done
 	fi
 	if [ "${KEEP:-0}" = 1 ] && [ "$rc" -eq 0 ]; then exit 0; fi # POC mode: leave everything running
-	$RUN "$CLI" uninstall --yes >/dev/null 2>&1 || true
+	$RUN env TS_DEV_ALLOW_HTTP=true "$CLI" uninstall --yes >/dev/null 2>&1 || true
 	[ -f "$W/hub.pid" ] && kill "$(cat "$W/hub.pid")" 2>/dev/null || true
 	docker rm -f ts-e2e-registry >/dev/null 2>&1 || true
 	[ -n "${REGPID:-}" ] && kill "$REGPID" 2>/dev/null || true
@@ -106,12 +106,19 @@ REGPID=$!
 step "start the Hub (secrets sealed under a generated KEK)"
 "$W/hub" kek-generate > "$W/kek"; chmod 600 "$W/kek"
 start_hub() {
-	TS_KEK_FILE="$W/kek" TS_ENV=development TS_SETUP_TOKEN=e2e-setup-token-0123456789abcdef TS_DB_PATH="$W/ts.db" TS_LISTEN_PORT=18080 \
+	TS_KEK_FILE="$W/kek" TS_ENV=development TS_SETUP_TOKEN=e2e-setup-token-0123456789abcdef TS_DB_PATH="$W/ts.db" \
+		TS_LISTEN_ADDR="$HOSTIP" TS_LISTEN_PORT=18080 TS_METRICS_ADDR="127.0.0.1:19090" \
 		TS_REGISTRY_URL=http://127.0.0.1:18081/ TS_DEV_ALLOW_UNSIGNED_MANIFESTS=1 \
 		TS_UPDATE_CHECK_URL=https://127.0.0.1:1/none "$W/hub" serve >> "$W/hub.log" 2>&1 &
 	echo $! > "$W/hub.pid"
 	for _ in $(seq 50); do curl -fsS "$HUB/v3/version" >/dev/null 2>&1 && break; sleep 0.2; done
 	curl -fsS "$HUB/v3/version" || fail "hub did not start"; echo
+	curl -fsS "$HUB/healthz" | jq -e '.status == "ok"' >/dev/null || fail "/healthz failed"
+	curl -fsS "$HUB/readyz" | jq -e '.status == "ok"' >/dev/null || fail "/readyz failed"
+	curl -fsS "http://127.0.0.1:19090/metrics" | grep -q 'doppel_build_info{' || fail "/metrics scrape failed on loopback listener"
+	if curl -fsS "$HUB/metrics" 2>/dev/null | grep -q 'doppel_build_info{'; then
+		fail "/metrics must never be exposed on the public Hub port"
+	fi
 }
 start_hub
 
@@ -132,8 +139,11 @@ add '{"catalogue_name":"template","version":"1.0.0","config":{"TS_TEMPLATE_PORT"
 add '{"catalogue_name":"web-router-decoy","version":"1.0.0","config":{"TS_PORT":"8081"}}'
 
 step "link and apply with the real CLI and docker compose"
-$RUN env TS_NODE_KEY="$KEY" "$CLI" link "$HUB"
-$RUN "$CLI" apply
+if $RUN env TS_NODE_KEY="$KEY" "$CLI" link "$HUB" >/dev/null 2>&1; then
+	fail "CLI accepted plain http:// without TS_DEV_ALLOW_HTTP=true"
+fi
+$RUN env TS_NODE_KEY="$KEY" TS_DEV_ALLOW_HTTP=true "$CLI" link "$HUB"
+$RUN env TS_DEV_ALLOW_HTTP=true "$CLI" apply
 docker ps --filter label=io.truesignal.role=sensor --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
 
 step "rendered hardening holds on the running containers (§6.12)"
@@ -230,8 +240,8 @@ api GET '/analytics/projections/sources' | jq -e '[.data.sources[].source] | ind
 	fail "fire drill events should be excluded from /api/v3/analytics/projections/sources (F-002)"
 
 step "status, idempotent re-apply, applied revision"
-$RUN "$CLI" status
-$RUN "$CLI" apply 2>&1 | tee "$W/apply2.txt"
+$RUN env TS_DEV_ALLOW_HTTP=true "$CLI" status
+$RUN env TS_DEV_ALLOW_HTTP=true "$CLI" apply 2>&1 | tee "$W/apply2.txt"
 grep -q "nothing to do" "$W/apply2.txt" || fail "second apply was not a no-op"
 api GET "/nodes/$NODE" | jq -e '.node.health.in_sync' >/dev/null || fail "node not in sync after apply"
 api GET "/nodes/$NODE" | jq -e '[.node.sensors[].dropped_events | type == "number"] | all' >/dev/null ||
@@ -338,7 +348,7 @@ POC
 fi
 
 step "uninstall"
-$RUN "$CLI" uninstall --yes
+$RUN env TS_DEV_ALLOW_HTTP=true "$CLI" uninstall --yes
 [ -z "$(docker ps -aq --filter label=io.truesignal.role=sensor)" ] || fail "containers left after uninstall"
 echo
 echo "E2E PASS: real Docker deployment of $SENSORS"

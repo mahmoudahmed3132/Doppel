@@ -12,6 +12,7 @@ import (
 
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/auth"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/domain"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/metrics"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/store"
 )
 
@@ -159,6 +160,7 @@ func (a *Admin) routes() {
 // state-changing requests after completion.
 func (a *Admin) wrap(method, route, action string, acc access, n need, h http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		metrics.SetRoute(r.Context(), method+" "+route)
 		sw := &statusWriter{ResponseWriter: w}
 		actor := &actorRef{name: "anonymous"}
 		r = r.WithContext(context.WithValue(r.Context(), actorKey, actor))

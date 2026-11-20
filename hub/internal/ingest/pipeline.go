@@ -52,16 +52,17 @@ type LiveFeed interface {
 // Pipeline processes accepted events in the order defined by §6.5.
 // Collaborators other than Store, Log and Now may be nil in tests.
 type Pipeline struct {
-	Store       Store
-	Lists       SourceLists
-	Beacons     ported.BeaconService
-	Honeytokens ported.HoneytokenService
-	Enricher    Enricher
-	SIEM        SIEMSink
-	Notifier    Notifier
-	Live        LiveFeed
-	Log         *slog.Logger
-	Now         func() time.Time
+	Store           Store
+	Lists           SourceLists
+	Beacons         ported.BeaconService
+	Honeytokens     ported.HoneytokenService
+	Enricher        Enricher
+	SIEM            SIEMSink
+	Notifier        Notifier
+	Live            LiveFeed
+	Log             *slog.Logger
+	Now             func() time.Time
+	OnEventIngested func(node, sensor, severity string, drill bool)
 }
 
 // Result reports what happened to one event.
@@ -157,6 +158,9 @@ func (p *Pipeline) Process(ctx context.Context, ev *domain.Event) (Result, error
 		return res, nil
 	}
 	res.Stored = true
+	if p.OnEventIngested != nil {
+		p.OnEventIngested(ev.NodeID, ev.SensorID, string(ev.Severity), ev.Drill)
+	}
 
 	// Step 5: beacon use.
 	if knownBeacon {

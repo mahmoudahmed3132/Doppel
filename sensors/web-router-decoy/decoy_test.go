@@ -161,7 +161,7 @@ func TestTestModeAgainstMockHub(t *testing.T) {
 		io.WriteString(w, `{"ok":true,"accepted":1,"duplicates":0,"rejected":[]}`)
 	}))
 	defer hub.Close()
-	env := map[string]string{"TS_HUB_ENDPOINT": hub.URL, "TS_TEST_MODE": "true"}
+	env := map[string]string{"TS_HUB_ENDPOINT": hub.URL, "TS_TEST_MODE": "true", "TS_DEV_ALLOW_HTTP": "true"}
 	if code := sensor.Run(context.Background(), spec, sensor.Options{Getenv: func(k string) string { return env[k] },
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}); code != 0 || len(got) != 1 || got[0]["trigger"] != TriggerLogin {
 		t.Fatalf("%d %v", code, got)

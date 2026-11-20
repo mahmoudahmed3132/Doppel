@@ -15,9 +15,13 @@ func TestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.ListenPort != 8080 || c.DBPath != "/data/truesignal.db" || c.SessionTTL != 12*time.Hour ||
+	if c.ListenAddr != "127.0.0.1" || c.ListenPort != 8080 || c.MetricsAddr != "127.0.0.1:9090" ||
+		c.DBPath != "/data/truesignal.db" || c.SessionTTL != 12*time.Hour ||
 		c.SessionIdle != 15*time.Minute || c.SyslogPEN != 32473 || c.Development || len(c.TrustedProxies) != 0 {
 		t.Fatalf("%+v", c)
+	}
+	if !c.ListenIsLoopback() {
+		t.Fatal("default ListenAddr must be loopback")
 	}
 	if len(c.DevWarnings()) != 0 {
 		t.Fatal("unexpected dev warnings")
@@ -105,5 +109,78 @@ func TestSecretsPolicy(t *testing.T) {
 	}
 	if !found {
 		t.Error("no warning for plaintext secrets")
+	}
+}
+
+func TestListenTLSAndMetrics(t *testing.T) {
+	c, err := Load(env(map[string]string{
+		EnvListenAddr:  "0.0.0.0",
+		EnvListenPort:  "8443",
+		EnvTLSCertFile: "/etc/hub/cert.pem",
+		EnvTLSKeyFile:  "/etc/hub/key.pem",
+		EnvMetricsAddr: "127.0.0.1:9191",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.ListenEndpoint() != "0.0.0.0:8443" || c.ListenIsLoopback() || !c.TLSEnabled() || c.MetricsAddr != "127.0.0.1:9191" {
+		t.Fatalf("unexpected config: %+v", c)
+	}
+
+	// Metrics disabled via "off"
+	c, err = Load(env(map[string]string{EnvMetricsAddr: "off"}))
+	if err != nil || c.MetricsAddr != "" {
+		t.Fatalf("metrics off: cfg=%+v err=%v", c, err)
+	}
+
+	// IPv6 loopback and localhost
+	c, err = Load(env(map[string]string{EnvListenAddr: "::1"}))
+	if err != nil || !c.ListenIsLoopback() || c.ListenEndpoint() != "[::1]:8080" {
+		t.Fatalf("ipv6 loopback: cfg=%+v err=%v", c, err)
+	}
+	c, err = Load(env(map[string]string{EnvListenAddr: "localhost"}))
+	if err != nil || c.ListenAddr != "127.0.0.1" {
+		t.Fatalf("localhost: cfg=%+v err=%v", c, err)
+	}
+
+	// Invalid cases must fail closed
+	for name, m := range map[string]map[string]string{
+		"bad listen addr":       {EnvListenAddr: "not-an-ip"},
+		"cert without key":      {EnvTLSCertFile: "/etc/cert.pem"},
+		"key without cert":      {EnvTLSKeyFile: "/etc/key.pem"},
+		"bad metrics addr":      {EnvMetricsAddr: "9090"},
+		"bad metrics host":      {EnvMetricsAddr: "example.com:9090"},
+		"bad metrics port":      {EnvMetricsAddr: "127.0.0.1:70000"},
+		"metrics shares public": {EnvListenAddr: "127.0.0.1", EnvListenPort: "8080", EnvMetricsAddr: "127.0.0.1:8080"},
+	} {
+		if _, err := Load(env(m)); err == nil {
+			t.Errorf("%s: expected error, got nil", name)
+		}
+	}
+}
+
+func TestTransportPolicy(t *testing.T) {
+	for name, tc := range map[string]struct {
+		env      map[string]string
+		endpoint string
+		ok       bool
+	}{
+		"prod, no tls, no proxy":               {map[string]string{}, "", false},
+		"prod, non-loopback, no tls, no proxy": {map[string]string{EnvListenAddr: "0.0.0.0"}, "", false},
+		"prod, native tls, no endpoint":        {map[string]string{EnvTLSCertFile: "/c", EnvTLSKeyFile: "/k"}, "", true},
+		"prod, native tls, https endpoint":     {map[string]string{EnvTLSCertFile: "/c", EnvTLSKeyFile: "/k"}, "https://hub.example.com", true},
+		"prod, native tls, http endpoint":      {map[string]string{EnvTLSCertFile: "/c", EnvTLSKeyFile: "/k"}, "http://hub.example.com", false},
+		"prod, trusted proxy, https endpoint":  {map[string]string{EnvTrustedProxies: "10.0.0.1"}, "https://hub.example.com", true},
+		"prod, trusted proxy, http endpoint":   {map[string]string{EnvTrustedProxies: "10.0.0.1"}, "http://hub.example.com", false},
+		"prod, non-loopback + trusted proxy":   {map[string]string{EnvListenAddr: "0.0.0.0", EnvTrustedProxies: "10.0.0.1"}, "https://hub.example.com", true},
+		"dev, no tls, no proxy, http endpoint": {map[string]string{EnvEnvironment: "development"}, "http://127.0.0.1:8080", true},
+	} {
+		c, err := Load(env(tc.env))
+		if err != nil {
+			t.Fatalf("%s: load: %v", name, err)
+		}
+		if got := c.TransportPolicy(tc.endpoint) == nil; got != tc.ok {
+			t.Errorf("%s: ok=%v want %v (err=%v)", name, got, tc.ok, c.TransportPolicy(tc.endpoint))
+		}
 	}
 }

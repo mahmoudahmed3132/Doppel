@@ -33,12 +33,15 @@ type Client struct {
 	http    *http.Client
 }
 
-// ParseEndpoint validates a Hub URL. Plain HTTP is accepted for lab use
-// (§4.1); the caller should warn.
-func ParseEndpoint(raw string) (*url.URL, error) {
+// ParseEndpoint validates a Hub URL. Plain HTTP is refused unless allowHTTP
+// is true (TS_DEV_ALLOW_HTTP=true for local development, H1 / R2).
+func ParseEndpoint(raw string, allowHTTP bool) (*url.URL, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return nil, errors.New("hub URL must be https://host[:port][/path] (http:// only for lab use)")
+		return nil, errors.New("hub URL must be https://host[:port][/path]")
+	}
+	if u.Scheme == "http" && !allowHTTP {
+		return nil, errors.New("plain HTTP hub URL is refused (set TS_DEV_ALLOW_HTTP=true for local development)")
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
 	return u, nil

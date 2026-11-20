@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -15,7 +16,11 @@ import (
 
 // Environment variable names.
 const (
+	EnvListenAddr          = "TS_LISTEN_ADDR"
 	EnvListenPort          = "TS_LISTEN_PORT"
+	EnvTLSCertFile         = "TS_TLS_CERT_FILE"
+	EnvTLSKeyFile          = "TS_TLS_KEY_FILE"
+	EnvMetricsAddr         = "TS_METRICS_ADDR"
 	EnvDBPath              = "TS_DB_PATH"
 	EnvEnvironment         = "TS_ENV"
 	EnvTrustedProxies      = "TS_TRUSTED_PROXIES"
@@ -39,9 +44,19 @@ const (
 	EnvDevAllowPlaintext   = "TS_DEV_ALLOW_PLAINTEXT_SECRETS"
 )
 
+// DefaultListenAddr and DefaultMetricsAddr bind loopback only (F-003).
+const (
+	DefaultListenAddr  = "127.0.0.1"
+	DefaultMetricsAddr = "127.0.0.1:9090"
+)
+
 // Config is the Hub process configuration.
 type Config struct {
+	ListenAddr        string
 	ListenPort        int
+	TLSCertFile       string
+	TLSKeyFile        string
+	MetricsAddr       string // "" disables the dedicated /metrics listener
 	DBPath            string
 	Development       bool
 	TrustedProxies    []netip.Prefix
@@ -80,7 +95,9 @@ const DefaultUpdateCheckURL = "https://api.github.com/repos/" + ReleasesRepo + "
 func Load(getenv func(string) string) (*Config, error) {
 	get := func(k string) string { return strings.TrimSpace(getenv(k)) }
 	c := &Config{
+		ListenAddr:  DefaultListenAddr,
 		ListenPort:  8080,
+		MetricsAddr: DefaultMetricsAddr,
 		DBPath:      "/data/truesignal.db",
 		SessionTTL:  12 * time.Hour,
 		SessionIdle: 15 * time.Minute,
@@ -91,12 +108,50 @@ func Load(getenv func(string) string) (*Config, error) {
 		errs = append(errs, fmt.Errorf("%s: "+format, append([]any{k}, a...)...))
 	}
 
+	if v := get(EnvListenAddr); v != "" {
+		if strings.EqualFold(v, "localhost") {
+			c.ListenAddr = "127.0.0.1"
+		} else if a, err := netip.ParseAddr(v); err != nil {
+			fail(EnvListenAddr, "invalid IP address %q", v)
+		} else {
+			c.ListenAddr = a.Unmap().String()
+		}
+	}
 	if v := get(EnvListenPort); v != "" {
 		p, err := strconv.Atoi(v)
 		if err != nil || p < 1 || p > 65535 {
 			fail(EnvListenPort, "invalid port %q", v)
 		}
 		c.ListenPort = p
+	}
+	c.TLSCertFile = get(EnvTLSCertFile)
+	c.TLSKeyFile = get(EnvTLSKeyFile)
+	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
+		fail(EnvTLSCertFile, "must be set together with %s", EnvTLSKeyFile)
+	}
+	if v := get(EnvMetricsAddr); v != "" {
+		switch strings.ToLower(v) {
+		case "off", "none", "disabled":
+			c.MetricsAddr = ""
+		default:
+			host, portStr, err := net.SplitHostPort(v)
+			if err != nil {
+				fail(EnvMetricsAddr, "must be host:port or off, got %q", v)
+			} else {
+				p, perr := strconv.Atoi(portStr)
+				if perr != nil || p < 0 || p > 65535 {
+					fail(EnvMetricsAddr, "invalid port %q", portStr)
+				}
+				if strings.EqualFold(host, "localhost") {
+					host = "127.0.0.1"
+				} else if a, aerr := netip.ParseAddr(host); aerr != nil {
+					fail(EnvMetricsAddr, "invalid host %q (must be an IP address)", host)
+				} else {
+					host = a.Unmap().String()
+				}
+				c.MetricsAddr = net.JoinHostPort(host, strconv.Itoa(p))
+			}
+		}
 	}
 	if v := get(EnvDBPath); v != "" {
 		c.DBPath = v
@@ -187,10 +242,49 @@ func Load(getenv func(string) string) (*Config, error) {
 		c.RegistryURL = v
 	}
 
+	if c.MetricsAddr != "" && c.MetricsAddr == c.ListenEndpoint() {
+		fail(EnvMetricsAddr, "must not share the Hub listen address %s", c.ListenEndpoint())
+	}
+
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
 	}
 	return c, nil
+}
+
+// TLSEnabled reports whether native TLS is configured via cert and key files.
+func (c *Config) TLSEnabled() bool {
+	return c.TLSCertFile != "" && c.TLSKeyFile != ""
+}
+
+// ListenEndpoint returns host:port for the main Hub HTTP(S) listener.
+func (c *Config) ListenEndpoint() string {
+	return net.JoinHostPort(c.ListenAddr, strconv.Itoa(c.ListenPort))
+}
+
+// ListenIsLoopback reports whether ListenAddr is a loopback IP address.
+func (c *Config) ListenIsLoopback() bool {
+	a, err := netip.ParseAddr(c.ListenAddr)
+	return err == nil && a.IsLoopback()
+}
+
+// TransportPolicy enforces HTTPS in production (H1 / WP-4A / F-003):
+// production refuses to start unless native TLS is configured or
+// TS_TRUSTED_PROXIES is set (TLS terminated by a trusted reverse proxy), and
+// any configured public_endpoint uses https://.
+func (c *Config) TransportPolicy(publicEndpoint string) error {
+	if c.Development {
+		return nil
+	}
+	if !c.TLSEnabled() && len(c.TrustedProxies) == 0 {
+		return fmt.Errorf("production requires HTTPS: configure native TLS (%s and %s) or a TLS-terminating reverse proxy (%s); for local lab use set %s=development",
+			EnvTLSCertFile, EnvTLSKeyFile, EnvTrustedProxies, EnvEnvironment)
+	}
+	if ep := strings.TrimSpace(publicEndpoint); ep != "" && !strings.HasPrefix(strings.ToLower(ep), "https://") {
+		return fmt.Errorf("production requires public_endpoint to use https:// (got %q); update public_endpoint or set %s=development for local lab use",
+			ep, EnvEnvironment)
+	}
+	return nil
 }
 
 func parsePrefix(s string) (netip.Prefix, error) {
@@ -231,7 +325,7 @@ func (c *Config) DevWarnings() []string {
 		w = append(w, EnvDevAllowPlaintext+" is set: secrets are stored in plaintext")
 	}
 	if c.Development {
-		w = append(w, EnvEnvironment+"=development: cookie Secure flag and WebSocket origin check are relaxed")
+		w = append(w, EnvEnvironment+"=development: HTTPS enforcement, cookie Secure flag and WebSocket origin check are relaxed")
 	}
 	return w
 }

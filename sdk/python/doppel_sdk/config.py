@@ -18,8 +18,17 @@ ENV_DEFAULT_SEVERITY = "TS_DEFAULT_SEVERITY"
 ENV_CONFIG_REVISION = "TS_CONFIG_REVISION"
 ENV_TEST_MODE = "TS_TEST_MODE"
 ENV_CA_BUNDLE = "TS_CA_BUNDLE"
+ENV_DEV_ALLOW_HTTP = "TS_DEV_ALLOW_HTTP"
 
-RESERVED = frozenset({ENV_HUB_ENDPOINT, ENV_NODE_KEY, ENV_SENSOR_ID, ENV_CONFIG_REVISION, ENV_TEST_MODE, ENV_CA_BUNDLE})
+RESERVED = frozenset({
+    ENV_HUB_ENDPOINT,
+    ENV_NODE_KEY,
+    ENV_SENSOR_ID,
+    ENV_CONFIG_REVISION,
+    ENV_TEST_MODE,
+    ENV_CA_BUNDLE,
+    ENV_DEV_ALLOW_HTTP,
+})
 TEST_MODE_SENSOR_ID = "ts-sensor-test"
 
 
@@ -37,6 +46,7 @@ class Config:
     test_mode: bool
     ca_bundle: str
     _env: Mapping[str, str] = field(repr=False, compare=False, default_factory=dict)
+    dev_allow_http: bool = False
 
     @classmethod
     def load(cls, env: Optional[Mapping[str, str]] = None) -> "Config":
@@ -52,6 +62,14 @@ class Config:
         else:
             raise ConfigError(f"{ENV_TEST_MODE} must be true or false, got {tm!r}")
 
+        ah = (env.get("DOPPEL_DEV_ALLOW_HTTP") or env.get(ENV_DEV_ALLOW_HTTP) or "").strip().lower()
+        if ah in ("", "false", "0", "no"):
+            dev_allow_http = False
+        elif ah in ("true", "1", "yes"):
+            dev_allow_http = True
+        else:
+            raise ConfigError(f"{ENV_DEV_ALLOW_HTTP} must be true or false, got {ah!r}")
+
         endpoint = ""
         raw = get(ENV_HUB_ENDPOINT)
         if not raw:
@@ -60,7 +78,11 @@ class Config:
             try:
                 u = urlsplit(raw)
                 if u.scheme not in ("https", "http"):
-                    errors.append(f"{ENV_HUB_ENDPOINT} must use https:// (or http:// for lab use)")
+                    errors.append(f"{ENV_HUB_ENDPOINT} must use https://")
+                elif u.scheme == "http" and not dev_allow_http:
+                    errors.append(
+                        f"{ENV_HUB_ENDPOINT} must use https:// (set {ENV_DEV_ALLOW_HTTP}=true for local development)"
+                    )
                 elif not u.hostname:
                     errors.append(f"{ENV_HUB_ENDPOINT} has no host")
                 elif u.username is not None or u.password is not None:
@@ -87,7 +109,17 @@ class Config:
                 errors.append(f"{ENV_DEFAULT_SEVERITY}: {e}")
         if errors:
             raise ConfigError("; ".join(errors))
-        return cls(endpoint, node_key, sensor_id, sev, get(ENV_CONFIG_REVISION), test_mode, get(ENV_CA_BUNDLE), env)
+        return cls(
+            endpoint,
+            node_key,
+            sensor_id,
+            sev,
+            get(ENV_CONFIG_REVISION),
+            test_mode,
+            get(ENV_CA_BUNDLE),
+            env,
+            dev_allow_http=dev_allow_http,
+        )
 
     def setting(self, name: str) -> Optional[str]:
         """A sensor setting declared in the manifest (a TS_ variable). Reserved

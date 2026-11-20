@@ -205,11 +205,27 @@ func (h *mockHub) env(extra map[string]string) func(string) string {
 		EnvNodeKey:        "tsk_test",
 		EnvSensorID:       "ts-sensor-demo",
 		EnvConfigRevision: "rev_0000abcd",
+		EnvDevAllowHTTP:   "true",
 	}
 	for k, v := range extra {
 		m[k] = v
 	}
 	return func(k string) string { return m[k] }
+}
+
+func TestLoadConfigRefusesPlainHTTPWithoutDevFlag(t *testing.T) {
+	base := map[string]string{
+		EnvHubEndpoint: "http://127.0.0.1:8080",
+		EnvNodeKey:     "tsk_test",
+		EnvSensorID:    "ts-sensor-demo",
+	}
+	if _, err := LoadConfig(func(k string) string { return base[k] }); err == nil {
+		t.Fatal("expected plain http:// to be refused without TS_DEV_ALLOW_HTTP=true")
+	}
+	base[EnvDevAllowHTTP] = "true"
+	if _, err := LoadConfig(func(k string) string { return base[k] }); err != nil {
+		t.Fatalf("expected http:// with TS_DEV_ALLOW_HTTP=true to succeed: %v", err)
+	}
 }
 
 func quietLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
