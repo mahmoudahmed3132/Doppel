@@ -531,4 +531,5 @@ The rules are tested against what the Hub really emits, not hand-written JSON.
 - `truesignal-sensor-dark` looks back 24 hours. A sensor dark for longer stops re-alerting; the Hub's Fleet page still shows it.
 - Internal ranges are fixed in the queries. If your organisation uses public address space internally, add it to the Assets page (preferred) or to the CIDR lists. [NOT IN PROJECT]
 - Not covered here: index or repository naming, alert routing and on-call: site decisions.
+- **Verified on Doppel output (2026-11-20, F-001):** `scripts/siem-rules/run-elastic.sh` ingested the 62 sample documents (three of them fire drills) without mapping errors, imported all 17 rules and every rule raised exactly the expected alerts; the drills matched only `truesignal-drill-received` (PASS).
 - **Verified on Doppel output (2026-11-15):** `scripts/siem-rules/run-elastic.sh` ingested the 59 sample documents without mapping errors, imported all 16 rules and every rule raised exactly the expected alerts (PASS).
