@@ -3,6 +3,10 @@
 // Command doppel-hub is the Doppel Hub (installed with a truesignal-hub symlink for one major version).
 //
 //	doppel-hub [serve]   run the Hub (default)
+//	doppel-hub backup --out <dir> [--encrypt-to <age-recipient>]   online SQLite backup + manifest
+//	doppel-hub backup --schedule                                   print systemd/Kubernetes schedule examples
+//	doppel-hub verify --from <dir> [--identity <age-key-file>]     verify backup integrity without restoring
+//	doppel-hub restore --from <dir> [--identity <age-key-file>]    offline restore (Hub stopped)
 //	doppel-hub mfa-reset remove MFA from the admin account (Hub stopped)
 //	doppel-hub kek-generate        print a new key-encryption key (64 hex characters)
 //	doppel-hub kek-rotate OLD NEW  re-wrap the data key under a new KEK file (Hub stopped)
@@ -16,6 +20,7 @@ import (
 	"fmt"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/assets"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/attack"
+	"github.com/mahmoudahmed3132/Doppel/hub/internal/backup"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/beacon"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/ecs"
 	"github.com/mahmoudahmed3132/Doppel/hub/internal/honeytoken"
@@ -78,6 +83,12 @@ func main() {
 	switch cmd {
 	case "serve":
 		err = serve(log)
+	case "backup":
+		err = backupCmd(log, os.Args[2:])
+	case "verify":
+		err = verifyCmd(log, os.Args[2:])
+	case "restore":
+		err = restoreCmd(log, os.Args[2:])
 	case "mfa-reset":
 		err = mfaReset(log)
 	case "kek-generate":
@@ -89,7 +100,7 @@ func main() {
 	case "version":
 		fmt.Printf("truesignal-hub %s (contract %d, schema v%d)\n", Version, contractVersion, store.SchemaVersion())
 	default:
-		fmt.Fprintf(os.Stderr, "usage: doppel-hub [serve|mfa-reset|kek-generate|kek-rotate|secrets-reset|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: doppel-hub [serve|backup|verify|restore|mfa-reset|kek-generate|kek-rotate|secrets-reset|version]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -271,6 +282,12 @@ func serve(log *slog.Logger) error {
 		return err
 	}
 	defer db.Close()
+
+	dbLock, err := backup.AcquireDBLock(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer dbLock.Close()
 
 	if ep, ok, err := db.Setting(ctx, auth.SettingEndpoint); err != nil {
 		return err
