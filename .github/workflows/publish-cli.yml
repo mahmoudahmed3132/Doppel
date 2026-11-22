@@ -96,7 +96,7 @@ jobs:
             cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
             cosign verify-blob --bundle "$f.sigstore.json" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$f"
           done
-      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           version: v0.70.0
       - name: gate - no unwaived critical vulnerability in any binary (scripts/release/trivy-gate.sh)
